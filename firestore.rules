@@ -1,0 +1,40 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    // Health check and connection validation
+    match /test/{docId} {
+      allow read, write: if isValidId(docId);
+    }
+
+    // Global settings and branding (Logo, Store Name, Taglines, Policies)
+    match /settings/{settingId} {
+      allow read: if isValidId(settingId);
+      allow write: if isValidId(settingId);
+    }
+
+    // Products catalog
+    match /products/{productId} {
+      allow read: if isValidId(productId);
+      allow write: if isValidId(productId);
+    }
+
+    // Customer orders
+    match /orders/{orderId} {
+      allow read, create, update: if isValidId(orderId);
+      allow delete: if false; // Orders cannot be deleted for audit history
+    }
+
+    // Promo Coupons
+    match /coupons/{couponId} {
+      allow read: if isValidId(couponId);
+      allow write: if isValidId(couponId);
+    }
+  }
+}

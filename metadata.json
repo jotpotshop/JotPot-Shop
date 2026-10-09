@@ -1,0 +1,6 @@
+{
+  "name": "JotPotShop - যা দরকার, এক জায়গায়",
+  "description": "আধুনিক, দ্রুত ও মোবাইল-ফার্স্ট ই-কমার্স প্ল্যাটফর্ম। Men Fashion, Gadgets, Jewelry, Shoes, Lifestyle এবং স্পেশাল ডিল।",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

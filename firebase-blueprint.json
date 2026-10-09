@@ -1,0 +1,76 @@
+{
+  "entities": {
+    "BrandingSettings": {
+      "title": "BrandingSettings",
+      "description": "Website logo, branding assets and store identity settings",
+      "type": "object",
+      "properties": {
+        "storeName": { "type": "string" },
+        "storeNameBn": { "type": "string" },
+        "tagline": { "type": "string" },
+        "taglineBn": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "mobileLogoUrl": { "type": "string" },
+        "faviconUrl": { "type": "string" },
+        "logoStoragePath": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["storeName", "logoUrl"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer order details and timeline tracking",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerName": { "type": "string" },
+        "phone": { "type": "string" },
+        "totalAmount": { "type": "number" },
+        "status": { "type": "string" },
+        "orderDate": { "type": "string" }
+      },
+      "required": ["id", "customerName", "phone", "totalAmount", "status"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "E-commerce product catalog item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string" },
+        "stock": { "type": "number" }
+      },
+      "required": ["id", "title", "price", "stock"]
+    },
+    "ConnectionTest": {
+      "title": "ConnectionTest",
+      "description": "Health check document for testing Firestore connectivity",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string" },
+        "timestamp": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/settings/{settingId}": {
+      "schema": "BrandingSettings",
+      "description": "Global website configuration, logos, and branding"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Store orders and lifecycle states"
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Store inventory and catalog"
+    },
+    "/test/{docId}": {
+      "schema": "ConnectionTest",
+      "description": "Diagnostics and connectivity test"
+    }
+  }
+}
