@@ -5,7 +5,7 @@ import { useShop } from '../../context/ShopContext';
 export const BondhameLoginPortal: React.FC = () => {
   const { adminLogin, websiteSettings, t } = useShop();
 
-  const [identifier, setIdentifier] = useState('mdmahmudulhashan0@gmail.com');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -74,7 +74,7 @@ export const BondhameLoginPortal: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleLogin} autoComplete="off" className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-300 mb-1.5">
                 ইমেইল বা ইউজারনেম
@@ -86,7 +86,9 @@ export const BondhameLoginPortal: React.FC = () => {
                   required
                   value={identifier}
                   onChange={e => setIdentifier(e.target.value)}
-                  placeholder="mdmahmudulhashan0@gmail.com"
+                  placeholder="ইমেইল বা ইউজারনেম লিখুন"
+                  autoComplete="off"
+                  name="admin_login_identifier"
                   className="w-full bg-slate-950/80 border border-slate-700 rounded-2xl pl-10 pr-4 py-3 text-xs text-white placeholder:text-slate-600 focus:outline-hidden focus:border-rose-500 focus:ring-1 focus:ring-rose-500 font-mono transition-all"
                 />
               </div>
@@ -104,6 +106,8 @@ export const BondhameLoginPortal: React.FC = () => {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••••••"
+                  autoComplete="new-password"
+                  name="admin_login_password"
                   className="w-full bg-slate-950/80 border border-slate-700 rounded-2xl pl-10 pr-10 py-3 text-xs text-white placeholder:text-slate-600 focus:outline-hidden focus:border-rose-500 focus:ring-1 focus:ring-rose-500 font-mono transition-all"
                 />
                 <button
@@ -131,16 +135,6 @@ export const BondhameLoginPortal: React.FC = () => {
               )}
             </button>
           </form>
-
-          {/* Super Admin Quick hint */}
-          <div className="mt-5 pt-4 border-t border-slate-800 text-[11px] text-slate-400 space-y-1">
-            <p className="font-semibold text-slate-300 flex items-center space-x-1">
-              <span>🔒 সুপার এডমিন লগইন সহায়তা:</span>
-            </p>
-            <p className="text-[10px] text-slate-500 font-mono">
-              ইউজার: mdmahmudulhashan0@gmail.com
-            </p>
-          </div>
         </div>
 
         {/* Back to Customer Store button */}

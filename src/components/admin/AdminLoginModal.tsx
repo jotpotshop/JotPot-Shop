@@ -57,7 +57,7 @@ export const AdminLoginModal: React.FC = () => {
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleLogin} className="p-6 space-y-4">
+        <form onSubmit={handleLogin} autoComplete="off" className="p-6 space-y-4">
           {errorMsg && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-start space-x-2 text-xs text-red-700 animate-in shake duration-200">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
@@ -78,6 +78,8 @@ export const AdminLoginModal: React.FC = () => {
                 value={identifier}
                 onChange={e => setIdentifier(e.target.value)}
                 placeholder="ইমেইল বা ইউজারনেম লিখুন"
+                autoComplete="off"
+                name="admin_modal_identifier"
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-xs text-gray-900 focus:bg-white focus:border-rose-500 focus:ring-1 focus:ring-rose-500 transition-all font-mono"
               />
             </div>
@@ -96,6 +98,8 @@ export const AdminLoginModal: React.FC = () => {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="পাসওয়ার্ড লিখুন"
+                autoComplete="new-password"
+                name="admin_modal_password"
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-10 py-2.5 text-xs text-gray-900 focus:bg-white focus:border-rose-500 focus:ring-1 focus:ring-rose-500 transition-all font-mono"
               />
               <button
