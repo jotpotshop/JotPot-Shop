@@ -1,5 +1,16 @@
 export type Language = 'bn' | 'en';
 
+export type NeedTag =
+  | 'gift'
+  | 'office'
+  | 'campus'
+  | 'wedding'
+  | 'travel'
+  | 'party'
+  | 'couple'
+  | 'formal'
+  | 'everyday';
+
 export interface Product {
   id: string;
   name: string;
@@ -36,7 +47,7 @@ export interface Product {
   isBestSeller?: boolean;
   isNewArrival?: boolean;
   isTrending?: boolean;
-  needTags: ('gift' | 'office' | 'campus' | 'wedding' | 'travel' | 'party' | 'couple' | 'formal' | 'everyday')[];
+  needTags: NeedTag[];
   reviews: ProductReview[];
   sellerName?: string;
   sellerRating?: number;
@@ -71,6 +82,7 @@ export interface BundleOffer {
   regularPrice: number;
   bundlePrice: number;
   badge: string;
+  isActive?: boolean;
 }
 
 export interface SavedAddress {
@@ -162,7 +174,7 @@ export interface Order {
   couponCode?: string;
   deliveryFee: number;
   totalAmount: number;
-  paymentMethod: 'cod' | 'bkash' | 'nagad' | 'card' | 'rocket';
+  paymentMethod: 'cod' | 'bkash' | 'nagad' | 'rocket';
   paymentStatus: 'Pending' | 'Paid';
   paymentDetails?: {
     senderNumber?: string;
@@ -343,7 +355,9 @@ export interface PaymentSettings {
   nagadInstructionsBn?: string;
   rocketEnabled: boolean;
   rocketNumber: string;
-  onlineCardGatewayEnabled: boolean;
+  rocketAccountType?: 'Merchant' | 'Personal';
+  rocketAccountName?: string;
+  rocketInstructionsBn?: string;
   taxPercent: number;
 }
 
@@ -361,6 +375,14 @@ export interface CourierConfig {
   baseChargeDhaka: number;
   baseChargeOutside: number;
   trackingUrlTemplate: string;
+  isSandbox?: boolean;
+  storeId?: string;
+  clientId?: string;
+  pickupAddress?: string;
+  pickupPhone?: string;
+  lastConnectedAt?: string;
+  accountBalance?: number;
+  connectionStatus?: 'connected' | 'disconnected' | 'testing' | 'untested';
 }
 
 export interface ReturnPolicySettings {

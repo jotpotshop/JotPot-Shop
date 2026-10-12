@@ -18,6 +18,7 @@ import {
   Save,
   Eye,
   EyeOff,
+  RefreshCw,
 } from 'lucide-react';
 import { useShop } from '../../context/ShopContext';
 import {
@@ -30,7 +31,6 @@ import {
 export const RolePermissionManager: React.FC = () => {
   const {
     currentRole,
-    setCurrentRole,
     staffAccounts,
     addStaffAccount,
     updateStaffAccount,
@@ -38,10 +38,12 @@ export const RolePermissionManager: React.FC = () => {
     adminUser,
     rolePermissions,
     updateRolePermission,
+    resetRolePermissionsToDefault,
     t,
   } = useShop();
 
   const [selectedTargetRole, setSelectedTargetRole] = useState<UserRole>('MANAGER');
+  const [resetSuccessNotice, setResetSuccessNotice] = useState(false);
 
   // Staff Account modal state
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
@@ -179,29 +181,15 @@ export const RolePermissionManager: React.FC = () => {
             </p>
           </div>
 
-          {/* Quick Active Role Switcher */}
-          <div className="bg-white/10 backdrop-blur-md p-3 rounded-2xl border border-white/10">
-            <span className="text-[10px] text-gray-300 uppercase font-bold tracking-wider block mb-1.5">
-              {t('সরাসরি টেস্ট করতে আপনার বর্তমান রোল পরিবর্তন করুন:', 'Test Live: Switch Active User Role:')}
-            </span>
-            <div className="flex flex-wrap gap-1.5">
-              {(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] as UserRole[]).map(role => {
-                const isActive = currentRole === role;
-                return (
-                  <button
-                    key={role}
-                    onClick={() => setCurrentRole(role)}
-                    className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-                      isActive
-                        ? 'bg-rose-600 text-white shadow-xs'
-                        : 'bg-black/30 text-gray-300 hover:bg-black/50'
-                    }`}
-                  >
-                    {role.replace('_', ' ')}
-                  </button>
-                );
-              })}
+          {/* Active Authority Info */}
+          <div className="bg-white/10 backdrop-blur-md p-3.5 rounded-2xl border border-white/10 space-y-1">
+            <div className="flex items-center space-x-1.5 text-rose-300 text-xs font-black">
+              <ShieldCheck className="w-4 h-4 text-rose-400" />
+              <span>সুপার এডমিন মাস্টার কন্ট্রোল হাব</span>
             </div>
+            <p className="text-[11px] text-gray-300">
+              লগইনকৃত: <strong className="text-white font-mono">{adminUser?.name || 'সুপার এডমিন'}</strong> ({adminUser?.email})
+            </p>
           </div>
         </div>
       </div>
@@ -448,29 +436,82 @@ export const RolePermissionManager: React.FC = () => {
             </p>
           </div>
 
-          {/* Role selector tab */}
-          <div className="flex items-center space-x-1.5 bg-gray-100 p-1 rounded-xl">
-            {(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] as UserRole[]).map(role => (
-              <button
-                key={role}
-                onClick={() => setSelectedTargetRole(role)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  selectedTargetRole === role
-                    ? 'bg-white text-gray-900 shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                {role.replace('_', ' ')}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Reset to standard RBAC button */}
+            <button
+              onClick={() => {
+                if (confirm('আপনি কি নিশ্চিত যে সমস্ত রোলের পারমিশন ডিফল্ট স্ট্যান্ডার্ড নিয়মে রিসেট করতে চান?')) {
+                  resetRolePermissionsToDefault();
+                  setResetSuccessNotice(true);
+                  setTimeout(() => setResetSuccessNotice(false), 3500);
+                }
+              }}
+              className="bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold px-3 py-1.5 rounded-xl flex items-center space-x-1.5 cursor-pointer transition-colors border border-gray-300"
+              title="ডিফল্ট স্ট্যান্ডার্ড আরবিএসি রুলসে ফিরিয়ে নিন"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-gray-600" />
+              <span>{t('স্ট্যান্ডার্ড আরবিএসি রিসেট', 'Reset RBAC Defaults')}</span>
+            </button>
+
+            {/* Role selector tab */}
+            <div className="flex items-center space-x-1.5 bg-gray-100 p-1 rounded-xl">
+              {(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] as UserRole[]).map(role => (
+                <button
+                  key={role}
+                  onClick={() => setSelectedTargetRole(role)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    selectedTargetRole === role
+                      ? 'bg-white text-gray-900 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  {role.replace('_', ' ')}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
+        {resetSuccessNotice && (
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs flex items-center space-x-2 animate-in fade-in">
+            <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>সফলভাবে স্ট্যান্ডার্ড রোল ও পারমিশন নীতি রিসেট ও সক্রিয় করা হয়েছে!</span>
+          </div>
+        )}
+
+        {/* Dynamic Role Capability Explainer Banner */}
         {selectedTargetRole === 'SUPER_ADMIN' && (
           <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-rose-800 text-xs flex items-center space-x-2">
             <Sparkles className="w-4 h-4 text-rose-600 shrink-0" />
             <span>
-              <strong>সুপার এডমিন (SUPER ADMIN):</strong> ওয়েবসাইটের সিস্টেমের সর্বোচ্চ ক্ষমতাসম্পন্ন রোল। সব মডিউল ও অ্যাকশন স্বয়ংক্রিয়ভাবে আনলকড ও আনলিমিটেড।
+              <strong>👑 সুপার এডমিন (SUPER ADMIN):</strong> ওয়েবসাইটের সিস্টেমের সর্বোচ্চ ক্ষমতাসম্পন্ন রোল (God Mode)। সমস্ত আর্থিক হিসাব, বিকাশ/নগদ মার্চেন্ট সেটিংস, স্টাফ তৈরি ও পাসওয়ার্ড, এবং সম্পূর্ণ ডাটাবেজ এক্সেস।
+            </span>
+          </div>
+        )}
+
+        {selectedTargetRole === 'ADMIN' && (
+          <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-xs flex items-center space-x-2">
+            <Shield className="w-4 h-4 text-purple-600 shrink-0" />
+            <span>
+              <strong>🛡️ এডমিন (ADMIN):</strong> স্টোর ক্যাটালগ ম্যানেজমেন্ট (পণ্য যোগ/এডিট/ডিলিট), কুপন তৈরি, গ্রাহক তালিকা, ডেলিভারি চার্জ। 🔒 সীমাবদ্ধতা: মূল বিজনেস পেমেন্ট গেটওয়ে ক্রেডেনশিয়াল ও স্টাফ পারমিশন সুরক্ষিত।
+            </span>
+          </div>
+        )}
+
+        {selectedTargetRole === 'MANAGER' && (
+          <div className="p-3 bg-blue-50 rounded-xl border border-blue-200 text-blue-900 text-xs flex items-center space-x-2">
+            <UserCheck className="w-4 h-4 text-blue-600 shrink-0" />
+            <span>
+              <strong>📋 ম্যানেজার (MANAGER):</strong> অর্ডার প্যাকেজিং, কুরিয়ার বুকিং (Steadfast/Pathao), চালান ও লেবেল প্রিন্ট, ওয়্যারহাউজ স্টক লো-স্টক পূরণ। 🔒 সীমাবদ্ধতা: কুপন, গ্রাহক ব্যক্তিগত ডেটা, পণ্য ডিলিট বা বিক্রয় মুনাফা সুরক্ষিত।
+            </span>
+          </div>
+        )}
+
+        {selectedTargetRole === 'STAFF' && (
+          <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-900 text-xs flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>
+              <strong>💼 স্টাফ (STAFF):</strong> গ্রাহকদের ফোন কল করা, ঠিকানা যাচাই, কাস্টমার চ্যাট ইনবক্স এবং স্টক/মূল্য অনুসন্ধান। 🔒 সীমাবদ্ধতা: কুরিয়ার ডিসপ্যাচ, ইনভয়েস এডিট, অর্ডার বাতিল বা যেকোনো আর্থিক ডেটা কঠোরভাবে নিষিদ্ধ।
             </span>
           </div>
         )}

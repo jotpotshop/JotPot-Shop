@@ -159,39 +159,6 @@ export const Header: React.FC = () => {
               <Truck className="w-3.5 h-3.5" />
               <span>{t('অর্ডার ট্র্যাক', 'Track')}</span>
             </button>
-            <span className="hidden sm:inline text-white/40">|</span>
-
-            {/* Admin Access Button */}
-            {adminUser ? (
-              <div className="flex items-center space-x-1.5">
-                <button
-                  onClick={() => setIsAdminView(!isAdminView)}
-                  className={`px-2 py-0.5 rounded text-[11px] font-bold flex items-center space-x-1 cursor-pointer transition-colors shadow-xs ${
-                    isAdminView
-                      ? 'bg-amber-400 text-gray-950 font-black'
-                      : 'bg-white/20 text-white hover:bg-white/30'
-                  }`}
-                >
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>{isAdminView ? t('এডমিন মোড এক্টিভ', 'Admin Active') : t('এডমিন প্যানেল', 'Admin Panel')}</span>
-                </button>
-                <button
-                  onClick={adminLogout}
-                  title={t('লগআউট', 'Logout')}
-                  className="px-1.5 py-0.5 rounded bg-black/25 hover:bg-black/40 text-[10px] text-white font-semibold cursor-pointer transition-colors"
-                >
-                  {t('লগআউট', 'Logout')}
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowAdminLoginModal(true)}
-                className="bg-amber-400 hover:bg-amber-300 text-gray-950 font-black px-2.5 py-0.5 rounded text-[11px] flex items-center space-x-1 cursor-pointer transition-all shadow-xs hover:scale-102"
-              >
-                <Lock className="w-3 h-3" />
-                <span>{t('এডমিন লগইন', 'Admin Login')}</span>
-              </button>
-            )}
           </div>
         </div>
       </div>

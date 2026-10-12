@@ -27,6 +27,7 @@ import { InvoiceModal } from './components/InvoiceModal';
 import { AdminPanel } from './components/AdminPanel';
 import { FloatingContactWidget } from './components/FloatingContactWidget';
 import { AdminLoginModal } from './components/admin/AdminLoginModal';
+import { BondhameLoginPortal } from './components/admin/BondhameLoginPortal';
 
 import {
   Sparkles,
@@ -49,6 +50,8 @@ const MainContent: React.FC = () => {
     selectedMaxBudget,
     setSelectedMaxBudget,
     isAdminView,
+    setIsAdminView,
+    adminUser,
     recentlyViewed,
     language,
     t,
@@ -57,6 +60,44 @@ const MainContent: React.FC = () => {
 
   const [activeSubcategory, setActiveSubcategory] = useState<string | null>(null);
   const [sortOption, setSortOption] = useState<'featured' | 'price-asc' | 'price-desc' | 'rating'>('featured');
+
+  // Track route to handle /bondhame vs / (and block /admin)
+  const [currentRoute, setCurrentRoute] = useState<string>(() => {
+    if (typeof window === 'undefined') return '/';
+    return (window.location.pathname || '/').toLowerCase();
+  });
+
+  React.useEffect(() => {
+    const handleUrlCheck = () => {
+      if (typeof window === 'undefined') return;
+      const path = (window.location.pathname || '/').toLowerCase().replace(/\/+$/, '');
+      const hash = (window.location.hash || '').toLowerCase();
+
+      // Explicitly block /admin access! Redirect to /
+      if (path === '/admin' || hash === '#admin') {
+        window.history.replaceState(null, '', '/');
+        setCurrentRoute('/');
+        setIsAdminView(false);
+        return;
+      }
+
+      if (path === '/bondhame' || hash === '#bondhame') {
+        setCurrentRoute('/bondhame');
+        setIsAdminView(true);
+      } else {
+        setCurrentRoute('/');
+        setIsAdminView(false);
+      }
+    };
+
+    handleUrlCheck();
+    window.addEventListener('popstate', handleUrlCheck);
+    window.addEventListener('hashchange', handleUrlCheck);
+    return () => {
+      window.removeEventListener('popstate', handleUrlCheck);
+      window.removeEventListener('hashchange', handleUrlCheck);
+    };
+  }, [setIsAdminView]);
 
   // Dynamically sync document title and favicon with Website Branding
   React.useEffect(() => {
@@ -78,8 +119,12 @@ const MainContent: React.FC = () => {
     }
   }, [websiteSettings, language]);
 
-  if (isAdminView) {
-    return <AdminPanel />;
+  // Handle /bondhame route
+  if (currentRoute === '/bondhame') {
+    if (adminUser) {
+      return <AdminPanel />;
+    }
+    return <BondhameLoginPortal />;
   }
 
   // Filter products for category view

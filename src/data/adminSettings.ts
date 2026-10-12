@@ -109,7 +109,9 @@ export const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
   nagadInstructionsBn: 'নগদ অ্যাপ অথবা *167# ডায়াল করে পেমেন্ট বা সেন্ড মানি করুন।',
   rocketEnabled: true,
   rocketNumber: '01912-345678-9',
-  onlineCardGatewayEnabled: true,
+  rocketAccountType: 'Personal',
+  rocketAccountName: 'JotPotShop Official',
+  rocketInstructionsBn: 'রকেট অ্যাপ অথবা *322# ডায়াল করে সেন্ড মানি বা পেমেন্ট সম্পন্ন করুন।',
   taxPercent: 0,
 };
 
@@ -128,6 +130,12 @@ export const DEFAULT_COURIER_CONFIGS: CourierConfig[] = [
     baseChargeDhaka: 60,
     baseChargeOutside: 120,
     trackingUrlTemplate: 'https://steadfast.com.bd/t/{TRACKING_ID}',
+    isSandbox: false,
+    connectionStatus: 'connected',
+    lastConnectedAt: '১২ অক্টোবর ২০২৬, ১১:৪০ AM',
+    accountBalance: 4850,
+    pickupAddress: 'হাউজ ১৪, রোড ৭, সেক্টর ৩, উত্তরা, ঢাকা-১২৩০',
+    pickupPhone: '01890-123456',
   },
   {
     id: 'RedX',
@@ -279,9 +287,10 @@ export const DEFAULT_REVIEW_SETTINGS: ReviewSettings = {
 };
 
 // -------------------------------------------------------------
-// DEFAULT RBAC PERMISSION MATRIX
+// DEFAULT RBAC PERMISSION MATRIX (STRICT ROLE SEPARATION)
 // -------------------------------------------------------------
 export const DEFAULT_ROLE_PERMISSIONS: RolePermissionMatrix = {
+  // 1. 👑 SUPER ADMIN: Full God-Mode Master Access
   SUPER_ADMIN: {
     products: ['view', 'create', 'edit', 'delete', 'approve', 'export', 'manage'],
     orders: ['view', 'create', 'edit', 'delete', 'approve', 'export', 'manage'],
@@ -294,41 +303,50 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionMatrix = {
     roles: ['view', 'create', 'edit', 'delete', 'approve', 'export', 'manage'],
     reports: ['view', 'create', 'edit', 'delete', 'approve', 'export', 'manage'],
   },
+
+  // 2. 🛡️ ADMIN (Store Admin): Store catalog, orders, marketing, coupons, customer contacts
+  // Restricted: Cannot touch secret system payment keys (settings) or staff password roles matrix
   ADMIN: {
     products: ['view', 'create', 'edit', 'delete', 'approve', 'export'],
     orders: ['view', 'create', 'edit', 'delete', 'approve', 'export'],
-    categories: ['view', 'create', 'edit', 'export'],
+    categories: ['view', 'create', 'edit', 'delete', 'export'],
     coupons: ['view', 'create', 'edit', 'delete', 'export'],
     couriers: ['view', 'create', 'edit', 'approve', 'export'],
     customers: ['view', 'create', 'edit', 'export'],
     homepage: ['view', 'edit'],
-    settings: [], // Restricted: Only Super Admin can access Payment & Master Business Settings
-    roles: [],    // Restricted: Only Super Admin can modify Roles Matrix
+    settings: [], // Restricted: Only Super Admin can access Payment Gateways & Master Business Settings
+    roles: [],    // Restricted: Only Super Admin can create/edit staff accounts & permissions
     reports: ['view', 'export'],
   },
+
+  // 3. 📋 MANAGER (Operations & Logistics): Packaging, courier consignment, warehouse inventory
+  // Restricted: Cannot create or delete products, cannot touch coupons, customer private database, financial profits, settings or roles
   MANAGER: {
-    products: ['view', 'create', 'edit', 'export'],
-    orders: ['view', 'edit', 'approve', 'export'],
-    categories: ['view', 'export'],
-    coupons: ['view', 'export'],
-    couriers: ['view', 'approve', 'export'],
-    customers: ['view'],
-    homepage: ['view'],
-    settings: [], // Restricted
-    roles: [],    // Restricted
-    reports: ['view', 'export'],
-  },
-  STAFF: {
-    products: ['view'], // View-only: cannot create, edit, or delete products
-    orders: ['view', 'edit'], // Call verification notes and packing check only
-    categories: ['view'],
-    coupons: [],   // Restricted: Staff cannot view or create coupons
-    couriers: [],  // Restricted: Logistics managed by Manager/Admin
-    customers: [], // Restricted: Staff cannot view whole customer database
+    products: ['view', 'edit'], // Stock inventory management only; cannot delete products or change pricing
+    orders: ['view', 'approve', 'export'], // Can approve and dispatch orders; cannot cancel or delete orders
+    categories: ['view'], // View-only
+    coupons: [],   // Restricted: No coupon management
+    couriers: ['view', 'create', 'approve', 'export'], // Full logistics, shipping label printing & courier booking
+    customers: [], // Restricted: No customer private database access
     homepage: [],  // Restricted
     settings: [],  // Restricted
     roles: [],     // Restricted
-    reports: [],   // Restricted: Staff cannot see revenue, profits or financial reports
+    reports: [],   // Restricted: Cannot view total revenue or profit margins
+  },
+
+  // 4. 💼 STAFF (Support & Order Verification Desk): Phone call confirmation & live chat customer support
+  // Restricted: View-only order phone verification and chat; cannot confirm to courier, cannot edit prices, cannot delete anything
+  STAFF: {
+    products: ['view'], // View-only: Stock & price lookup for answering customer inquiries
+    orders: ['view'],   // View-only: Call customer, add verification notes; cannot cancel, delete, or dispatch
+    categories: ['view'], // View-only
+    coupons: [],   // Restricted
+    couriers: [],  // Restricted: Logistics handled by Manager
+    customers: [], // Restricted: Full customer directory protected
+    homepage: [],  // Restricted
+    settings: [],  // Restricted
+    roles: [],     // Restricted
+    reports: [],   // Restricted: Financials protected
   },
 };
 

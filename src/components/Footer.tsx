@@ -157,24 +157,12 @@ export const Footer: React.FC = () => {
               <span className="bg-amber-900/40 text-amber-300 border border-amber-700/50 px-2.5 py-1 rounded-md font-bold text-[10px]">
                 Nagad নগদ
               </span>
-              <span className="bg-blue-900/40 text-blue-300 border border-blue-700/50 px-2.5 py-1 rounded-md font-bold text-[10px]">
-                VISA
-              </span>
-              <span className="bg-rose-900/40 text-rose-300 border border-rose-700/50 px-2.5 py-1 rounded-md font-bold text-[10px]">
-                Mastercard
+              <span className="bg-purple-900/40 text-purple-300 border border-purple-700/50 px-2.5 py-1 rounded-md font-bold text-[10px]">
+                Rocket রকেট
               </span>
               <span className="bg-emerald-900/40 text-emerald-300 border border-emerald-700/50 px-2.5 py-1 rounded-md font-bold text-[10px]">
-                Cash On Delivery
+                Cash On Delivery ক্যাশ অন ডেলিভারি
               </span>
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-gray-800">
-              <button
-                onClick={() => setIsAdminView(true)}
-                className="text-[11px] text-gray-400 hover:text-white underline cursor-pointer"
-              >
-                {t('এডমিন পোর্টাল প্রবেশ', 'Admin Portal Login')}
-              </button>
             </div>
           </div>
         </div>

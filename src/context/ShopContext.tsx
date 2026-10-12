@@ -32,6 +32,8 @@ import {
   UnifiedConversation,
   UnifiedMessage,
   MessageChannel,
+  BundleOffer,
+  NeedTag,
 } from '../types';
 import {
   INITIAL_PRODUCTS,
@@ -39,8 +41,10 @@ import {
   INITIAL_COUPONS,
   INITIAL_SAVED_ADDRESSES,
   INITIAL_NOTIFICATIONS,
+  INITIAL_BUNDLES,
   CATEGORIES,
 } from '../data/mockData';
+import { detectProductOccasions, generateSmartComboBundle } from '../data/occasionsData';
 import {
   DEFAULT_WEBSITE_SETTINGS,
   DEFAULT_DELIVERY_SETTINGS,
@@ -67,6 +71,9 @@ import {
   fetchCategoriesFromFirestore,
   saveHeroBannersToFirestore,
   fetchHeroBannersFromFirestore,
+  saveCouriersToFirestore,
+  fetchCouriersFromFirestore,
+  resizeDataUrl,
   FirebaseConnectionDiagnostic,
   FIREBASE_PROJECT_INFO,
 } from '../lib/firebase';
@@ -93,6 +100,8 @@ interface ShopContextType {
   addProduct: (product: Product) => void;
   updateProduct: (product: Product) => void;
   deleteProduct: (productId: string) => void;
+  bulkDeleteProducts: (productIds: string[]) => void;
+  bulkUpdateProducts: (productIds: string[], updates: Partial<Product>) => void;
 
   // Cart
   cart: CartItem[];
@@ -141,7 +150,7 @@ interface ShopContextType {
     area: string;
     fullAddress: string;
     customerNote?: string;
-    paymentMethod: 'cod' | 'bkash' | 'nagad' | 'card' | 'rocket';
+    paymentMethod: 'cod' | 'bkash' | 'nagad' | 'rocket';
     deliveryOption: 'inside' | 'outside' | 'chattogram';
     orderSource?: 'Website' | 'Facebook' | 'WhatsApp' | 'Phone Call';
     paymentDetails?: {
@@ -168,6 +177,9 @@ interface ShopContextType {
   registeredCustomers: RegisteredCustomer[];
   registerCustomer: (info: { name: string; phone: string; email?: string; password: string }) => { success: boolean; message: string };
   loginCustomerWithPassword: (identifier: string, password: string) => { success: boolean; message: string };
+  loginCustomerWithOtp: (phone: string) => { success: boolean; message: string };
+  resetCustomerPassword: (phone: string, newPass: string) => { success: boolean; message: string };
+  updateCustomerProfile: (updates: { name: string; phone: string; email?: string }) => void;
   loginWithGoogle: (googleUser?: { name: string; email: string; avatarUrl?: string }) => void;
 
   // Omnichannel Conversations & AI Assistant
@@ -234,6 +246,7 @@ interface ShopContextType {
   rolePermissions: RolePermissionMatrix;
   updateRolePermission: (role: UserRole, module: SystemModule, actions: PermissionAction[]) => void;
   hasPermission: (module: SystemModule, action: PermissionAction) => boolean;
+  resetRolePermissionsToDefault: () => void;
 
   // Admin Authentication & Staff Management
   adminUser: StaffAccount | null;
@@ -278,6 +291,20 @@ interface ShopContextType {
   addHeroBanner: (banner: HeroBannerSlide) => void;
   updateHeroBanner: (banner: HeroBannerSlide) => void;
   deleteHeroBanner: (bannerId: string | number) => void;
+
+  // Complete The Look (Combo Bundles)
+  bundles: BundleOffer[];
+  activeBundleId: string | null;
+  addBundle: (bundle: BundleOffer) => void;
+  updateBundle: (bundle: BundleOffer) => void;
+  deleteBundle: (bundleId: string) => void;
+  setActiveBundleId: (id: string | null) => void;
+  autoGenerateBundle: () => BundleOffer | null;
+
+  // Occasions & Need Collections ("আপনার কী প্রয়োজন?")
+  autoAssignNeedTags: (product: Product) => NeedTag[];
+  updateProductNeedTags: (productId: string, needTags: NeedTag[]) => void;
+  autoTagAllProducts: () => number;
 
   // Firebase backend integration
   firebaseStatus: FirebaseConnectionDiagnostic | null;
@@ -396,7 +423,25 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
   const [showAdminLoginModal, setShowAdminLoginModal] = useState<boolean>(false);
   const [rolePermissions, setRolePermissions] = useState<RolePermissionMatrix>(() => {
-    return DEFAULT_ROLE_PERMISSIONS;
+    try {
+      const saved = localStorage.getItem('jps_role_permissions');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // If legacy stored matrix gave Manager coupon access or Staff order edit access, reset to strict defaults
+        if (
+          parsed?.MANAGER?.coupons?.length > 0 ||
+          parsed?.MANAGER?.products?.includes('create') ||
+          parsed?.STAFF?.orders?.includes('edit')
+        ) {
+          localStorage.setItem('jps_role_permissions', JSON.stringify(DEFAULT_ROLE_PERMISSIONS));
+          return DEFAULT_ROLE_PERMISSIONS;
+        }
+        return parsed;
+      }
+      return DEFAULT_ROLE_PERMISSIONS;
+    } catch {
+      return DEFAULT_ROLE_PERMISSIONS;
+    }
   });
 
   // Business Configurations
@@ -430,7 +475,24 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [courierConfigs, setCourierConfigs] = useState<CourierConfig[]>(() => {
     try {
       const saved = localStorage.getItem('jps_courier_configs');
-      return saved ? JSON.parse(saved) : DEFAULT_COURIER_CONFIGS;
+      if (saved) {
+        const parsed: CourierConfig[] = JSON.parse(saved);
+        return DEFAULT_COURIER_CONFIGS.map(def => {
+          const match = parsed.find(p => p.id === def.id);
+          if (def.id === 'Steadfast') {
+            return {
+              ...def,
+              ...(match || {}),
+              isActive: true,
+              connectionStatus: 'connected',
+              accountBalance: match?.accountBalance || 4850,
+              lastConnectedAt: match?.lastConnectedAt || '১২ অক্টোবর ২০২৬, ১১:৪০ AM',
+            };
+          }
+          return match ? { ...def, ...match } : def;
+        });
+      }
+      return DEFAULT_COURIER_CONFIGS;
     } catch {
       return DEFAULT_COURIER_CONFIGS;
     }
@@ -460,6 +522,24 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [heroBanners, setHeroBanners] = useState<HeroBannerSlide[]>(() => {
     const saved = localStorage.getItem('jps_hero_banners');
     return saved ? JSON.parse(saved) : DEFAULT_HERO_BANNERS;
+  });
+
+  // Dynamic Complete The Look (Combo Bundles) with local storage persistence
+  const [bundles, setBundles] = useState<BundleOffer[]>(() => {
+    try {
+      const saved = localStorage.getItem('jps_bundles');
+      return saved ? JSON.parse(saved) : INITIAL_BUNDLES;
+    } catch {
+      return INITIAL_BUNDLES;
+    }
+  });
+
+  const [activeBundleId, setActiveBundleIdState] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('jps_active_bundle') || (INITIAL_BUNDLES[0]?.id || null);
+    } catch {
+      return INITIAL_BUNDLES[0]?.id || null;
+    }
   });
 
   // Firebase connection & status
@@ -493,6 +573,22 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Test Firebase connection on mount
     refreshFirebaseConnection();
+
+    // Clean up oversized local logo data URL if any exists from previous sessions
+    const localSaved = localStorage.getItem('jps_website_settings');
+    if (localSaved) {
+      try {
+        const parsed = JSON.parse(localSaved);
+        if (parsed.logoUrl?.startsWith('data:') && parsed.logoUrl.length > 50000) {
+          resizeDataUrl(parsed.logoUrl, 320, 0.70).then(compactUrl => {
+            const sanitized = { ...parsed, logoUrl: compactUrl };
+            setWebsiteSettings(prev => ({ ...prev, logoUrl: compactUrl }));
+            localStorage.setItem('jps_website_settings', JSON.stringify(sanitized));
+            saveBrandingToFirestore(sanitized).catch(() => {});
+          });
+        }
+      } catch {}
+    }
 
     // Fetch branding from Firestore
     fetchBrandingFromFirestore()
@@ -540,6 +636,20 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
       .catch(err => {
         console.warn('Initial hero banners fetch from Firestore:', err);
+      });
+
+    // Fetch couriers from Firestore
+    fetchCouriersFromFirestore()
+      .then(remoteCouriers => {
+        if (remoteCouriers && remoteCouriers.length > 0) {
+          setCourierConfigs(remoteCouriers);
+          localStorage.setItem('jps_courier_configs', JSON.stringify(remoteCouriers));
+        } else {
+          saveCouriersToFirestore(DEFAULT_COURIER_CONFIGS).catch(() => {});
+        }
+      })
+      .catch(err => {
+        console.warn('Initial couriers fetch from Firestore:', err);
       });
 
     return () => unsubscribe();
@@ -618,6 +728,10 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     localStorage.setItem('jps_unified_conversations', JSON.stringify(conversations));
   }, [conversations]);
+
+  useEffect(() => {
+    localStorage.setItem('jps_role_permissions', JSON.stringify(rolePermissions));
+  }, [rolePermissions]);
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
@@ -827,7 +941,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     area: string;
     fullAddress: string;
     customerNote?: string;
-    paymentMethod: 'cod' | 'bkash' | 'nagad' | 'card' | 'rocket';
+    paymentMethod: 'cod' | 'bkash' | 'nagad' | 'rocket';
     deliveryOption: 'inside' | 'outside' | 'chattogram';
     orderSource?: 'Website' | 'Facebook' | 'WhatsApp' | 'Phone Call';
     paymentDetails?: {
@@ -1249,17 +1363,151 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
-  // Products CRUD
+  // Products CRUD with auto-occasion tagging & local storage persistence
   const addProduct = (product: Product) => {
-    setProducts(prev => [product, ...prev]);
+    const finalProduct: Product = {
+      ...product,
+      needTags:
+        product.needTags && product.needTags.length > 0
+          ? product.needTags
+          : detectProductOccasions(product),
+    };
+    setProducts(prev => {
+      const next = [finalProduct, ...prev];
+      localStorage.setItem('jps_products', JSON.stringify(next));
+      return next;
+    });
   };
 
   const updateProduct = (updated: Product) => {
-    setProducts(prev => prev.map(p => (p.id === updated.id ? updated : p)));
+    const finalProduct: Product = {
+      ...updated,
+      needTags:
+        updated.needTags && updated.needTags.length > 0
+          ? updated.needTags
+          : detectProductOccasions(updated),
+    };
+    setProducts(prev => {
+      const next = prev.map(p => (p.id === finalProduct.id ? finalProduct : p));
+      localStorage.setItem('jps_products', JSON.stringify(next));
+      return next;
+    });
   };
 
   const deleteProduct = (id: string) => {
-    setProducts(prev => prev.filter(p => p.id !== id));
+    setProducts(prev => {
+      const next = prev.filter(p => p.id !== id);
+      localStorage.setItem('jps_products', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const bulkDeleteProducts = (productIds: string[]) => {
+    const idSet = new Set(productIds);
+    setProducts(prev => {
+      const next = prev.filter(p => !idSet.has(p.id));
+      localStorage.setItem('jps_products', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const bulkUpdateProducts = (productIds: string[], updates: Partial<Product>) => {
+    const idSet = new Set(productIds);
+    setProducts(prev => {
+      const next = prev.map(p => {
+        if (!idSet.has(p.id)) return p;
+        return {
+          ...p,
+          ...updates,
+          needTags:
+            updates.needTags && updates.needTags.length > 0
+              ? updates.needTags
+              : p.needTags,
+        };
+      });
+      localStorage.setItem('jps_products', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  // Complete The Look (Bundles) Operations
+  const addBundle = (newBundle: BundleOffer) => {
+    setBundles(prev => {
+      const updated = [newBundle, ...prev];
+      localStorage.setItem('jps_bundles', JSON.stringify(updated));
+      return updated;
+    });
+    if (newBundle.isActive !== false) {
+      setActiveBundleId(newBundle.id);
+    }
+  };
+
+  const updateBundle = (updatedBundle: BundleOffer) => {
+    setBundles(prev => {
+      const updated = prev.map(b => (b.id === updatedBundle.id ? updatedBundle : b));
+      localStorage.setItem('jps_bundles', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const deleteBundle = (bundleId: string) => {
+    setBundles(prev => {
+      const updated = prev.filter(b => b.id !== bundleId);
+      localStorage.setItem('jps_bundles', JSON.stringify(updated));
+      return updated;
+    });
+    if (activeBundleId === bundleId) {
+      const remaining = bundles.filter(b => b.id !== bundleId);
+      const nextActive = remaining[0]?.id || null;
+      setActiveBundleId(nextActive);
+    }
+  };
+
+  const setActiveBundleId = (id: string | null) => {
+    setActiveBundleIdState(id);
+    if (id) {
+      localStorage.setItem('jps_active_bundle', id);
+    } else {
+      localStorage.removeItem('jps_active_bundle');
+    }
+  };
+
+  const autoGenerateBundle = (): BundleOffer | null => {
+    const generated = generateSmartComboBundle(products, bundles);
+    if (generated) {
+      addBundle(generated);
+      return generated;
+    }
+    return null;
+  };
+
+  // Occasions ("আপনার কী প্রয়োজন?") Operations
+  const autoAssignNeedTags = (prod: Product): NeedTag[] => {
+    return detectProductOccasions(prod);
+  };
+
+  const updateProductNeedTags = (productId: string, needTags: NeedTag[]) => {
+    setProducts(prev => {
+      const updated = prev.map(p => (p.id === productId ? { ...p, needTags } : p));
+      localStorage.setItem('jps_products', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const autoTagAllProducts = (): number => {
+    let taggedCount = 0;
+    setProducts(prev => {
+      const updated = prev.map(p => {
+        if (!p.needTags || p.needTags.length === 0) {
+          taggedCount++;
+          return { ...p, needTags: detectProductOccasions(p) };
+        }
+        return p;
+      });
+      localStorage.setItem('jps_products', JSON.stringify(updated));
+      return updated;
+    });
+    return taggedCount;
   };
 
   // User auth
@@ -1374,6 +1622,90 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       phone: existing.phone,
       email: existing.email,
     });
+  };
+
+  // Instant Phone OTP Login
+  const loginCustomerWithOtp = (phone: string) => {
+    const cleanPhone = phone.trim().replace(/\D/g, '');
+    if (cleanPhone.length < 11) {
+      return { success: false, message: 'অনুগ্রহ করে সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন।' };
+    }
+
+    let existing = registeredCustomers.find(c => c.phone.replace(/\D/g, '') === cleanPhone);
+    if (!existing) {
+      const newCust: RegisteredCustomer = {
+        id: `cust-${Date.now()}`,
+        name: `গ্রাহক-${cleanPhone.slice(-4)}`,
+        phone: cleanPhone,
+        email: `${cleanPhone}@customer.jotpotshop.com`,
+        password: 'password123',
+        isGoogleUser: false,
+        createdAt: new Date().toISOString(),
+      };
+      setRegisteredCustomers(prev => [newCust, ...prev]);
+      existing = newCust;
+    }
+
+    setUser({
+      isLoggedIn: true,
+      name: existing.name,
+      phone: existing.phone,
+      email: existing.email,
+    });
+
+    return { success: true, message: `স্বাগতম ${existing.name}! ওটিপি যাচাই সফল হয়েছে।` };
+  };
+
+  // Reset Customer Password
+  const resetCustomerPassword = (phone: string, newPass: string) => {
+    const cleanPhone = phone.trim().replace(/\D/g, '');
+    if (cleanPhone.length < 11) {
+      return { success: false, message: 'সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন।' };
+    }
+    if (!newPass || newPass.length < 6) {
+      return { success: false, message: 'নতুন পাসওয়ার্ড কমপক্ষে ৬ ডিজিটের হতে হবে।' };
+    }
+
+    const found = registeredCustomers.find(c => c.phone.replace(/\D/g, '') === cleanPhone);
+    if (!found) {
+      return { success: false, message: 'এই নম্বরে কোনো অ্যাকাউন্ট পাওয়া যায়নি। নতুন অ্যাকাউন্ট রেজিস্ট্রেশন করুন।' };
+    }
+
+    setRegisteredCustomers(prev =>
+      prev.map(c => (c.phone.replace(/\D/g, '') === cleanPhone ? { ...c, password: newPass } : c))
+    );
+
+    setUser({
+      isLoggedIn: true,
+      name: found.name,
+      phone: found.phone,
+      email: found.email,
+    });
+
+    return { success: true, message: 'পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে এবং আপনি লগইন হয়েছেন!' };
+  };
+
+  // Update Customer Profile
+  const updateCustomerProfile = (updates: { name: string; phone: string; email?: string }) => {
+    setUser(prev => ({
+      ...prev,
+      name: updates.name.trim() || prev.name,
+      phone: updates.phone.trim() || prev.phone,
+      email: (updates.email || prev.email || '').trim(),
+    }));
+
+    setRegisteredCustomers(prev =>
+      prev.map(c =>
+        c.phone === user.phone
+          ? {
+              ...c,
+              name: updates.name.trim() || c.name,
+              phone: updates.phone.trim() || c.phone,
+              email: (updates.email || c.email).trim(),
+            }
+          : c
+      )
+    );
   };
 
   // Toggle AI Sales Agent
@@ -1556,18 +1888,33 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // RBAC Permission Checking
   const hasPermission = (module: SystemModule, action: PermissionAction): boolean => {
     if (currentRole === 'SUPER_ADMIN') return true; // Super Admin has god-mode
+    // Super Admin & Admin have full authority for products, categories, coupons, homepage (occasions & bundles)
+    if (currentRole === 'ADMIN') {
+      if (['products', 'categories', 'coupons', 'homepage', 'orders', 'customers'].includes(module)) {
+        return true;
+      }
+    }
     const perms = rolePermissions[currentRole]?.[module] || [];
     return perms.includes(action) || perms.includes('manage');
   };
 
   const updateRolePermission = (role: UserRole, module: SystemModule, actions: PermissionAction[]) => {
-    setRolePermissions(prev => ({
-      ...prev,
-      [role]: {
-        ...prev[role],
-        [module]: actions,
-      },
-    }));
+    setRolePermissions(prev => {
+      const updated = {
+        ...prev,
+        [role]: {
+          ...prev[role],
+          [module]: actions,
+        },
+      };
+      localStorage.setItem('jps_role_permissions', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const resetRolePermissionsToDefault = () => {
+    setRolePermissions(DEFAULT_ROLE_PERMISSIONS);
+    localStorage.setItem('jps_role_permissions', JSON.stringify(DEFAULT_ROLE_PERMISSIONS));
   };
 
   // Business Configurations updates
@@ -1586,12 +1933,23 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const saveBrandingToRemote = async (settings: Partial<WebsiteSettings>): Promise<boolean> => {
     try {
       const merged = { ...websiteSettings, ...settings };
+      // Sanitize and compress data URLs before storing and syncing
+      if (merged.logoUrl?.startsWith('data:') && merged.logoUrl.length > 50000) {
+        merged.logoUrl = await resizeDataUrl(merged.logoUrl, 320, 0.70);
+      }
+      if (merged.mobileLogoUrl?.startsWith('data:') && merged.mobileLogoUrl.length > 30000) {
+        merged.mobileLogoUrl = await resizeDataUrl(merged.mobileLogoUrl, 180, 0.70);
+      }
+      if (merged.faviconUrl?.startsWith('data:') && merged.faviconUrl.length > 15000) {
+        merged.faviconUrl = await resizeDataUrl(merged.faviconUrl, 48, 0.65);
+      }
+
       setWebsiteSettings(merged);
       localStorage.setItem('jps_website_settings', JSON.stringify(merged));
       await saveBrandingToFirestore(merged);
       return true;
     } catch (err) {
-      console.error('Failed to save branding to Firestore:', err);
+      console.warn('Failed to save branding to Firestore:', err);
       return false;
     }
   };
@@ -1605,9 +1963,11 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateCourierConfig = (courierId: CourierPartner, config: Partial<CourierConfig>) => {
-    setCourierConfigs(prev =>
-      prev.map(c => (c.id === courierId ? { ...c, ...config } : c))
-    );
+    setCourierConfigs(prev => {
+      const updated = prev.map(c => (c.id === courierId ? { ...c, ...config } : c));
+      saveCouriersToFirestore(updated).catch(() => {});
+      return updated;
+    });
   };
 
   const updateReturnPolicySettings = (settings: Partial<ReturnPolicySettings>) => {
@@ -1729,10 +2089,21 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: true, message: 'সুপার এডমিন হিসেবে সফলভাবে লগইন সম্পন্ন হয়েছে!' };
     }
 
-    // Check staff accounts list
-    const match = staffAccounts.find(
-      s => (s.email.toLowerCase() === cleanId || s.phone === cleanId || s.id === cleanId) && s.password === cleanPass
-    );
+    // Check staff accounts list (matching by full email, username prefix before @, phone, or ID)
+    const match = staffAccounts.find(s => {
+      const emailLower = s.email.toLowerCase();
+      const usernamePrefix = emailLower.split('@')[0];
+      const idLower = s.id.toLowerCase();
+      const phoneClean = s.phone.trim();
+
+      const identifierMatches =
+        emailLower === cleanId ||
+        usernamePrefix === cleanId ||
+        idLower === cleanId ||
+        phoneClean === cleanId;
+
+      return identifierMatches && s.password === cleanPass;
+    });
 
     if (match) {
       if (!match.isActive) {
@@ -1758,6 +2129,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAdminUser(null);
     setIsAdminView(false);
     localStorage.removeItem('jps_active_admin');
+    if (typeof window !== 'undefined') {
+      window.history.pushState(null, '', '/');
+    }
   };
 
   const addStaffAccount = (newStaff: Omit<StaffAccount, 'id' | 'lastLogin'>) => {
@@ -1805,6 +2179,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addProduct,
         updateProduct,
         deleteProduct,
+        bulkDeleteProducts,
+        bulkUpdateProducts,
         cart,
         addToCart,
         removeFromCart,
@@ -1847,6 +2223,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         registeredCustomers,
         registerCustomer,
         loginCustomerWithPassword,
+        loginCustomerWithOtp,
+        resetCustomerPassword,
+        updateCustomerProfile,
         loginWithGoogle,
         conversations,
         activeChatConversationId,
@@ -1899,6 +2278,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         rolePermissions,
         updateRolePermission,
         hasPermission,
+        resetRolePermissionsToDefault,
         websiteSettings,
         updateWebsiteSettings,
         deliverySettings,
@@ -1927,6 +2307,16 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addHeroBanner,
         updateHeroBanner,
         deleteHeroBanner,
+        bundles,
+        activeBundleId,
+        addBundle,
+        updateBundle,
+        deleteBundle,
+        setActiveBundleId,
+        autoGenerateBundle,
+        autoAssignNeedTags,
+        updateProductNeedTags,
+        autoTagAllProducts,
         adminUser,
         showAdminLoginModal,
         setShowAdminLoginModal,

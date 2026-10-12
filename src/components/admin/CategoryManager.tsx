@@ -22,7 +22,7 @@ import { uploadCategoryIcon } from '../../lib/firebase';
 const PRESET_EMOJIS = ['👨', '👩', '📱', '💍', '👟', '👜', '🕶️', '🏠', '💄', '🎁', '⚡', '👕', '👗', '🎮', '🎧', '⌚', '🧸', '📚'];
 
 export const CategoryManager: React.FC = () => {
-  const { categories, addCategory, updateCategory, deleteCategory, products, t, language } = useShop();
+  const { categories, addCategory, updateCategory, deleteCategory, products, t, language, currentRole, hasPermission } = useShop();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
@@ -210,15 +210,25 @@ export const CategoryManager: React.FC = () => {
               />
             </div>
 
-            <button
-              onClick={handleOpenAdd}
-              className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl flex items-center space-x-1.5 cursor-pointer shadow-md shadow-rose-600/20 transition-all text-xs"
-            >
-              <Plus className="w-4 h-4" />
-              <span>{t('নতুন ক্যাটাগরি', 'Add Category')}</span>
-            </button>
+            {hasPermission('categories', 'create') && (
+              <button
+                onClick={handleOpenAdd}
+                className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl flex items-center space-x-1.5 cursor-pointer shadow-md shadow-rose-600/20 transition-all text-xs"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{t('নতুন ক্যাটাগরি', 'Add Category')}</span>
+              </button>
+            )}
           </div>
         </div>
+
+        {/* Manager Read-only Banner */}
+        {currentRole === 'MANAGER' && (
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl text-xs text-blue-900 flex items-center space-x-2">
+            <Layers className="w-4 h-4 text-blue-600 shrink-0" />
+            <span><strong>📋 ম্যানেজার মোড (রিড-অনলি):</strong> ওয়্যারহাউজ স্টক ও পণ্য শ্রেণিবিন্যাস দেখতে পারবেন। নতুন ক্যাটাগরি তৈরি, এডিট বা ডিলিট করার অনুমতি নেই।</span>
+          </div>
+        )}
 
         {/* Status notification */}
         {statusMessage && (
@@ -299,21 +309,25 @@ export const CategoryManager: React.FC = () => {
 
                     {/* Actions: Edit & Delete */}
                     <div className="flex items-center space-x-1 shrink-0">
-                      <button
-                        onClick={() => handleOpenEdit(c)}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg cursor-pointer transition-colors"
-                        title="ক্যাটাগরি ইডিট করুন"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
+                      {hasPermission('categories', 'edit') && (
+                        <button
+                          onClick={() => handleOpenEdit(c)}
+                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg cursor-pointer transition-colors"
+                          title="ক্যাটাগরি ইডিট করুন"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                      )}
 
-                      <button
-                        onClick={() => setDeletingCatId(c.id)}
-                        className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
-                        title="ক্যাটাগরি ডিলিট করুন"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {hasPermission('categories', 'delete') && (
+                        <button
+                          onClick={() => setDeletingCatId(c.id)}
+                          className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
+                          title="ক্যাটাগরি ডিলিট করুন"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -337,16 +351,20 @@ export const CategoryManager: React.FC = () => {
 
                 {/* Card footer: Quick Icon Upload Action */}
                 <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-[10px] text-gray-500">
-                  <button
-                    onClick={() => {
-                      setQuickUploadTargetId(c.id);
-                      quickIconUploadRef.current?.click();
-                    }}
-                    className="text-rose-600 hover:text-rose-700 font-bold flex items-center space-x-1 cursor-pointer"
-                  >
-                    <Upload className="w-3 h-3" />
-                    <span>আইকন আপলোড / পরিবর্তন</span>
-                  </button>
+                  {hasPermission('categories', 'edit') ? (
+                    <button
+                      onClick={() => {
+                        setQuickUploadTargetId(c.id);
+                        quickIconUploadRef.current?.click();
+                      }}
+                      className="text-rose-600 hover:text-rose-700 font-bold flex items-center space-x-1 cursor-pointer"
+                    >
+                      <Upload className="w-3 h-3" />
+                      <span>আইকন আপলোড / পরিবর্তন</span>
+                    </button>
+                  ) : (
+                    <span className="text-gray-400">ক্যাটাগরি ব্যাজ</span>
+                  )}
 
                   <span className="text-gray-400">
                     {hasImage ? 'কাস্টম ইমেজ' : 'ইমোজি আইকন'}

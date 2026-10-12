@@ -43,9 +43,10 @@ export const CheckoutModal: React.FC = () => {
   const [fullAddress, setFullAddress] = useState('House 42, Road 15/A, Dhanmondi R/A, Dhaka');
   const [customerNote, setCustomerNote] = useState('');
   const [deliveryOption, setDeliveryOption] = useState<'inside' | 'outside' | 'chattogram'>('inside');
-  const [paymentMethod, setPaymentMethod] = useState<'cod' | 'bkash' | 'nagad' | 'card'>('cod');
+  const [paymentMethod, setPaymentMethod] = useState<'cod' | 'bkash' | 'nagad' | 'rocket'>('cod');
   const [bkashNumber, setBkashNumber] = useState('');
   const [nagadNumber, setNagadNumber] = useState('');
+  const [rocketNumber, setRocketNumber] = useState('');
   const [personalSenderNumber, setPersonalSenderNumber] = useState(user.phone || '');
   const [personalTrxId, setPersonalTrxId] = useState('');
   const [personalAmount, setPersonalAmount] = useState('');
@@ -157,6 +158,23 @@ export const CheckoutModal: React.FC = () => {
       }
     }
 
+    if (paymentMethod === 'rocket') {
+      const isPersonal = (paymentSettings.rocketAccountType || 'Personal') === 'Personal';
+      if (isPersonal) {
+        if (!personalSenderNumber.trim()) {
+          setErrorMessage(t('যে রকেট নম্বর থেকে টাকা পাঠিয়েছেন তা প্রদান করুন', 'Please enter your sender Rocket number'));
+          return;
+        }
+        if (!personalTrxId.trim()) {
+          setErrorMessage(t('রকেট সেন্ড মানি করার পর ট্রানজেকশন আইডি (TrxID) প্রদান করুন', 'Please enter your Rocket Transaction ID (TrxID)'));
+          return;
+        }
+      } else if (!rocketNumber.trim()) {
+        setErrorMessage(t('রকেট অ্যাকাউন্ট নম্বর প্রদান করুন', 'Please enter your Rocket account number'));
+        return;
+      }
+    }
+
     setIsSubmitting(true);
 
     let paymentDetailsObj: {
@@ -178,6 +196,14 @@ export const CheckoutModal: React.FC = () => {
       const isPersonal = paymentSettings.nagadAccountType === 'Personal';
       paymentDetailsObj = {
         senderNumber: isPersonal ? personalSenderNumber.trim() : nagadNumber.trim(),
+        trxId: isPersonal ? personalTrxId.trim().toUpperCase() : undefined,
+        amount: isPersonal ? (Number(personalAmount) || totalAmount) : totalAmount,
+        accountType: isPersonal ? 'Personal' : 'Merchant',
+      };
+    } else if (paymentMethod === 'rocket') {
+      const isPersonal = (paymentSettings.rocketAccountType || 'Personal') === 'Personal';
+      paymentDetailsObj = {
+        senderNumber: isPersonal ? personalSenderNumber.trim() : rocketNumber.trim(),
         trxId: isPersonal ? personalTrxId.trim().toUpperCase() : undefined,
         amount: isPersonal ? (Number(personalAmount) || totalAmount) : totalAmount,
         accountType: isPersonal ? 'Personal' : 'Merchant',
@@ -533,21 +559,21 @@ export const CheckoutModal: React.FC = () => {
                   <p className="text-[10px] text-gray-500 mt-1">{t('নগদ মোবাইল পেমেন্ট', 'Nagad Online Pay')}</p>
                 </button>
 
-                {/* Card */}
+                {/* Rocket (DBBL) */}
                 <button
                   type="button"
-                  onClick={() => setPaymentMethod('card')}
+                  onClick={() => setPaymentMethod('rocket')}
                   className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
-                    paymentMethod === 'card'
-                      ? 'border-indigo-600 bg-indigo-50 text-indigo-950 font-bold shadow-xs'
+                    paymentMethod === 'rocket'
+                      ? 'border-purple-600 bg-purple-50 text-purple-950 font-bold shadow-xs'
                       : 'border-gray-200 bg-white text-gray-700'
                   }`}
                 >
                   <div className="flex items-center space-x-1.5">
-                    <CreditCard className="w-4 h-4 text-indigo-600" />
-                    <span className="text-xs font-bold">{t('কার্ড / অনলাইন', 'Debit / Credit Card')}</span>
+                    <span className="w-4 h-4 rounded-full bg-purple-600 text-white text-[9px] font-bold flex items-center justify-center">র</span>
+                    <span className="text-xs font-bold text-purple-700">Rocket (রকেট)</span>
                   </div>
-                  <p className="text-[10px] text-gray-500 mt-1">Visa, Mastercard, Amex</p>
+                  <p className="text-[10px] text-gray-500 mt-1">{t('ডিবিবিএল রকেট পেমেন্ট', 'DBBL Rocket Pay')}</p>
                 </button>
               </div>
 
@@ -777,6 +803,119 @@ export const CheckoutModal: React.FC = () => {
                         onChange={e => setNagadNumber(e.target.value)}
                         placeholder="01XXXXXXXXX"
                         className="w-full bg-white border border-amber-300 rounded-xl p-2 text-xs font-mono"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Rocket Payment Form & Instructions */}
+              {paymentMethod === 'rocket' && (
+                <div className="mt-2 bg-purple-50/80 p-3.5 rounded-2xl border border-purple-200 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-purple-200/60">
+                    <div className="flex items-center space-x-2">
+                      <span className="w-5 h-5 rounded-full bg-purple-600 text-white text-[10px] font-bold flex items-center justify-center">
+                        র
+                      </span>
+                      <span className="text-xs font-black text-purple-900">
+                        {(paymentSettings.rocketAccountType || 'Personal') === 'Personal'
+                          ? t('রকেট পার্সোনাল সেন্ড মানি', 'Rocket Personal Send Money')
+                          : t('রকেট মার্চেন্ট পেমেন্ট', 'Rocket Merchant Payment')}
+                      </span>
+                    </div>
+                    <span className="bg-purple-200/70 text-purple-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      {(paymentSettings.rocketAccountType || 'Personal') === 'Personal' ? 'Personal Account' : 'Merchant Gateway'}
+                    </span>
+                  </div>
+
+                  {(paymentSettings.rocketAccountType || 'Personal') === 'Personal' ? (
+                    <div className="space-y-3">
+                      <div className="bg-white p-3 rounded-xl border border-purple-200 space-y-2">
+                        <p className="text-[11px] text-purple-900 font-medium">
+                          {paymentSettings.rocketInstructionsBn ||
+                            'রকেট অ্যাপ অথবা *322# ডায়াল করে নিচের ১২ ডিজিটের নম্বরে সেন্ড মানি (Send Money) সম্পন্ন করুন:'}
+                        </p>
+                        <div className="flex items-center justify-between bg-purple-50 p-2 rounded-lg border border-purple-100">
+                          <div>
+                            <span className="text-[10px] text-gray-500 block">পার্সোনাল রকেট নম্বর (১২ ডিজিট):</span>
+                            <span className="text-xs font-mono font-black text-purple-700">
+                              {paymentSettings.rocketNumber || '01912-345678-9'}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(paymentSettings.rocketNumber || '01912-345678-9');
+                              setCopiedNumber(true);
+                              setTimeout(() => setCopiedNumber(false), 2000);
+                            }}
+                            className="bg-white hover:bg-purple-100 text-purple-700 border border-purple-200 px-2 py-1 rounded text-[10px] font-bold flex items-center space-x-1 cursor-pointer transition-colors"
+                          >
+                            {copiedNumber ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                            <span>{copiedNumber ? 'কপি হয়েছে' : 'কপি করুন'}</span>
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-purple-950 font-bold pt-1">
+                          <span>সেন্ড মানি অ্যামাউন্ট:</span>
+                          <span className="text-rose-600 font-extrabold">{formatPrice(totalAmount)}</span>
+                        </div>
+                      </div>
+
+                      {/* Customer inputs after sending money */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="block text-[11px] font-bold text-purple-950 mb-1">
+                            {t('১. আপনার রকেট নম্বর * (১২ ডিজিট)', '1. Your Sender Rocket Number *')}
+                          </label>
+                          <input
+                            type="tel"
+                            required
+                            value={personalSenderNumber}
+                            onChange={e => setPersonalSenderNumber(e.target.value)}
+                            placeholder="যেমন: 019XXXXXXXXX"
+                            className="w-full bg-white border border-purple-300 rounded-xl p-2 text-xs font-mono focus:border-purple-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-purple-950 mb-1">
+                            {t('২. ট্রানজেকশন আইডি (TrxID) *', '2. Transaction ID (TrxID) *')}
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={personalTrxId}
+                            onChange={e => setPersonalTrxId(e.target.value)}
+                            placeholder="যেমন: 98K2P4M"
+                            className="w-full bg-white border border-purple-300 rounded-xl p-2 text-xs font-mono uppercase focus:border-purple-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-purple-950 mb-1">
+                          {t('৩. প্রেরিত টাকার পরিমাণ (৳ অ্যামাউন্ট)', '3. Paid Amount (৳) *')}
+                        </label>
+                        <input
+                          type="number"
+                          value={personalAmount || totalAmount}
+                          onChange={e => setPersonalAmount(e.target.value)}
+                          placeholder={String(totalAmount)}
+                          className="w-full bg-white border border-purple-300 rounded-xl p-2 text-xs font-bold text-gray-900 focus:border-purple-500 font-mono"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-xs font-bold text-purple-900 mb-1">
+                        {t('আপনার রকেট নম্বর প্রদান করুন:', 'Enter Your Rocket Number:')}
+                      </label>
+                      <input
+                        type="tel"
+                        value={rocketNumber}
+                        onChange={e => setRocketNumber(e.target.value)}
+                        placeholder="01XXXXXXXXX"
+                        className="w-full bg-white border border-purple-300 rounded-xl p-2 text-xs font-mono"
                       />
                     </div>
                   )}

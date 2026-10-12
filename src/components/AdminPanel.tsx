@@ -42,19 +42,31 @@ import {
   Tag,
   Upload,
   Bot,
+  Target,
+  Sliders,
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
-import { Product, Order, OrderStatus, CourierPartner, UserRole } from '../types';
+import { Product, Order, OrderStatus, CourierPartner, UserRole, NeedTag } from '../types';
 import { CATEGORIES } from '../data/mockData';
+import { OCCASIONS_LIST, detectProductOccasions } from '../data/occasionsData';
 import { RolePermissionManager } from './admin/RolePermissionManager';
 import { BusinessSettingsManager } from './admin/BusinessSettingsManager';
 import { CategoryManager } from './admin/CategoryManager';
+import { BundleManager } from './admin/BundleManager';
+import { OccasionsManager } from './admin/OccasionsManager';
 import { OrderCallModal } from './admin/OrderCallModal';
 import { OrderEditModal } from './admin/OrderEditModal';
 import { CourierDispatchModal } from './admin/CourierDispatchModal';
+import { CourierManager } from './admin/CourierManager';
 import { ShippingLabelModal } from './admin/ShippingLabelModal';
 import { OmnichannelChatManager } from './admin/OmnichannelChatManager';
 import { RoleDashboards } from './admin/RoleDashboards';
+import {
+  ProductEditModal,
+  ProductDeleteModal,
+  BulkProductEditModal,
+  BulkProductDeleteModal,
+} from './admin/ProductModals';
 
 const AccessRestrictedCard: React.FC<{
   role: UserRole;
@@ -84,12 +96,64 @@ const AccessRestrictedCard: React.FC<{
   </div>
 );
 
+export const ROLE_PERMITTED_TABS: Record<UserRole, string[]> = {
+  SUPER_ADMIN: [
+    'dashboard',
+    'orders',
+    'livechat',
+    'couriers',
+    'products',
+    'inventory',
+    'categories',
+    'bundles',
+    'occasions',
+    'customers',
+    'coupons',
+    'delivery',
+    'reports',
+    'roles',
+    'settings',
+  ],
+  ADMIN: [
+    'dashboard',
+    'orders',
+    'livechat',
+    'couriers',
+    'products',
+    'inventory',
+    'categories',
+    'bundles',
+    'occasions',
+    'customers',
+    'coupons',
+    'delivery',
+    'reports',
+  ],
+  MANAGER: [
+    'dashboard',
+    'orders',
+    'livechat',
+    'couriers',
+    'inventory',
+    'products',
+    'categories',
+  ],
+  STAFF: [
+    'dashboard',
+    'orders',
+    'livechat',
+    'products',
+  ],
+};
+
 export const AdminPanel: React.FC = () => {
   const {
     products,
     addProduct,
     updateProduct,
     deleteProduct,
+    bulkDeleteProducts,
+    bulkUpdateProducts,
     orders,
     confirmOrder,
     cancelOrder,
@@ -130,6 +194,8 @@ export const AdminPanel: React.FC = () => {
     | 'products'
     | 'inventory'
     | 'categories'
+    | 'bundles'
+    | 'occasions'
     | 'couriers'
     | 'customers'
     | 'coupons'
@@ -142,21 +208,9 @@ export const AdminPanel: React.FC = () => {
 
   // Strict RBAC Tab Access Enforcement: Prevent unauthorized role from accessing hidden tabs
   useEffect(() => {
-    if (currentRole === 'STAFF') {
-      const staffAllowed = ['dashboard', 'orders', 'livechat', 'products'];
-      if (!staffAllowed.includes(adminTab)) {
-        setAdminTab('dashboard');
-      }
-    } else if (currentRole === 'MANAGER') {
-      const managerAllowed = ['dashboard', 'orders', 'livechat', 'couriers', 'products', 'inventory', 'categories', 'reports'];
-      if (!managerAllowed.includes(adminTab)) {
-        setAdminTab('dashboard');
-      }
-    } else if (currentRole === 'ADMIN') {
-      const adminAllowed = ['dashboard', 'orders', 'livechat', 'couriers', 'products', 'inventory', 'categories', 'customers', 'coupons', 'delivery', 'reports'];
-      if (!adminAllowed.includes(adminTab)) {
-        setAdminTab('dashboard');
-      }
+    const permitted = ROLE_PERMITTED_TABS[currentRole] || ['dashboard'];
+    if (!permitted.includes(adminTab)) {
+      setAdminTab('dashboard');
     }
   }, [currentRole, adminTab]);
 
@@ -185,6 +239,7 @@ export const AdminPanel: React.FC = () => {
   const [newImageUrl, setNewImageUrl] = useState('https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?auto=format&fit=crop&w=800&q=80');
   const [newDesc, setNewDesc] = useState('High quality fabric crafted for comfort and elegance.');
   const [newDescBn, setNewDescBn] = useState('আরামদায়ক ও টেকসই সুতি কাপড়ে তৈরি প্রিমিয়াম কোয়ালিটি পণ্য।');
+  const [newNeedTags, setNewNeedTags] = useState<NeedTag[]>(['office', 'campus', 'everyday']);
 
   // Add Category Modal State
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
@@ -201,23 +256,72 @@ export const AdminPanel: React.FC = () => {
   const [newCouponMin, setNewCouponMin] = useState(1000);
   const [newCouponDesc, setNewCouponDesc] = useState('');
 
+  // Edit & Delete Product Modals State
+  const [productToEdit, setProductToEdit] = useState<Product | null>(null);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [adminToast, setAdminToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (adminToast) {
+      const timer = setTimeout(() => setAdminToast(null), 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [adminToast]);
+
+  const handleSaveProductEdit = (updated: Product) => {
+    updateProduct(updated);
+    setProductToEdit(null);
+    setAdminToast({ message: `"${updated.name}" পণ্যটি সফলভাবে আপডেট করা হয়েছে!`, type: 'success' });
+  };
+
+  const handleConfirmProductDelete = (productId: string) => {
+    const target = products.find(p => p.id === productId);
+    deleteProduct(productId);
+    setProductToDelete(null);
+    setAdminToast({ message: `"${target?.name || 'পণ্য'}" সফলভাবে মুছে ফেলা হয়েছে!`, type: 'success' });
+  };
+
+  // Bulk Product Selection & Actions State
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+
+  const handleToggleSelectProduct = (productId: string) => {
+    setSelectedProductIds(prev =>
+      prev.includes(productId) ? prev.filter(id => id !== productId) : [...prev, productId]
+    );
+  };
+
+  const handleClearSelection = () => {
+    setSelectedProductIds([]);
+  };
+
+  const handleBulkDeleteConfirm = (productIds: string[]) => {
+    bulkDeleteProducts(productIds);
+    setSelectedProductIds([]);
+    setShowBulkDeleteModal(false);
+    setAdminToast({
+      message: `নির্বাচিত ${productIds.length}টি পণ্য সফলভাবে মুছে ফেলা হয়েছে!`,
+      type: 'success',
+    });
+  };
+
+  const handleBulkEditSave = (productIds: string[], updates: Partial<Product>) => {
+    bulkUpdateProducts(productIds, updates);
+    setSelectedProductIds([]);
+    setShowBulkEditModal(false);
+    setAdminToast({
+      message: `নির্বাচিত ${productIds.length}টি পণ্যের তথ্য সফলভাবে আপডেট করা হয়েছে!`,
+      type: 'success',
+    });
+  };
+
   const handleRoleSwitch = (newRole: UserRole) => {
     setCurrentRole(newRole);
-    if (newRole === 'STAFF') {
-      const allowed = ['dashboard', 'orders', 'livechat', 'products'];
-      if (!allowed.includes(adminTab)) {
-        setAdminTab('dashboard');
-      }
-    } else if (newRole === 'MANAGER') {
-      const allowed = ['dashboard', 'orders', 'livechat', 'couriers', 'products', 'inventory', 'categories', 'reports'];
-      if (!allowed.includes(adminTab)) {
-        setAdminTab('dashboard');
-      }
-    } else if (newRole === 'ADMIN') {
-      const allowed = ['dashboard', 'orders', 'livechat', 'couriers', 'products', 'inventory', 'categories', 'customers', 'coupons', 'delivery', 'reports'];
-      if (!allowed.includes(adminTab)) {
-        setAdminTab('dashboard');
-      }
+    const permitted = ROLE_PERMITTED_TABS[newRole] || ['dashboard'];
+    if (!permitted.includes(adminTab)) {
+      setAdminTab('dashboard');
     }
   };
 
@@ -307,7 +411,16 @@ export const AdminPanel: React.FC = () => {
       reviewsCount: 1,
       isFlashSale: false,
       isBestSeller: true,
-      needTags: ['office', 'campus', 'everyday'],
+      needTags:
+        newNeedTags.length > 0
+          ? newNeedTags
+          : detectProductOccasions({
+              name: newTitle,
+              nameBn: newTitleBn,
+              category: newCategory,
+              subcategory: newSubcategory,
+              description: newDesc,
+            }),
       reviews: [],
     };
 
@@ -315,6 +428,10 @@ export const AdminPanel: React.FC = () => {
     setShowAddProductModal(false);
     setNewTitle('');
     setNewTitleBn('');
+    setAdminToast({
+      message: `"${created.name}" পণ্যটি সফলভাবে যুক্ত ও স্টোরে লাইভ করা হয়েছে!`,
+      type: 'success',
+    });
   };
 
   const handleCreateCoupon = (e: React.FormEvent) => {
@@ -365,7 +482,12 @@ export const AdminPanel: React.FC = () => {
       <div className="max-w-7xl mx-auto bg-white rounded-3xl p-4 sm:p-5 shadow-xs border border-gray-200 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center space-x-3.5">
           <button
-            onClick={() => setIsAdminView(false)}
+            onClick={() => {
+              setIsAdminView(false);
+              if (typeof window !== 'undefined') {
+                window.history.pushState(null, '', '/');
+              }
+            }}
             className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-2xl text-gray-700 transition-colors cursor-pointer"
             title={t('গ্রাহক স্টোরে ফিরে যান', 'Back to Storefront')}
           >
@@ -385,22 +507,34 @@ export const AdminPanel: React.FC = () => {
               <span
                 className={`text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider ${
                   currentRole === 'SUPER_ADMIN'
-                    ? 'bg-rose-600 text-white'
+                    ? 'bg-rose-600 text-white shadow-xs'
                     : currentRole === 'ADMIN'
-                    ? 'bg-purple-600 text-white'
+                    ? 'bg-purple-600 text-white shadow-xs'
                     : currentRole === 'MANAGER'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-700 text-white'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-emerald-600 text-white shadow-xs'
                 }`}
               >
-                {currentRole.replace('_', ' ')}
+                {currentRole === 'SUPER_ADMIN'
+                  ? '👑 সুপার এডমিন'
+                  : currentRole === 'ADMIN'
+                  ? '🛡️ স্টোর এডমিন'
+                  : currentRole === 'MANAGER'
+                  ? '📋 অপারেশন ম্যানেজার'
+                  : '💼 সাপোর্ট স্টাফ'}
               </span>
               <h1 className="text-lg sm:text-xl font-black text-gray-900">
                 {websiteSettings.storeName} কন্ট্রোল সেন্টার
               </h1>
             </div>
-            <p className="text-xs text-gray-500 mt-0.5">
-              সুপার এডমিন ফুল কন্ট্রোল • অর্ডার ভেরিফিকেশন • কুরিয়ার ইন্টিগ্রেশন • RBAC পারমিশন
+            <p className="text-xs text-gray-500 mt-0.5 font-medium">
+              {currentRole === 'SUPER_ADMIN'
+                ? 'সুপার এডমিন ফুল কন্ট্রোল • আর্থিক প্রতিবেদন • কুরিয়ার এপিআই • টিম পারমিশন ও সিস্টেম সেটিংস'
+                : currentRole === 'ADMIN'
+                ? 'স্টোর অপারেশনস • পণ্য ক্যাটালগ নিয়ন্ত্রণ • কুপন ও ক্যাম্পেইন • গ্রাহক ডিরেক্টরি ও অফার'
+                : currentRole === 'MANAGER'
+                ? 'লজিস্টিকস ও ইনভেন্টরি • অর্ডার প্যাকেজিং • কুরিয়ার চালান হস্তান্তর • ওয়্যারহাউজ স্টক'
+                : 'কাস্টমার সাপোর্ট ডেস্ক • জরুরি কল ভেরিফিকেশন • লাইভ চ্যাট/হোয়াটসঅ্যাপ • স্টক ও মূল্য লুকআপ'}
             </p>
           </div>
         </div>
@@ -419,46 +553,32 @@ export const AdminPanel: React.FC = () => {
             </div>
           )}
 
-          {/* Role Switcher Pill - Only Super Admin can preview/switch other roles */}
-          {(!adminUser || adminUser.role === 'SUPER_ADMIN') ? (
-            <div className="flex items-center space-x-1 bg-amber-50 p-1 rounded-2xl text-xs font-bold border border-amber-200">
-              <span className="text-[10px] text-amber-800 uppercase px-2 font-mono flex items-center space-x-1">
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
-                <span>সুপার এডমিন রোল প্রিভিউ:</span>
-              </span>
-              {(
-                [
-                  { id: 'SUPER_ADMIN', label: '👑 সুপার এডমিন', tip: 'ফুল মাস্টার এক্সেস' },
-                  { id: 'ADMIN', label: '🛡️ এডমিন', tip: 'পণ্য, কুপন ও গ্রাহক কন্ট্রোল' },
-                  { id: 'MANAGER', label: '📋 ম্যানেজার', tip: 'কুরিয়ার ও ইনভেন্টরি কন্ট্রোল' },
-                  { id: 'STAFF', label: '💼 স্টাফ', tip: 'অর্ডার কল ও চ্যাট সাপোর্ট' },
-                ] as const
-              ).map(r => (
-                <button
-                  key={r.id}
-                  onClick={() => handleRoleSwitch(r.id)}
-                  title={r.tip}
-                  className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer text-xs font-bold flex items-center space-x-1 ${
-                    currentRole === r.id
-                      ? 'bg-rose-600 text-white shadow-xs font-black'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
-                  }`}
-                >
-                  <span>{r.label}</span>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="flex items-center space-x-2 bg-gray-100 px-3 py-1.5 rounded-2xl text-xs font-bold border border-gray-200 text-gray-700">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>
-                বর্তমান রোল: <strong className="text-gray-900">{adminUser.name}</strong> ({adminUser.role})
-              </span>
-              <span className="text-[10px] bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full font-mono">
-                লকড এক্সেস
-              </span>
-            </div>
-          )}
+          {/* Active Authenticated User & Role Clearance Badge */}
+          <div className="flex items-center space-x-2 bg-white px-3.5 py-1.5 rounded-2xl text-xs font-bold border border-gray-200 text-gray-700 shadow-xs">
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <span>
+              লগইনকৃত: <strong className="text-gray-900">{adminUser?.name || 'অ্যাডমিন'}</strong>
+            </span>
+            <span
+              className={`text-[10px] px-2.5 py-0.5 rounded-full font-black border ${
+                currentRole === 'SUPER_ADMIN'
+                  ? 'bg-rose-50 text-rose-800 border-rose-200'
+                  : currentRole === 'ADMIN'
+                  ? 'bg-purple-50 text-purple-800 border-purple-200'
+                  : currentRole === 'MANAGER'
+                  ? 'bg-blue-50 text-blue-800 border-blue-200'
+                  : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+              }`}
+            >
+              {currentRole === 'SUPER_ADMIN'
+                ? '👑 সুপার এডমিন'
+                : currentRole === 'ADMIN'
+                ? '🛡️ এডমিন'
+                : currentRole === 'MANAGER'
+                ? '📋 ম্যানেজার'
+                : '💼 স্টাফ'}
+            </span>
+          </div>
 
           {/* Add Product Button (Permission gated) */}
           {hasPermission('products', 'create') && (
@@ -482,6 +602,45 @@ export const AdminPanel: React.FC = () => {
               <span>CSV</span>
             </button>
           )}
+        </div>
+      </div>
+
+      {/* RBAC Role Access & Permissions Banner */}
+      <div className={`max-w-7xl mx-auto rounded-3xl p-4 sm:p-5 mb-6 border shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+        currentRole === 'SUPER_ADMIN'
+          ? 'bg-gradient-to-r from-gray-950 via-slate-900 to-rose-950 text-white border-rose-900/40'
+          : currentRole === 'ADMIN'
+          ? 'bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-900 text-white border-purple-800/40'
+          : currentRole === 'MANAGER'
+          ? 'bg-gradient-to-r from-blue-950 via-slate-900 to-teal-950 text-white border-blue-800/40'
+          : 'bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 text-white border-emerald-800/40'
+      }`}>
+        <div className="space-y-1">
+          <div className="flex items-center space-x-2">
+            <span className="text-xs uppercase font-mono tracking-wider px-2.5 py-0.5 rounded-full bg-white/20 font-black">
+              {currentRole === 'SUPER_ADMIN' ? '👑 মাস্টার এক্সিকিউটিভ সুইট' :
+               currentRole === 'ADMIN' ? '🛡️ স্টোর ম্যানেজমেন্ট' :
+               currentRole === 'MANAGER' ? '📋 অপারেশনস ও লজিস্টিকস' :
+               '💼 কাস্টমার সাপোর্ট ডেস্ক'}
+            </span>
+            <span className="text-xs opacity-60">•</span>
+            <span className="text-xs font-semibold opacity-90">
+              বর্তমান ইউজার: <strong className="text-white">{adminUser?.name || 'Md Mahmudul Hashan'}</strong> ({adminUser?.email || 'admin@jotpotshop.com'})
+            </span>
+          </div>
+
+          <p className="text-xs opacity-90 leading-relaxed max-w-3xl">
+            {currentRole === 'SUPER_ADMIN' && '🔓 পূর্ণ মাস্টার এক্সেস: প্ল্যাটফর্মের সব মডিউল, মোট লাভ ও রাজস্ব, স্টাফ অ্যাকাউন্ট ও পাসওয়ার্ড তৈরি, বিকাশ/নগদ মার্চেন্ট কনফিগ ও সিস্টেম ডেটাবেজ।'}
+            {currentRole === 'ADMIN' && 'অনুমোদিত: পণ্য ক্যাটালগ যোগ/এডিট/ডিলিট, কুপন তৈরি, গ্রাহক তালিকা, ডেলিভারি চার্জ। 🔒 সীমাবদ্ধতা: মূল বিজনেস সেটিংস ও স্টাফ পারমিশন সুরক্ষিত।'}
+            {currentRole === 'MANAGER' && 'অনুমোদিত: অর্ডার প্যাকেজিং, কুরিয়ার বুকিং, চালান লেবেল প্রিন্ট, ইনভেন্টরি লো-স্টক। 🔒 সীমাবদ্ধতা: গ্রাহক ব্যক্তিগত ডেটা, কুপন ও মোট লাভ সুরক্ষিত।'}
+            {currentRole === 'STAFF' && 'অনুমোদিত: পেন্ডিং গ্রাহকদের ফোন কল করা, ঠিকানা যাচাই ও লাইভ চ্যাট ইনবক্স। 🔒 সীমাবদ্ধতা: কোনো আর্থিক ডেটা, কুরিয়ার ডিসপ্যাচ বা পণ্য ডিলিট নিষিদ্ধ।'}
+          </p>
+        </div>
+
+        <div className="flex items-center space-x-2 shrink-0">
+          <span className="text-[11px] bg-white/10 px-3 py-1.5 rounded-xl border border-white/20 font-mono font-bold">
+            মডিউল এক্সেস: {ROLE_PERMITTED_TABS[currentRole].length}/13 টি
+          </span>
         </div>
       </div>
 
@@ -569,7 +728,7 @@ export const AdminPanel: React.FC = () => {
           </button>
 
           {/* 4. Couriers Logistics (Manager, Admin, Super Admin) */}
-          {currentRole !== 'STAFF' && (
+          {ROLE_PERMITTED_TABS[currentRole].includes('couriers') && (
             <button
               onClick={() => setAdminTab('couriers')}
               className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center space-x-2.5 transition-colors cursor-pointer ${
@@ -582,21 +741,23 @@ export const AdminPanel: React.FC = () => {
           )}
 
           {/* 5. Products Catalog (All roles) */}
-          <button
-            onClick={() => setAdminTab('products')}
-            className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center justify-between transition-colors cursor-pointer ${
-              adminTab === 'products' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
-            }`}
-          >
-            <div className="flex items-center space-x-2.5">
-              <Package className="w-4 h-4" />
-              <span>{t('পণ্য তালিকা ও স্টক', 'Products Catalog')}</span>
-            </div>
-            <span className="text-[10px] text-gray-400 font-mono">({products.length})</span>
-          </button>
+          {ROLE_PERMITTED_TABS[currentRole].includes('products') && (
+            <button
+              onClick={() => setAdminTab('products')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center justify-between transition-colors cursor-pointer ${
+                adminTab === 'products' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <Package className="w-4 h-4" />
+                <span>{t('পণ্য তালিকা ও স্টক', 'Products Catalog')}</span>
+              </div>
+              <span className="text-[10px] text-gray-400 font-mono">({products.length})</span>
+            </button>
+          )}
 
           {/* 6. Inventory Low Stock Alerts (Manager, Admin, Super Admin) */}
-          {currentRole !== 'STAFF' && (
+          {ROLE_PERMITTED_TABS[currentRole].includes('inventory') && (
             <button
               onClick={() => setAdminTab('inventory')}
               className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center justify-between transition-colors cursor-pointer ${
@@ -616,7 +777,7 @@ export const AdminPanel: React.FC = () => {
           )}
 
           {/* 7. Categories (Manager, Admin, Super Admin) */}
-          {currentRole !== 'STAFF' && (
+          {ROLE_PERMITTED_TABS[currentRole].includes('categories') && (
             <button
               onClick={() => setAdminTab('categories')}
               className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center space-x-2.5 transition-colors cursor-pointer ${
@@ -628,8 +789,44 @@ export const AdminPanel: React.FC = () => {
             </button>
           )}
 
+          {/* 7b. Complete The Look (Combo Bundles) (Admin, Super Admin) */}
+          {ROLE_PERMITTED_TABS[currentRole].includes('bundles') && (
+            <button
+              onClick={() => setAdminTab('bundles')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center justify-between transition-colors cursor-pointer ${
+                adminTab === 'bundles' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <Sparkles className="w-4 h-4 text-amber-500" />
+                <span>{t('কম্বো বান্ডেল (Complete The Look)', 'Combo Bundles')}</span>
+              </div>
+              <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-1.5 py-0.2 rounded-full">
+                অফার
+              </span>
+            </button>
+          )}
+
+          {/* 7c. Occasions & Need Collections (Admin, Super Admin) */}
+          {ROLE_PERMITTED_TABS[currentRole].includes('occasions') && (
+            <button
+              onClick={() => setAdminTab('occasions')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center justify-between transition-colors cursor-pointer ${
+                adminTab === 'occasions' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <Target className="w-4 h-4 text-indigo-500" />
+                <span>{t('উপলক্ষ কালেকশন (Shop By Need)', 'Occasions & Needs')}</span>
+              </div>
+              <span className="bg-indigo-100 text-indigo-900 text-[10px] font-black px-1.5 py-0.2 rounded-full">
+                🎯
+              </span>
+            </button>
+          )}
+
           {/* 8. Customers Directory (Admin, Super Admin) */}
-          {(currentRole === 'ADMIN' || currentRole === 'SUPER_ADMIN') && (
+          {ROLE_PERMITTED_TABS[currentRole].includes('customers') && (
             <button
               onClick={() => setAdminTab('customers')}
               className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center space-x-2.5 transition-colors cursor-pointer ${
@@ -642,7 +839,7 @@ export const AdminPanel: React.FC = () => {
           )}
 
           {/* 9. Coupons & Discounts (Admin, Super Admin) */}
-          {(currentRole === 'ADMIN' || currentRole === 'SUPER_ADMIN') && (
+          {ROLE_PERMITTED_TABS[currentRole].includes('coupons') && (
             <button
               onClick={() => setAdminTab('coupons')}
               className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center space-x-2.5 transition-colors cursor-pointer ${
@@ -655,7 +852,7 @@ export const AdminPanel: React.FC = () => {
           )}
 
           {/* 10. Delivery & Chattogram Offer (Admin, Super Admin) */}
-          {(currentRole === 'ADMIN' || currentRole === 'SUPER_ADMIN') && (
+          {ROLE_PERMITTED_TABS[currentRole].includes('delivery') && (
             <button
               onClick={() => setAdminTab('delivery')}
               className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center justify-between transition-colors cursor-pointer ${
@@ -674,8 +871,8 @@ export const AdminPanel: React.FC = () => {
             </button>
           )}
 
-          {/* 11. Reports (Manager, Admin, Super Admin) */}
-          {currentRole !== 'STAFF' && (
+          {/* 11. Reports (Admin, Super Admin Only) */}
+          {ROLE_PERMITTED_TABS[currentRole].includes('reports') && (
             <button
               onClick={() => setAdminTab('reports')}
               className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center space-x-2.5 transition-colors cursor-pointer ${
@@ -688,7 +885,7 @@ export const AdminPanel: React.FC = () => {
           )}
 
           {/* 12. RBAC Roles & Team Matrix (Super Admin Only) */}
-          {currentRole === 'SUPER_ADMIN' && (
+          {ROLE_PERMITTED_TABS[currentRole].includes('roles') && (
             <button
               onClick={() => setAdminTab('roles')}
               className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center space-x-2.5 transition-colors cursor-pointer ${
@@ -701,7 +898,7 @@ export const AdminPanel: React.FC = () => {
           )}
 
           {/* 13. All Business & Payment Settings (Super Admin Only) */}
-          {currentRole === 'SUPER_ADMIN' && (
+          {ROLE_PERMITTED_TABS[currentRole].includes('settings') && (
             <button
               onClick={() => setAdminTab('settings')}
               className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center space-x-2.5 transition-colors cursor-pointer ${
@@ -716,8 +913,31 @@ export const AdminPanel: React.FC = () => {
 
         {/* Right Dynamic Tab Content */}
         <div className="md:col-span-9 space-y-6">
-          {/* TAB: ORDERS & CONFIRMATION SYSTEM */}
-          {adminTab === 'orders' && (
+          {!ROLE_PERMITTED_TABS[currentRole].includes(adminTab) ? (
+            <AccessRestrictedCard
+              role={currentRole}
+              requiredRole={
+                adminTab === 'roles' || adminTab === 'settings'
+                  ? 'SUPER_ADMIN'
+                  : 'ADMIN / SUPER_ADMIN'
+              }
+              moduleName={adminTab.toUpperCase()}
+              onGoBack={() => setAdminTab('dashboard')}
+            />
+          ) : (
+            <>
+              {/* TAB 1: ROLE-TAILORED DASHBOARD */}
+              {adminTab === 'dashboard' && (
+                <RoleDashboards
+                  setAdminTab={setAdminTab}
+                  onCallOrder={setOrderForCall}
+                  onCourierDispatch={setOrderForCourier}
+                  onEditOrder={setOrderForEdit}
+                />
+              )}
+
+              {/* TAB 2: ORDERS & CONFIRMATION SYSTEM */}
+              {adminTab === 'orders' && (
             <div className="space-y-4">
               {/* Order Status Filters & Search Bar */}
               <div className="bg-white rounded-3xl p-4 sm:p-5 border border-gray-200 shadow-xs space-y-3">
@@ -993,13 +1213,15 @@ export const AdminPanel: React.FC = () => {
                               <span>{t('হোয়াটসঅ্যাপ', 'WhatsApp')}</span>
                             </button>
 
-                            <button
-                              onClick={() => setOrderForEdit(order)}
-                              className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-3 py-1.5 rounded-xl flex items-center space-x-1.5 cursor-pointer transition-colors"
-                            >
-                              <Edit className="w-3.5 h-3.5" />
-                              <span>{t('এডিট অর্ডার', 'Edit')}</span>
-                            </button>
+                            {hasPermission('orders', 'edit') && (
+                              <button
+                                onClick={() => setOrderForEdit(order)}
+                                className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-3 py-1.5 rounded-xl flex items-center space-x-1.5 cursor-pointer transition-colors"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                                <span>{t('এডিট অর্ডার', 'Edit')}</span>
+                              </button>
+                            )}
                           </div>
 
                           {/* Fulfillment Actions */}
@@ -1027,7 +1249,7 @@ export const AdminPanel: React.FC = () => {
                             )}
 
                             {/* Shipping Label / Consignment Note */}
-                            {order.courierInfo && (
+                            {order.courierInfo && currentRole !== 'STAFF' && (
                               <button
                                 onClick={() => setOrderForShippingLabel(order)}
                                 className="bg-gray-900 hover:bg-black text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center space-x-1.5 cursor-pointer transition-colors"
@@ -1038,29 +1260,31 @@ export const AdminPanel: React.FC = () => {
                             )}
 
                             {/* Official Invoice Print */}
-                            <button
-                              onClick={() => {
-                                setSelectedOrderForInvoice(order);
-                                setActiveModal('invoice');
-                              }}
-                              className="bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold px-3 py-1.5 rounded-xl flex items-center space-x-1.5 cursor-pointer transition-colors"
-                            >
-                              <FileText className="w-3.5 h-3.5" />
-                              <span>{t('ইনভয়েস', 'Invoice')}</span>
-                            </button>
+                            {currentRole !== 'STAFF' && (
+                              <button
+                                onClick={() => {
+                                  setSelectedOrderForInvoice(order);
+                                  setActiveModal('invoice');
+                                }}
+                                className="bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold px-3 py-1.5 rounded-xl flex items-center space-x-1.5 cursor-pointer transition-colors"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                                <span>{t('ইনভয়েস', 'Invoice')}</span>
+                              </button>
+                            )}
 
-                            {/* Hold / Cancel */}
-                            {order.status !== 'Cancelled' && order.status !== 'Delivered' && (
+                            {/* Hold / Cancel (Admin & Super Admin only) */}
+                            {order.status !== 'Cancelled' && order.status !== 'Delivered' && hasPermission('orders', 'delete') && (
                               <div className="flex items-center space-x-1">
                                 <button
-                                  onClick={() => holdOrder(order.id, 'Admin put on hold for verification')}
+                                  onClick={() => holdOrder(order.id, `${currentRole} put on hold for verification`)}
                                   className="text-gray-400 hover:text-orange-600 p-1 rounded hover:bg-orange-50 cursor-pointer"
                                   title={t('হোল্ডে রাখুন', 'Hold Order')}
                                 >
                                   <PauseCircle className="w-4 h-4" />
                                 </button>
                                 <button
-                                  onClick={() => cancelOrder(order.id, 'Cancelled from Admin')}
+                                  onClick={() => cancelOrder(order.id, `Cancelled by ${currentRole}`)}
                                   className="text-gray-400 hover:text-rose-600 p-1 rounded hover:bg-rose-50 cursor-pointer"
                                   title={t('অর্ডার বাতিল করুন', 'Cancel Order')}
                                 >
@@ -1079,66 +1303,7 @@ export const AdminPanel: React.FC = () => {
           )}
 
           {/* TAB: COURIER LOGISTICS */}
-          {adminTab === 'couriers' && (
-            <div className="space-y-5">
-              <div className="bg-white rounded-3xl p-6 border border-gray-200 shadow-xs space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <h3 className="font-extrabold text-base text-gray-900">
-                      {t('কুরিয়ার লজিস্টিকস ও পার্সেল মনিটরিং', 'Courier Logistics Management')}
-                    </h3>
-                    <p className="text-xs text-gray-500">
-                      Steadfast, RedX, Pathao, Paperfly, Sundarban, eCourier পার্সেল স্ট্যাটাস
-                    </p>
-                  </div>
-                </div>
-
-                {/* 6 Courier Stats Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {courierConfigs.map(c => {
-                    const assignedOrders = orders.filter(o => o.courierInfo?.courierName === c.id);
-                    const deliveredCount = assignedOrders.filter(o => o.status === 'Delivered').length;
-                    const inTransitCount = assignedOrders.filter(o => o.status === 'Shipped').length;
-                    const totalCod = assignedOrders.reduce(
-                      (sum, o) => sum + (o.paymentMethod === 'cod' ? o.totalAmount : 0),
-                      0
-                    );
-
-                    return (
-                      <div key={c.id} className="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-2 text-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="font-black text-sm text-gray-900">{c.name}</span>
-                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded">
-                            ACTIVE
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2 pt-1 text-center">
-                          <div className="bg-white p-2 rounded-xl border border-gray-100">
-                            <span className="text-[10px] text-gray-400 block font-bold">বুকিং</span>
-                            <span className="font-bold text-gray-900">{assignedOrders.length}</span>
-                          </div>
-                          <div className="bg-white p-2 rounded-xl border border-gray-100">
-                            <span className="text-[10px] text-gray-400 block font-bold">ট্রানজিট</span>
-                            <span className="font-bold text-blue-600">{inTransitCount}</span>
-                          </div>
-                          <div className="bg-white p-2 rounded-xl border border-gray-100">
-                            <span className="text-[10px] text-gray-400 block font-bold">ডেলিভার্ড</span>
-                            <span className="font-bold text-emerald-600">{deliveredCount}</span>
-                          </div>
-                        </div>
-
-                        <div className="pt-2 border-t border-gray-200 flex justify-between text-[11px] text-gray-600">
-                          <span>আদায়যোগ্য COD:</span>
-                          <strong className="text-rose-600 font-mono">{formatPrice(totalCod)}</strong>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
+          {adminTab === 'couriers' && <CourierManager />}
 
           {/* TAB: ROLE-TAILORED DASHBOARD OVERVIEWS (Super Admin, Admin, Manager, Staff) */}
           {adminTab === 'dashboard' && (
@@ -1184,11 +1349,119 @@ export const AdminPanel: React.FC = () => {
                 </div>
               </div>
 
+              {/* Staff / Manager Role Awareness Banner */}
+              {currentRole === 'STAFF' && (
+                <div className="bg-blue-50 border border-blue-200 text-blue-900 rounded-2xl p-3 flex items-center space-x-2 text-xs">
+                  <Eye className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>
+                    <strong>💼 স্টাফ ভিউ (রিড-অনলি):</strong> কাস্টমার প্রশ্নের উত্তর দিতে স্টক ও মূল্য অনুসন্ধান করুন। পণ্য তৈরি, মূল্য পরিবর্তন বা ডিলিট করার অনুমতি নেই।
+                  </span>
+                </div>
+              )}
+              {currentRole === 'MANAGER' && (
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-2xl p-3 flex items-center space-x-2 text-xs">
+                  <Package className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>
+                    <strong>📋 ম্যানেজার ভিউ:</strong> ক্যাটালগ ও ওয়্যারহাউজ স্টক নিরীক্ষণ। নতুন পণ্য তৈরি, বিক্রয় মূল্য পরিবর্তন ও ডিলিট করা স্টোর এডমিনের ক্ষমতা।
+                  </span>
+                </div>
+              )}
+
+              {/* Bulk Actions Bar */}
+              {(currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN') && selectedProductIds.length > 0 && (
+                <div className="bg-gradient-to-r from-rose-50 via-pink-50 to-amber-50 border border-rose-200 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-fade-in">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 rounded-xl bg-rose-600 text-white flex items-center justify-center font-black text-xs shadow-xs">
+                      {selectedProductIds.length}
+                    </div>
+                    <div>
+                      <span className="font-extrabold text-xs text-gray-900 block">
+                        {selectedProductIds.length}টি পণ্য নির্বাচিত (Selected Products)
+                      </span>
+                      <span className="text-[11px] text-gray-500">
+                        একসাথে একাধিক পণ্যের মূল্য, স্টক, ক্যাটাগরি এডিট করুন অথবা এক ক্লিকে মুছে ফেলুন
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    {/* Bulk Edit Button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowBulkEditModal(true)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3.5 py-1.5 rounded-xl text-xs flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer"
+                      title="নির্বাচিত সব পণ্যের মূল্য, স্টক বা ক্যাটাগরি একসাথে পরিবর্তন করুন"
+                    >
+                      <Sliders className="w-3.5 h-3.5" />
+                      <span>বাল্ক এডিট ({selectedProductIds.length})</span>
+                    </button>
+
+                    {/* Bulk Delete Button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowBulkDeleteModal(true)}
+                      className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-3.5 py-1.5 rounded-xl text-xs flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer"
+                      title="নির্বাচিত সব পণ্য একসাথে মুছে ফেলুন"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>বাল্ক ডিলিট ({selectedProductIds.length})</span>
+                    </button>
+
+                    {/* Clear selection */}
+                    <button
+                      type="button"
+                      onClick={handleClearSelection}
+                      className="bg-white hover:bg-gray-100 text-gray-600 font-bold px-3 py-1.5 rounded-xl text-xs border border-gray-200 transition-colors cursor-pointer"
+                    >
+                      নির্বাচন বাতিল
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Table */}
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border border-gray-100 rounded-2xl overflow-hidden">
                   <thead className="bg-gray-50 text-gray-500 border-b border-gray-200 font-bold uppercase text-[10px]">
                     <tr>
+                      {(currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN') && (
+                        <th className="py-2.5 px-3 w-10 text-center">
+                          <input
+                            type="checkbox"
+                            checked={
+                              filteredProducts.length > 0 &&
+                              filteredProducts.every(p => selectedProductIds.includes(p.id))
+                            }
+                            ref={input => {
+                              if (input) {
+                                const allSel =
+                                  filteredProducts.length > 0 &&
+                                  filteredProducts.every(p => selectedProductIds.includes(p.id));
+                                const someSel =
+                                  filteredProducts.some(p => selectedProductIds.includes(p.id)) && !allSel;
+                                input.indeterminate = someSel;
+                              }
+                            }}
+                            onChange={() => {
+                              const filteredIds = filteredProducts.map(p => p.id);
+                              const allSel =
+                                filteredProducts.length > 0 &&
+                                filteredProducts.every(p => selectedProductIds.includes(p.id));
+                              if (allSel) {
+                                setSelectedProductIds(prev =>
+                                  prev.filter(id => !filteredIds.includes(id))
+                                );
+                              } else {
+                                setSelectedProductIds(prev =>
+                                  Array.from(new Set([...prev, ...filteredIds]))
+                                );
+                              }
+                            }}
+                            className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 cursor-pointer accent-rose-600"
+                            title="সবগুলো ফিল্টার্ড পণ্য নির্বাচন করুন"
+                          />
+                        </th>
+                      )}
                       <th className="py-2.5 px-3">Product</th>
                       <th className="py-2.5 px-3">SKU</th>
                       <th className="py-2.5 px-3">Category</th>
@@ -1198,61 +1471,79 @@ export const AdminPanel: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {filteredProducts.map(p => (
-                      <tr key={p.id} className="hover:bg-gray-50/50">
-                        <td className="py-2.5 px-3">
-                          <div className="flex items-center space-x-2.5">
-                            <img src={p.images[0]} alt={p.name} className="w-10 h-10 object-cover rounded-xl shrink-0" />
-                            <div className="min-w-0">
-                              <span className="font-bold text-gray-900 block truncate max-w-xs">{p.name}</span>
-                              <span className="text-[10px] text-gray-500">{p.nameBn}</span>
+                    {filteredProducts.map(p => {
+                      const isSelected = selectedProductIds.includes(p.id);
+                      return (
+                        <tr
+                          key={p.id}
+                          className={isSelected ? 'bg-rose-50/70 border-l-4 border-rose-500 transition-colors' : 'hover:bg-gray-50/50 transition-colors'}
+                        >
+                          {(currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN') && (
+                            <td className="py-2.5 px-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleToggleSelectProduct(p.id)}
+                                className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 cursor-pointer accent-rose-600"
+                              />
+                            </td>
+                          )}
+                          <td className="py-2.5 px-3">
+                            <div className="flex items-center space-x-2.5">
+                              <img src={p.images[0]} alt={p.name} className="w-10 h-10 object-cover rounded-xl shrink-0" />
+                              <div className="min-w-0">
+                                <span className="font-bold text-gray-900 block truncate max-w-xs">{p.name}</span>
+                                <span className="text-[10px] text-gray-500">{p.nameBn}</span>
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        <td className="py-2.5 px-3 font-mono font-bold text-gray-500">{p.sku}</td>
-                        <td className="py-2.5 px-3">{p.category}</td>
-                        <td className="py-2.5 px-3 font-bold text-rose-600">{formatPrice(p.price)}</td>
-                        <td className="py-2.5 px-3">
-                          <span
-                            className={`font-black ${
-                              p.stock <= p.lowStockThreshold ? 'text-rose-600 bg-rose-50 px-2 py-0.5 rounded' : 'text-gray-900'
-                            }`}
-                          >
-                            {p.stock} pcs
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-right">
-                          <div className="flex items-center justify-end space-x-2">
-                            {hasPermission('products', 'edit') && (
-                              <button
-                                onClick={() => {
-                                  const newPriceVal = prompt('নতুন মূল্য লিখুন (৳):', String(p.price));
-                                  if (newPriceVal) updateProduct({ ...p, price: Number(newPriceVal) });
-                                }}
-                                className="text-gray-400 hover:text-blue-600 p-1 cursor-pointer"
-                                title="Edit Price"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </button>
-                            )}
+                          </td>
+                          <td className="py-2.5 px-3 font-mono font-bold text-gray-500">{p.sku}</td>
+                          <td className="py-2.5 px-3">{p.category}</td>
+                          <td className="py-2.5 px-3 font-bold text-rose-600">{formatPrice(p.price)}</td>
+                          <td className="py-2.5 px-3">
+                            <span
+                              className={`font-black ${
+                                p.stock <= p.lowStockThreshold ? 'text-rose-600 bg-rose-50 px-2 py-0.5 rounded' : 'text-gray-900'
+                              }`}
+                            >
+                              {p.stock} pcs
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <div className="flex items-center justify-end space-x-1.5">
+                              {(currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN') && (
+                                <>
+                                  <button
+                                    onClick={() => setProductToEdit(p)}
+                                    className="p-1.5 rounded-xl text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-200 cursor-pointer transition-colors shadow-2xs"
+                                    title="পণ্য সম্পাদনা করুন (Edit Product Details)"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => setProductToDelete(p)}
+                                    className="p-1.5 rounded-xl text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 cursor-pointer transition-colors shadow-2xs"
+                                    title="পণ্য মুছে ফেলুন (Delete Product)"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </>
+                              )}
 
-                            {hasPermission('products', 'delete') && (
-                              <button
-                                onClick={() => {
-                                  if (confirm(`Are you sure you want to delete ${p.name}?`)) {
-                                    deleteProduct(p.id);
-                                  }
-                                }}
-                                className="text-gray-400 hover:text-rose-600 p-1 cursor-pointer"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                              {currentRole === 'MANAGER' && (
+                                <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md font-medium">
+                                  ওয়্যারহাউজ ভিউ
+                                </span>
+                              )}
+
+                              {currentRole === 'STAFF' && (
+                                <span className="text-[10px] text-gray-400 italic">লুকআপ অনলি</span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1281,12 +1572,27 @@ export const AdminPanel: React.FC = () => {
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => updateProduct({ ...p, stock: p.stock + 20 })}
-                      className="bg-white hover:bg-rose-600 hover:text-white border border-rose-300 text-rose-700 font-bold px-3 py-1.5 rounded-xl cursor-pointer transition-colors shadow-xs"
-                    >
-                      +২০ যোগ করুন
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      {(currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN') && (
+                        <button
+                          onClick={() => setProductToEdit(p)}
+                          className="bg-white hover:bg-blue-50 border border-blue-200 text-blue-700 font-bold px-2.5 py-1.5 rounded-xl cursor-pointer transition-colors text-xs flex items-center space-x-1"
+                          title="পণ্য সম্পাদনা করুন"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                          <span>এডিট</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          updateProduct({ ...p, stock: p.stock + 20 });
+                          setAdminToast({ message: `"${p.name}" স্টকে ২০টি যোগ করা হয়েছে!`, type: 'success' });
+                        }}
+                        className="bg-white hover:bg-rose-600 hover:text-white border border-rose-300 text-rose-700 font-bold px-3 py-1.5 rounded-xl cursor-pointer transition-colors shadow-xs"
+                      >
+                        +২০ যোগ করুন
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1296,6 +1602,34 @@ export const AdminPanel: React.FC = () => {
           {/* TAB: CATEGORIES & BRANDS */}
           {adminTab === 'categories' && (
             <CategoryManager />
+          )}
+
+          {/* TAB: COMPLETE THE LOOK (BUNDLES) */}
+          {adminTab === 'bundles' && (
+            ROLE_PERMITTED_TABS[currentRole].includes('bundles') ? (
+              <BundleManager />
+            ) : (
+              <AccessRestrictedCard
+                role={currentRole}
+                requiredRole="ADMIN / SUPER_ADMIN"
+                moduleName="কম্বো ও বান্ডেল ম্যানেজার"
+                onGoBack={() => setAdminTab('dashboard')}
+              />
+            )
+          )}
+
+          {/* TAB: OCCASIONS & NEED COLLECTIONS */}
+          {adminTab === 'occasions' && (
+            ROLE_PERMITTED_TABS[currentRole].includes('occasions') ? (
+              <OccasionsManager />
+            ) : (
+              <AccessRestrictedCard
+                role={currentRole}
+                requiredRole="ADMIN / SUPER_ADMIN"
+                moduleName="উপলক্ষ ও কালেকশন ম্যানেজার"
+                onGoBack={() => setAdminTab('dashboard')}
+              />
+            )
           )}
 
           {/* TAB: CUSTOMERS */}
@@ -1342,12 +1676,14 @@ export const AdminPanel: React.FC = () => {
             <div className="bg-white rounded-3xl p-6 border border-gray-200 shadow-xs space-y-4 text-xs">
               <div className="flex items-center justify-between">
                 <h3 className="font-extrabold text-base text-gray-900">কুপন ও প্রমোশনাল কোড</h3>
-                <button
-                  onClick={() => setShowAddCouponModal(true)}
-                  className="bg-rose-600 text-white font-bold px-3 py-1.5 rounded-xl cursor-pointer"
-                >
-                  + নতুন কুপন
-                </button>
+                {hasPermission('coupons', 'create') && (
+                  <button
+                    onClick={() => setShowAddCouponModal(true)}
+                    className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-1.5 rounded-xl cursor-pointer"
+                  >
+                    + নতুন কুপন
+                  </button>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1358,12 +1694,15 @@ export const AdminPanel: React.FC = () => {
                       <p className="text-gray-700 font-medium mt-0.5">{c.description}</p>
                       <p className="text-[10px] text-gray-400">Min Purchase: ৳{c.minPurchase} • Expiry: {c.expiryDate}</p>
                     </div>
-                    <button
-                      onClick={() => deleteCoupon(c.code)}
-                      className="text-gray-400 hover:text-rose-600 p-1 cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {hasPermission('coupons', 'delete') && (
+                      <button
+                        onClick={() => deleteCoupon(c.code)}
+                        className="text-gray-400 hover:text-rose-600 p-1 cursor-pointer"
+                        title="কুপন মুছুন"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1434,6 +1773,8 @@ export const AdminPanel: React.FC = () => {
                 </div>
               </div>
             </div>
+          )}
+            </>
           )}
         </div>
       </div>
@@ -1592,6 +1933,62 @@ export const AdminPanel: React.FC = () => {
                 )}
               </div>
 
+              {/* Occasion / Shop by Need Tag Selection */}
+              <div className="space-y-2 pt-2 border-t border-gray-100">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-gray-800 flex items-center space-x-1.5 text-xs">
+                    <span>🎯 উপলক্ষ ও প্রয়োজন ট্যাগ (আপনার কী প্রয়োজন?)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setNewNeedTags(
+                        detectProductOccasions({
+                          name: newTitle,
+                          nameBn: newTitleBn,
+                          category: newCategory,
+                          subcategory: newSubcategory,
+                          description: newDesc,
+                        })
+                      )
+                    }
+                    className="text-[11px] font-bold text-rose-600 hover:text-rose-700 cursor-pointer flex items-center space-x-1 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-100"
+                  >
+                    <span>⚡ স্মার্ট অটো-ডিটেক্ট</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-gray-500">
+                  যেসব উপলক্ষ নির্বাচন করবেন, হোমপেজের "আপনার কী প্রয়োজন?" ট্যাবে পণ্যটি সাথে সাথে যুক্ত হবে:
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {OCCASIONS_LIST.map(occ => {
+                    const isSelected = newNeedTags.includes(occ.id);
+                    return (
+                      <button
+                        key={occ.id}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setNewNeedTags(newNeedTags.filter(t => t !== occ.id));
+                          } else {
+                            setNewNeedTags([...newNeedTags, occ.id]);
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center space-x-1.5 ${
+                          isSelected
+                            ? 'bg-gray-900 text-white border-gray-900 shadow-xs'
+                            : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                        }`}
+                      >
+                        <span>{occ.icon}</span>
+                        <span>{occ.titleBn}</span>
+                        {isSelected && <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <button
                 type="submit"
                 className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 rounded-xl text-xs cursor-pointer shadow-md"
@@ -1663,6 +2060,52 @@ export const AdminPanel: React.FC = () => {
       <OrderEditModal />
       <CourierDispatchModal />
       <ShippingLabelModal />
+
+      {/* Product Edit Modal */}
+      <ProductEditModal
+        product={productToEdit}
+        isOpen={Boolean(productToEdit)}
+        onClose={() => setProductToEdit(null)}
+        onSave={handleSaveProductEdit}
+      />
+
+      {/* Product Delete Modal */}
+      <ProductDeleteModal
+        product={productToDelete}
+        isOpen={Boolean(productToDelete)}
+        onClose={() => setProductToDelete(null)}
+        onConfirm={handleConfirmProductDelete}
+      />
+
+      {/* Bulk Product Edit Modal */}
+      <BulkProductEditModal
+        products={products.filter(p => selectedProductIds.includes(p.id))}
+        isOpen={showBulkEditModal}
+        onClose={() => setShowBulkEditModal(false)}
+        onSave={handleBulkEditSave}
+      />
+
+      {/* Bulk Product Delete Modal */}
+      <BulkProductDeleteModal
+        products={products.filter(p => selectedProductIds.includes(p.id))}
+        isOpen={showBulkDeleteModal}
+        onClose={() => setShowBulkDeleteModal(false)}
+        onConfirm={handleBulkDeleteConfirm}
+      />
+
+      {/* Admin Toast Notification */}
+      {adminToast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-2.5 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-slate-700 text-xs animate-in slide-in-from-bottom-5">
+          <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span className="font-semibold">{adminToast.message}</span>
+          <button
+            onClick={() => setAdminToast(null)}
+            className="text-gray-400 hover:text-white p-0.5 cursor-pointer ml-1"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };

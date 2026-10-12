@@ -18,7 +18,7 @@ import {
   getDownloadURL,
   deleteObject,
 } from 'firebase/storage';
-import { WebsiteSettings, Category, HeroBannerSlide } from '../types';
+import { WebsiteSettings, Category, HeroBannerSlide, CourierConfig } from '../types';
 import firebaseConfigJson from '../../firebase-applet-config.json';
 
 // Project Configuration matching user specifications
@@ -152,11 +152,17 @@ export function fileToDataUrl(file: File): Promise<string> {
 /**
  * Resizes and compresses image to lightweight data URL (well under Firestore's 1MB doc limit)
  */
-export function compressImage(file: File, maxDim = 1200, quality = 0.85): Promise<string> {
+export function compressImage(file: File, maxDim = 400, quality = 0.75): Promise<string> {
   return new Promise(resolve => {
-    // If SVG, return data URL directly
+    // If SVG, check length
     if (file.type.includes('svg') || file.name.toLowerCase().endsWith('.svg')) {
-      fileToDataUrl(file).then(resolve).catch(() => resolve(''));
+      fileToDataUrl(file).then(dataUrl => {
+        if (dataUrl.length > 150000) {
+          resizeDataUrl(dataUrl, maxDim, quality).then(resolve).catch(() => resolve(dataUrl));
+        } else {
+          resolve(dataUrl);
+        }
+      }).catch(() => resolve(''));
       return;
     }
 
@@ -188,7 +194,10 @@ export function compressImage(file: File, maxDim = 1200, quality = 0.85): Promis
       if (ctx) {
         ctx.drawImage(img, 0, 0, width, height);
         try {
-          const dataUrl = canvas.toDataURL('image/webp', quality) || canvas.toDataURL('image/jpeg', quality);
+          let dataUrl = canvas.toDataURL('image/webp', quality) || canvas.toDataURL('image/jpeg', quality);
+          if (!dataUrl || dataUrl.length > 120000) {
+            dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+          }
           resolve(dataUrl);
         } catch {
           resolve(img.src);
@@ -202,6 +211,59 @@ export function compressImage(file: File, maxDim = 1200, quality = 0.85): Promis
     };
 
     reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Resizes an existing base64 data URL to ensure it never exceeds Firestore document limits
+ */
+export function resizeDataUrl(dataUrl: string, maxDim = 320, quality = 0.70): Promise<string> {
+  return new Promise(resolve => {
+    if (!dataUrl || !dataUrl.startsWith('data:')) {
+      resolve(dataUrl || '');
+      return;
+    }
+
+    // Already compact enough (under 60KB)
+    if (dataUrl.length < 60000) {
+      resolve(dataUrl);
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(width, 1);
+      canvas.height = Math.max(height, 1);
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        try {
+          let compressed = canvas.toDataURL('image/webp', quality) || canvas.toDataURL('image/jpeg', quality);
+          if (!compressed || compressed.length > 80000) {
+            compressed = canvas.toDataURL('image/jpeg', 0.60);
+          }
+          resolve(compressed);
+        } catch {
+          resolve(dataUrl);
+        }
+      } else {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
   });
 }
 
@@ -219,7 +281,7 @@ export async function uploadAsset(
   file: File,
   folder: 'branding' | 'categories' | 'banners' | 'products',
   assetPrefix: string,
-  maxDimension = 1200
+  maxDimension = 800
 ): Promise<UploadAssetResult> {
   const allowedExtensions = ['png', 'jpg', 'jpeg', 'webp', 'svg', 'gif'];
   const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
@@ -277,7 +339,7 @@ export async function uploadAsset(
   } catch (storageError) {
     console.warn('Firebase Storage direct upload notice (using optimized fallback):', storageError);
     // Graceful fallback: compress image to compact Data URL
-    const compactDataUrl = await compressImage(file, maxDimension, 0.85);
+    const compactDataUrl = await compressImage(file, maxDimension, 0.75);
     return {
       downloadUrl: compactDataUrl || (await fileToDataUrl(file)),
       storagePath: `local://${folder}/${assetPrefix}_${timestamp}.${ext}`,
@@ -294,7 +356,7 @@ export async function uploadBrandingAsset(
   file: File,
   assetType: 'logo' | 'mobile_logo' | 'favicon'
 ): Promise<UploadAssetResult> {
-  const maxDim = assetType === 'favicon' ? 64 : assetType === 'mobile_logo' ? 400 : 800;
+  const maxDim = assetType === 'favicon' ? 48 : assetType === 'mobile_logo' ? 200 : 360;
   return uploadAsset(file, 'branding', assetType, maxDim);
 }
 
@@ -302,32 +364,99 @@ export async function uploadBrandingAsset(
  * Uploads category icon
  */
 export async function uploadCategoryIcon(file: File, categoryId = 'category'): Promise<UploadAssetResult> {
-  return uploadAsset(file, 'categories', `icon_${categoryId}`, 256);
+  return uploadAsset(file, 'categories', `icon_${categoryId}`, 200);
 }
 
 /**
  * Uploads hero banner image
  */
 export async function uploadHeroBannerImage(file: File, bannerId = 'hero'): Promise<UploadAssetResult> {
-  return uploadAsset(file, 'banners', `hero_${bannerId}`, 1600);
+  return uploadAsset(file, 'banners', `hero_${bannerId}`, 800);
 }
 
 /**
  * Saves Branding Settings to Cloud Firestore: collection "settings", doc "branding"
+ * Guaranteed to stay strictly under Firestore's 1MB document limit.
  */
 export async function saveBrandingToFirestore(
   branding: Partial<WebsiteSettings>,
   adminUserEmail = 'jotpotshop.official@gmail.com'
 ): Promise<void> {
   const docRef = doc(db, 'settings', 'branding');
-  const payload = {
+
+  // Sanitize and compress any oversized data URLs in branding
+  let safeLogoUrl = branding.logoUrl;
+  let safeMobileLogoUrl = branding.mobileLogoUrl;
+  let safeFaviconUrl = branding.faviconUrl;
+
+  if (safeLogoUrl && safeLogoUrl.startsWith('data:') && safeLogoUrl.length > 30000) {
+    safeLogoUrl = await resizeDataUrl(safeLogoUrl, 260, 0.65);
+    // If still large after compression, scale down further
+    if (safeLogoUrl.length > 80000) {
+      safeLogoUrl = await resizeDataUrl(safeLogoUrl, 180, 0.50);
+    }
+  }
+  if (safeMobileLogoUrl && safeMobileLogoUrl.startsWith('data:') && safeMobileLogoUrl.length > 20000) {
+    safeMobileLogoUrl = await resizeDataUrl(safeMobileLogoUrl, 160, 0.60);
+    if (safeMobileLogoUrl.length > 50000) {
+      safeMobileLogoUrl = await resizeDataUrl(safeMobileLogoUrl, 120, 0.45);
+    }
+  }
+  if (safeFaviconUrl && safeFaviconUrl.startsWith('data:') && safeFaviconUrl.length > 10000) {
+    safeFaviconUrl = await resizeDataUrl(safeFaviconUrl, 48, 0.60);
+    if (safeFaviconUrl.length > 30000) {
+      safeFaviconUrl = await resizeDataUrl(safeFaviconUrl, 32, 0.40);
+    }
+  }
+
+  const payload: Record<string, any> = {
     ...branding,
+    ...(safeLogoUrl !== undefined ? { logoUrl: safeLogoUrl } : {}),
+    ...(safeMobileLogoUrl !== undefined ? { mobileLogoUrl: safeMobileLogoUrl } : {}),
+    ...(safeFaviconUrl !== undefined ? { faviconUrl: safeFaviconUrl } : {}),
     updatedAt: new Date().toISOString(),
     updatedBy: adminUserEmail,
     projectId: FIREBASE_PROJECT_INFO.projectId,
   };
 
-  await setDoc(docRef, payload, { merge: true });
+  // Preemptively ensure total payload size is safely under Firestore's 1,048,576 bytes limit
+  let payloadBytes = new Blob([JSON.stringify(payload)]).size;
+  if (payloadBytes > 400000) {
+    console.warn(`Branding payload size is ${payloadBytes} bytes. Sanitizing data URLs...`);
+    // If any data URL is still over 70KB, compress further or drop to protect Firestore limit
+    ['logoUrl', 'mobileLogoUrl', 'faviconUrl'].forEach(key => {
+      if (typeof payload[key] === 'string' && payload[key].startsWith('data:')) {
+        if (payload[key].length > 100000) {
+          payload[key] = ''; // Prevent 1MB blowup
+        }
+      }
+    });
+  }
+
+  try {
+    await setDoc(docRef, payload, { merge: true });
+  } catch (err: any) {
+    console.warn('Initial setDoc notice for branding:', err?.message || err);
+    // If document size or write failed, strip all heavy data URLs to guarantee textual settings persist
+    const errMsg = String(err?.message || '').toLowerCase();
+    if (
+      errMsg.includes('exceeds the maximum allowed size') ||
+      errMsg.includes('size') ||
+      errMsg.includes('resource-exhausted') ||
+      err?.code === 'resource-exhausted' ||
+      err?.code === 'invalid-argument'
+    ) {
+      const fallbackPayload: Record<string, any> = { ...payload };
+      Object.keys(fallbackPayload).forEach(key => {
+        if (typeof fallbackPayload[key] === 'string' && fallbackPayload[key].startsWith('data:')) {
+          fallbackPayload[key] = '';
+        }
+      });
+      await setDoc(docRef, fallbackPayload, { merge: true });
+    } else {
+      throw err;
+    }
+  }
 }
 
 /**
@@ -374,17 +503,21 @@ export async function saveCategoriesToFirestore(
   categories: Category[],
   adminUserEmail = 'jotpotshop.official@gmail.com'
 ): Promise<void> {
-  const docRef = doc(db, 'settings', 'categories');
-  await setDoc(
-    docRef,
-    {
-      items: categories,
-      updatedAt: new Date().toISOString(),
-      updatedBy: adminUserEmail,
-      projectId: FIREBASE_PROJECT_INFO.projectId,
-    },
-    { merge: true }
-  );
+  try {
+    const docRef = doc(db, 'settings', 'categories');
+    await setDoc(
+      docRef,
+      {
+        items: categories,
+        updatedAt: new Date().toISOString(),
+        updatedBy: adminUserEmail,
+        projectId: FIREBASE_PROJECT_INFO.projectId,
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn('Failed to save categories to Firestore:', err);
+  }
 }
 
 /**
@@ -411,17 +544,21 @@ export async function saveHeroBannersToFirestore(
   banners: HeroBannerSlide[],
   adminUserEmail = 'jotpotshop.official@gmail.com'
 ): Promise<void> {
-  const docRef = doc(db, 'settings', 'hero_banners');
-  await setDoc(
-    docRef,
-    {
-      items: banners,
-      updatedAt: new Date().toISOString(),
-      updatedBy: adminUserEmail,
-      projectId: FIREBASE_PROJECT_INFO.projectId,
-    },
-    { merge: true }
-  );
+  try {
+    const docRef = doc(db, 'settings', 'hero_banners');
+    await setDoc(
+      docRef,
+      {
+        items: banners,
+        updatedAt: new Date().toISOString(),
+        updatedBy: adminUserEmail,
+        projectId: FIREBASE_PROJECT_INFO.projectId,
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn('Failed to save hero banners to Firestore:', err);
+  }
 }
 
 /**
@@ -440,3 +577,45 @@ export async function fetchHeroBannersFromFirestore(): Promise<HeroBannerSlide[]
     return null;
   }
 }
+
+/**
+ * Saves Courier Configs to Cloud Firestore: collection "settings", doc "couriers"
+ */
+export async function saveCouriersToFirestore(
+  couriers: CourierConfig[],
+  adminUserEmail = 'jotpotshop.official@gmail.com'
+): Promise<void> {
+  try {
+    const docRef = doc(db, 'settings', 'couriers');
+    await setDoc(
+      docRef,
+      {
+        items: couriers,
+        updatedAt: new Date().toISOString(),
+        updatedBy: adminUserEmail,
+        projectId: FIREBASE_PROJECT_INFO.projectId,
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn('Failed to save courier configs to Firestore:', err);
+  }
+}
+
+/**
+ * Fetches Courier Configs from Cloud Firestore
+ */
+export async function fetchCouriersFromFirestore(): Promise<CourierConfig[] | null> {
+  try {
+    const docRef = doc(db, 'settings', 'couriers');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists() && Array.isArray(docSnap.data()?.items)) {
+      return docSnap.data().items as CourierConfig[];
+    }
+    return null;
+  } catch (err) {
+    console.warn('Could not fetch courier configs from Firestore:', err);
+    return null;
+  }
+}
+

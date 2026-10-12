@@ -1,30 +1,68 @@
 import React from 'react';
 import { Sparkles, ShoppingBag, Plus, Check } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
-import { INITIAL_BUNDLES } from '../data/mockData';
 
 export const CompleteTheLookSection: React.FC = () => {
-  const { language, t, formatPrice, products, addBundleToCart } = useShop();
+  const {
+    language,
+    t,
+    formatPrice,
+    products,
+    addBundleToCart,
+    bundles,
+    activeBundleId,
+    setActiveBundleId,
+  } = useShop();
 
-  const bundle = INITIAL_BUNDLES[0];
+  if (!bundles || bundles.length === 0) return null;
+
+  const bundle = bundles.find(b => b.id === activeBundleId) || bundles[0];
   if (!bundle) return null;
 
   const bundleProducts = products.filter(p => bundle.productIds.includes(p.id));
-  const saveAmount = bundle.regularPrice - bundle.bundlePrice;
+  if (bundleProducts.length === 0) return null;
+
+  const calculatedRegularPrice = bundle.regularPrice > 0
+    ? bundle.regularPrice
+    : bundleProducts.reduce((sum, p) => sum + p.price, 0);
+
+  const saveAmount = Math.max(0, calculatedRegularPrice - bundle.bundlePrice);
 
   return (
     <section className="my-8 bg-gradient-to-r from-gray-900 via-rose-950 to-gray-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
       <div className="absolute top-0 right-0 w-96 h-96 bg-rose-600/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="relative z-10">
+        {/* If multiple bundles exist, show tabs */}
+        {bundles.length > 1 && (
+          <div className="flex items-center space-x-2 overflow-x-auto pb-3 mb-4 scrollbar-none">
+            {bundles.map(b => {
+              const isSelected = b.id === bundle.id;
+              return (
+                <button
+                  key={b.id}
+                  onClick={() => setActiveBundleId(b.id)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer border ${
+                    isSelected
+                      ? 'bg-amber-400 text-gray-950 border-amber-300 shadow-md font-black scale-102'
+                      : 'bg-white/10 text-gray-200 border-white/20 hover:bg-white/20'
+                  }`}
+                >
+                  <span>{language === 'bn' ? b.titleBn : b.title}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
           <div>
             <div className="inline-flex items-center space-x-1.5 bg-amber-400 text-gray-950 text-[11px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider mb-2">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>{bundle.badge}</span>
+              <span>{bundle.badge || `SAVE ${formatPrice(saveAmount)}`}</span>
             </div>
             <h2 className="text-lg sm:text-2xl font-black tracking-tight text-white">
-              {t('Complete The Look — কম্বো স্টাইল বান্ডেল', 'Complete The Look — Smart Bundle')}
+              {language === 'bn' ? (bundle.titleBn || bundle.title) : bundle.title}
             </h2>
             <p className="text-xs sm:text-sm text-gray-300 mt-1 max-w-xl">
               {language === 'bn' ? bundle.descriptionBn : bundle.description}
@@ -35,7 +73,7 @@ export const CompleteTheLookSection: React.FC = () => {
           <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl flex flex-col items-end shrink-0">
             <div className="text-right">
               <span className="text-xs text-gray-400 block line-through">
-                {t('রেগুলার দাম:', 'Regular:')} {formatPrice(bundle.regularPrice)}
+                {t('রেগুলার দাম:', 'Regular:')} {formatPrice(calculatedRegularPrice)}
               </span>
               <span className="text-xl sm:text-2xl font-black text-amber-400 block">
                 {t('বান্ডেল অফার:', 'Bundle:')} {formatPrice(bundle.bundlePrice)}

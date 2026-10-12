@@ -22,6 +22,7 @@ interface OrderEditModalContentProps {
   editOrder: (orderId: string, updatedFields: Partial<Order>) => void;
   t: (bn: string, en: string) => string;
   formatPrice: (amount: number) => string;
+  currentRole: string;
 }
 
 const OrderEditModalContent: React.FC<OrderEditModalContentProps> = ({
@@ -30,7 +31,10 @@ const OrderEditModalContent: React.FC<OrderEditModalContentProps> = ({
   editOrder,
   t,
   formatPrice,
+  currentRole,
 }) => {
+  const isStaff = currentRole === 'STAFF';
+  const isManager = currentRole === 'MANAGER';
   const [customerName, setCustomerName] = useState(order.customerName);
   const [phone, setPhone] = useState(order.phone);
   const [alternativePhone, setAlternativePhone] = useState(order.alternativePhone || '');
@@ -273,33 +277,57 @@ const OrderEditModalContent: React.FC<OrderEditModalContentProps> = ({
           </div>
 
           {/* Pricing Adjustments & Status */}
+          {isStaff && (
+            <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-[11px] text-amber-900 flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>
+                🔒 <strong>স্টাফ অনুমতি সীমাবদ্ধ:</strong> আপনি শুধুমাত্র গ্রাহকের ফোন, অল্টারনেট নম্বর, ডেলিভারি ঠিকানা এবং নোট আপডেট করতে পারবেন। ডিসকাউন্ট ও স্ট্যাটাস পরিবর্তন শুধুমাত্র ম্যানেজার বা এডমিনের অনুমোদিত।
+              </span>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
             <div>
-              <label className="block text-gray-600 font-semibold mb-1">Discount (৳)</label>
+              <label className="block text-gray-600 font-semibold mb-1">
+                Discount (৳) {isStaff && '🔒'}
+              </label>
               <input
                 type="number"
+                disabled={isStaff}
                 value={discount}
                 onChange={e => setDiscount(Number(e.target.value))}
-                className="w-full bg-white border border-gray-200 rounded-xl p-2 text-xs font-bold text-rose-600"
+                className={`w-full border rounded-xl p-2 text-xs font-bold ${
+                  isStaff ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-200 text-rose-600'
+                }`}
               />
             </div>
 
             <div>
-              <label className="block text-gray-600 font-semibold mb-1">Delivery Charge (৳)</label>
+              <label className="block text-gray-600 font-semibold mb-1">
+                Delivery Charge (৳) {isStaff && '🔒'}
+              </label>
               <input
                 type="number"
+                disabled={isStaff}
                 value={deliveryFee}
                 onChange={e => setDeliveryFee(Number(e.target.value))}
-                className="w-full bg-white border border-gray-200 rounded-xl p-2 text-xs font-bold"
+                className={`w-full border rounded-xl p-2 text-xs font-bold ${
+                  isStaff ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-200 text-gray-900'
+                }`}
               />
             </div>
 
             <div>
-              <label className="block text-gray-600 font-semibold mb-1">Order Status</label>
+              <label className="block text-gray-600 font-semibold mb-1">
+                Order Status {isStaff && '🔒'}
+              </label>
               <select
+                disabled={isStaff}
                 value={status}
                 onChange={e => setStatus(e.target.value as OrderStatus)}
-                className="w-full bg-white border border-gray-200 rounded-xl p-2 text-xs font-semibold cursor-pointer"
+                className={`w-full border rounded-xl p-2 text-xs font-semibold ${
+                  isStaff ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-200 cursor-pointer'
+                }`}
               >
                 <option value="Pending">Pending (যাচাই অপেক্ষমান)</option>
                 <option value="Confirmed">Confirmed (নিশ্চিত)</option>
@@ -314,11 +342,16 @@ const OrderEditModalContent: React.FC<OrderEditModalContentProps> = ({
             </div>
 
             <div>
-              <label className="block text-gray-600 font-semibold mb-1">Payment Status</label>
+              <label className="block text-gray-600 font-semibold mb-1">
+                Payment Status {isStaff && '🔒'}
+              </label>
               <select
+                disabled={isStaff}
                 value={paymentStatus}
                 onChange={e => setPaymentStatus(e.target.value as any)}
-                className="w-full bg-white border border-gray-200 rounded-xl p-2 text-xs font-semibold cursor-pointer"
+                className={`w-full border rounded-xl p-2 text-xs font-semibold ${
+                  isStaff ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-200 cursor-pointer'
+                }`}
               >
                 <option value="Pending">Pending (অপেক্ষমান)</option>
                 <option value="Paid">Paid (পরিশোধিত)</option>
@@ -363,6 +396,7 @@ export const OrderEditModal: React.FC = () => {
     editOrder,
     t,
     formatPrice,
+    currentRole,
   } = useShop();
 
   if (!orderForEdit) return null;
@@ -375,6 +409,7 @@ export const OrderEditModal: React.FC = () => {
       editOrder={editOrder}
       t={t}
       formatPrice={formatPrice}
+      currentRole={currentRole}
     />
   );
 };
