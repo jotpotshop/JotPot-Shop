@@ -19,6 +19,7 @@ import {
   PaymentSettings,
   CourierConfig,
   CourierPartner,
+  CourierConsignmentInfo,
   ReturnPolicySettings,
   SeoSettings,
   LiveChatSettings,
@@ -2507,6 +2508,12 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
+  const saveAllCourierConfigs = async (configs: CourierConfig[]): Promise<void> => {
+    setCourierConfigs(configs);
+    localStorage.setItem('jps_courier_configs', JSON.stringify(configs));
+    await saveCouriersToFirestore(configs);
+  };
+
   const updateReturnPolicySettings = (settings: Partial<ReturnPolicySettings>) => {
     setReturnPolicySettings(prev => {
       const merged = { ...prev, ...settings };
@@ -2872,6 +2879,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updatePaymentSettings,
         courierConfigs,
         updateCourierConfig,
+        saveAllCourierConfigs,
         returnPolicySettings,
         updateReturnPolicySettings,
         seoSettings,

@@ -348,6 +348,11 @@ export const CustomerDashboardModal: React.FC = () => {
     } catch (err: any) {
       if (err?.code === 'auth/popup-blocked') {
         setAuthError('ব্রাউজার পপ-আপ ব্লক করেছে। অনুগ্রহ করে পপ-আপ চালু করে আবার চেষ্টা করুন।');
+      } else if (err?.code === 'auth/unauthorized-domain') {
+        const domain = typeof window !== 'undefined' ? window.location.hostname : '';
+        setAuthError(
+          `বর্তমান ডোমেইনটি (${domain}) Firebase Console-এ অনুমোদিত নয়। Firebase Console > Authentication > Settings > Authorized domains-এ "${domain}" যুক্ত করুন। আপাতত মোবাইল নম্বর দিয়ে লগইন ও অর্ডার করা যাবে।`
+        );
       } else if (err?.code !== 'auth/popup-closed-by-user') {
         setAuthError(err?.message || 'গুগল লগইন ব্যর্থ হয়েছে। মোবাইল নম্বর দিয়ে চেষ্টা করুন।');
       }
