@@ -294,7 +294,7 @@ export async function testCourierApiConnection(
         clearTimeout(timeoutId);
 
         if (response.ok) {
-          const data = await response.json();
+          const data = (await response.json()) as Record<string, any>;
           const latencyMs = Date.now() - startTime;
           return {
             success: true,
