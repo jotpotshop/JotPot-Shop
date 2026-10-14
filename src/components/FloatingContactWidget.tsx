@@ -70,7 +70,7 @@ export const FloatingContactWidget: React.FC = () => {
   }
 
   // Format WhatsApp Link
-  const rawWhatsapp = (liveChatSettings.whatsappNumber || websiteSettings.whatsappNumber || '01712345678').replace(/\D/g, '');
+  const rawWhatsapp = (liveChatSettings.whatsappNumber || websiteSettings.whatsappNumber || '').replace(/\D/g, '');
   const cleanWhatsapp = rawWhatsapp.startsWith('880') ? rawWhatsapp : rawWhatsapp.startsWith('0') ? `88${rawWhatsapp}` : `880${rawWhatsapp}`;
   const whatsappUrl = `https://wa.me/${cleanWhatsapp}?text=${encodeURIComponent(
     liveChatSettings.whatsappMessageTemplate ||
@@ -84,7 +84,7 @@ export const FloatingContactWidget: React.FC = () => {
   const messengerUrl = `https://m.me/${rawMessenger}`;
 
   // Format Call Hotline
-  const rawHotline = (liveChatSettings.callHotlineNumber || websiteSettings.hotline || '01812345678').replace(/\D/g, '');
+  const rawHotline = (liveChatSettings.callHotlineNumber || websiteSettings.hotline || '').replace(/\D/g, '');
   const hotlineUrl = `tel:${rawHotline}`;
 
   // Pre-set FAQ responses

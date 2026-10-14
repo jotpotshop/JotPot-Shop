@@ -33,6 +33,7 @@ import {
 import { useShop } from '../context/ShopContext';
 import { ProductCard } from './ProductCard';
 import { BD_DISTRICTS } from '../data/mockData';
+import { signInWithGooglePopup } from '../lib/firebase';
 
 export const CustomerDashboardModal: React.FC = () => {
   const {
@@ -71,15 +72,15 @@ export const CustomerDashboardModal: React.FC = () => {
   const [authMode, setAuthMode] = useState<'otp' | 'password' | 'register' | 'forgot'>('otp');
 
   // 1. Phone OTP State
-  const [otpPhone, setOtpPhone] = useState('01712345678');
+  const [otpPhone, setOtpPhone] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [generatedOtp, setGeneratedOtp] = useState('');
   const [inputOtp, setInputOtp] = useState('');
   const [otpTimer, setOtpTimer] = useState(0);
 
   // 2. Password Login State
-  const [loginIdentifier, setLoginIdentifier] = useState('01712345678');
-  const [loginPassword, setLoginPassword] = useState('password123');
+  const [loginIdentifier, setLoginIdentifier] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // 3. Register State
@@ -334,23 +335,25 @@ export const CustomerDashboardModal: React.FC = () => {
     }, 300);
   };
 
-  // Direct Google Sign In
-  const handleGoogleSignIn = () => {
+  // Direct Google Sign In via Firebase Auth
+  const handleGoogleSignIn = async () => {
     setAuthError('');
     setIsLoading(true);
-    setTimeout(() => {
-      loginWithGoogle({
-        name: 'তানভীর আহমেদ (Google)',
-        email: 'tanvir.google@gmail.com',
-        avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80',
-      });
+    try {
+      const gUser = await signInWithGooglePopup();
+      if (gUser && gUser.email) {
+        loginWithGoogle(gUser);
+        setAuthSuccess('গুগল অ্যাকাউন্ট সফলভাবে কানেক্ট হয়েছে!');
+      }
+    } catch (err: any) {
+      if (err?.code === 'auth/popup-blocked') {
+        setAuthError('ব্রাউজার পপ-আপ ব্লক করেছে। অনুগ্রহ করে পপ-আপ চালু করে আবার চেষ্টা করুন।');
+      } else if (err?.code !== 'auth/popup-closed-by-user') {
+        setAuthError(err?.message || 'গুগল লগইন ব্যর্থ হয়েছে। মোবাইল নম্বর দিয়ে চেষ্টা করুন।');
+      }
+    } finally {
       setIsLoading(false);
-      setAuthSuccess('গুগল অ্যাকাউন্ট সফলভাবে কানেক্ট হয়েছে!');
-    }, 250);
-  };
-
-  const handleQuickDemoLogin = () => {
-    loginCustomerWithPassword('01712345678', 'password123');
+    }
   };
 
   const handleSaveProfile = (e: React.FormEvent) => {
@@ -713,16 +716,6 @@ export const CustomerDashboardModal: React.FC = () => {
                     <LogIn className="w-4 h-4" />
                     <span>{isLoading ? t('যাচাই করা হচ্ছে...', 'Verifying...') : t('লগইন করুন', 'Login')}</span>
                   </button>
-
-                  <div className="flex items-center justify-between pt-2">
-                    <button
-                      type="button"
-                      onClick={handleQuickDemoLogin}
-                      className="text-[11px] text-slate-500 hover:text-rose-600 underline font-semibold cursor-pointer"
-                    >
-                      ⚡ ডেমো অ্যাকাউন্ট দিয়ে ১-ক্লিক লগইন
-                    </button>
-                  </div>
                 </form>
               )}
 

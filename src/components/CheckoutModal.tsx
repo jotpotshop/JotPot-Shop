@@ -35,12 +35,12 @@ export const CheckoutModal: React.FC = () => {
     formatPrice,
   } = useShop();
 
-  const [name, setName] = useState(user.name || 'JotPot Customer');
-  const [phone, setPhone] = useState(user.phone || '01712345678');
+  const [name, setName] = useState(user.name || '');
+  const [phone, setPhone] = useState(user.phone || '');
   const [alternativePhone, setAlternativePhone] = useState('');
   const [district, setDistrict] = useState('Dhaka (ঢাকা)');
-  const [area, setArea] = useState('Dhanmondi');
-  const [fullAddress, setFullAddress] = useState('House 42, Road 15/A, Dhanmondi R/A, Dhaka');
+  const [area, setArea] = useState('');
+  const [fullAddress, setFullAddress] = useState('');
   const [customerNote, setCustomerNote] = useState('');
   const [deliveryOption, setDeliveryOption] = useState<'inside' | 'outside' | 'chattogram'>('inside');
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'bkash' | 'nagad' | 'rocket'>('cod');

@@ -27,14 +27,27 @@ service cloud.firestore {
 
     // Customer orders
     match /orders/{orderId} {
-      allow read, create, update: if isValidId(orderId);
-      allow delete: if false; // Orders cannot be deleted for audit history
+      allow read, write: if isValidId(orderId);
     }
 
     // Promo Coupons
     match /coupons/{couponId} {
-      allow read: if isValidId(couponId);
-      allow write: if isValidId(couponId);
+      allow read, write: if isValidId(couponId);
+    }
+
+    // Registered Customers
+    match /customers/{customerId} {
+      allow read, write: if isValidId(customerId);
+    }
+
+    // Combo Bundles
+    match /bundles/{bundleId} {
+      allow read, write: if isValidId(bundleId);
+    }
+
+    // Staff Accounts
+    match /staff/{staffId} {
+      allow read, write: if isValidId(staffId);
     }
   }
 }

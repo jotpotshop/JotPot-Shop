@@ -123,7 +123,7 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
     setTimeout(() => setSaveToast(false), 2500);
   };
 
-  const isSuperAdmin = currentRole === 'SUPER_ADMIN';
+  const isSuperAdmin = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN';
 
   // Handle Hero Banner Image Upload
   const handleBannerImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -376,6 +376,41 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
     } finally {
       setIsSavingBranding(false);
     }
+  };
+
+  const handleSaveDelivery = () => {
+    updateDeliverySettings(deliverySettings);
+    showSaveSuccess();
+  };
+
+  const handleSavePayment = () => {
+    updatePaymentSettings(paymentSettings);
+    showSaveSuccess();
+  };
+
+  const handleSavePolicy = () => {
+    updateReturnPolicySettings(returnPolicySettings);
+    showSaveSuccess();
+  };
+
+  const handleSaveSeo = () => {
+    updateSeoSettings(seoSettings);
+    showSaveSuccess();
+  };
+
+  const handleSaveLiveChat = () => {
+    updateLiveChatSettings(liveChatSettings);
+    showSaveSuccess();
+  };
+
+  const handleSaveHomepage = () => {
+    updateHomepageSections(homepageSections);
+    showSaveSuccess();
+  };
+
+  const handleSaveOrderRules = () => {
+    updateOrderSettings(orderSettings);
+    showSaveSuccess();
   };
 
   // Test Firebase Connection
@@ -1212,7 +1247,7 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
               <p className="text-gray-500 text-xs">ঢাকার ভেতরে ও বাইরে চার্জ, এক্সপ্রেস ডেলিভারি ও ফ্রি থ্রেশহোল্ড</p>
             </div>
             <button
-              onClick={showSaveSuccess}
+              onClick={handleSaveDelivery}
               className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl flex items-center space-x-1.5 cursor-pointer transition-colors"
             >
               <Save className="w-4 h-4" />
@@ -1362,7 +1397,7 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
               <p className="text-gray-500 text-xs">ক্যাশ অন ডেলিভারি, বিকাশ, নগদ ও কার্ড পেমেন্ট সেটিংস</p>
             </div>
             <button
-              onClick={showSaveSuccess}
+              onClick={handleSavePayment}
               className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl flex items-center space-x-1.5 cursor-pointer transition-colors"
             >
               <Save className="w-4 h-4" />
@@ -1902,7 +1937,7 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
                 <p className="text-gray-500 text-xs">হোমপেজে কোন কোন সেকশন দেখানো হবে বা বন্ধ থাকবে নির্ধারণ করুন</p>
               </div>
               <button
-                onClick={showSaveSuccess}
+                onClick={handleSaveHomepage}
                 className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl flex items-center space-x-1.5 cursor-pointer transition-colors"
               >
                 <Save className="w-4 h-4" />
@@ -1956,7 +1991,7 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
               <p className="text-gray-500 text-xs">গ্রাহকের জন্য রিটার্ন পলিসির সময়সীমা ও শর্তাবলী</p>
             </div>
             <button
-              onClick={showSaveSuccess}
+              onClick={handleSavePolicy}
               className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl flex items-center space-x-1.5 cursor-pointer transition-colors"
             >
               <Save className="w-4 h-4" />
@@ -2017,7 +2052,7 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
               <p className="text-gray-500 text-xs">গুগল সার্চ ও ফেসবুক শেয়ারের মেটা টাইটেল ও বিবরণী</p>
             </div>
             <button
-              onClick={showSaveSuccess}
+              onClick={handleSaveSeo}
               className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl flex items-center space-x-1.5 cursor-pointer transition-colors"
             >
               <Save className="w-4 h-4" />
@@ -2068,7 +2103,7 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
               <p className="text-gray-500 text-xs">ভাসমান কন্টাক্ট উইজেট এবং গ্রাহক সহায়তা চ্যানেলের তথ্য এন্ট্রি করুন</p>
             </div>
             <button
-              onClick={showSaveSuccess}
+              onClick={handleSaveLiveChat}
               className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl flex items-center space-x-1.5 cursor-pointer transition-colors shadow-xs"
             >
               <Save className="w-4 h-4" />
@@ -2338,7 +2373,7 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
               <p className="text-gray-500 text-xs">নতুন অর্ডার আসলে সাউন্ড এলার্ট, অটো কনফার্মেশন ও ন্যূনতম অর্ডার সীমা</p>
             </div>
             <button
-              onClick={showSaveSuccess}
+              onClick={handleSaveOrderRules}
               className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl flex items-center space-x-1.5 cursor-pointer transition-colors"
             >
               <Save className="w-4 h-4" />

@@ -73,6 +73,41 @@ import {
   fetchHeroBannersFromFirestore,
   saveCouriersToFirestore,
   fetchCouriersFromFirestore,
+  subscribeToCouriers,
+  savePaymentSettingsToFirestore,
+  fetchPaymentSettingsFromFirestore,
+  subscribeToPaymentSettings,
+  saveDeliverySettingsToFirestore,
+  fetchDeliverySettingsFromFirestore,
+  subscribeToDeliverySettings,
+  saveProductsToFirestore,
+  fetchProductsFromFirestore,
+  subscribeToProducts,
+  saveOrdersToFirestore,
+  saveSingleOrderToFirestore,
+  fetchOrdersFromFirestore,
+  subscribeToOrders,
+  saveBundlesToFirestore,
+  fetchBundlesFromFirestore,
+  saveCouponsToFirestore,
+  fetchCouponsFromFirestore,
+  subscribeToCoupons,
+  saveReturnPolicyToFirestore,
+  fetchReturnPolicyFromFirestore,
+  saveSeoSettingsToFirestore,
+  fetchSeoSettingsFromFirestore,
+  saveLiveChatSettingsToFirestore,
+  fetchLiveChatSettingsFromFirestore,
+  saveHomepageSectionsToFirestore,
+  fetchHomepageSectionsFromFirestore,
+  saveOrderSettingsToFirestore,
+  fetchOrderSettingsFromFirestore,
+  saveStaffAccountsToFirestore,
+  fetchStaffAccountsFromFirestore,
+  saveCustomersToFirestore,
+  fetchCustomersFromFirestore,
+  subscribeToCustomers,
+  signInWithGooglePopup,
   resizeDataUrl,
   FirebaseConnectionDiagnostic,
   FIREBASE_PROJECT_INFO,
@@ -152,6 +187,8 @@ interface ShopContextType {
     customerNote?: string;
     paymentMethod: 'cod' | 'bkash' | 'nagad' | 'rocket';
     deliveryOption: 'inside' | 'outside' | 'chattogram';
+    preferredCourier?: CourierPartner | 'Auto';
+    courierInstructions?: string;
     orderSource?: 'Website' | 'Facebook' | 'WhatsApp' | 'Phone Call';
     paymentDetails?: {
       senderNumber?: string;
@@ -267,6 +304,7 @@ interface ShopContextType {
   updatePaymentSettings: (settings: Partial<PaymentSettings>) => void;
   courierConfigs: CourierConfig[];
   updateCourierConfig: (courierId: CourierPartner, config: Partial<CourierConfig>) => void;
+  saveAllCourierConfigs: (configs: CourierConfig[]) => Promise<void>;
   returnPolicySettings: ReturnPolicySettings;
   updateReturnPolicySettings: (settings: Partial<ReturnPolicySettings>) => void;
   seoSettings: SeoSettings;
@@ -317,42 +355,85 @@ const ShopContext = createContext<ShopContextType | undefined>(undefined);
 
 export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>(() => {
-    return (localStorage.getItem('jps_lang') as Language) || 'bn';
+    try {
+      return (localStorage.getItem('jps_lang') as Language) || 'bn';
+    } catch {
+      return 'bn';
+    }
   });
 
   const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem('jps_products');
-    return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+    try {
+      const saved = localStorage.getItem('jps_products');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return INITIAL_PRODUCTS;
   });
 
   const [cart, setCart] = useState<CartItem[]>(() => {
-    const saved = localStorage.getItem('jps_cart');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('jps_cart');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
   });
 
   const [wishlist, setWishlist] = useState<string[]>(() => {
-    const saved = localStorage.getItem('jps_wishlist');
-    return saved ? JSON.parse(saved) : ['jps-prod-101', 'jps-prod-102'];
+    try {
+      const saved = localStorage.getItem('jps_wishlist');
+      return saved ? JSON.parse(saved) : ['jps-prod-101', 'jps-prod-102'];
+    } catch {
+      return ['jps-prod-101', 'jps-prod-102'];
+    }
   });
 
   const [comparisonList, setComparisonList] = useState<string[]>([]);
 
   const [recentlyViewed, setRecentlyViewed] = useState<string[]>(() => {
-    const saved = localStorage.getItem('jps_recent');
-    return saved ? JSON.parse(saved) : ['jps-prod-101', 'jps-prod-104', 'jps-prod-106'];
+    try {
+      const saved = localStorage.getItem('jps_recent');
+      return saved ? JSON.parse(saved) : ['jps-prod-101', 'jps-prod-104', 'jps-prod-106'];
+    } catch {
+      return ['jps-prod-101', 'jps-prod-104', 'jps-prod-106'];
+    }
   });
 
-  const [coupons, setCoupons] = useState<Coupon[]>(INITIAL_COUPONS);
+  const [coupons, setCoupons] = useState<Coupon[]>(() => {
+    try {
+      const saved = localStorage.getItem('jps_coupons');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_COUPONS;
+  });
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
 
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>(() => {
-    const saved = localStorage.getItem('jps_addresses');
-    return saved ? JSON.parse(saved) : INITIAL_SAVED_ADDRESSES;
+    try {
+      const saved = localStorage.getItem('jps_addresses');
+      return saved ? JSON.parse(saved) : INITIAL_SAVED_ADDRESSES;
+    } catch {
+      return INITIAL_SAVED_ADDRESSES;
+    }
   });
 
   const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem('jps_orders');
-    return saved ? JSON.parse(saved) : INITIAL_ORDERS;
+    try {
+      const saved = localStorage.getItem('jps_orders');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_ORDERS;
   });
 
   const [notifications, setNotifications] = useState<UserNotification[]>(INITIAL_NOTIFICATIONS);
@@ -361,16 +442,32 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [selectedLocation, setSelectedLocation] = useState<string>('Dhaka (ঢাকা)');
 
   const [user, setUser] = useState<UserState>(() => {
-    const saved = localStorage.getItem('jps_user');
-    return saved ? JSON.parse(saved) : { isLoggedIn: false, name: '', phone: '', email: '' };
+    try {
+      const saved = localStorage.getItem('jps_user');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.phone === '01712345678' || parsed.email === 'tanvir.ahmed@gmail.com') {
+          localStorage.removeItem('jps_user');
+          return { isLoggedIn: false, name: '', phone: '', email: '' };
+        }
+        return parsed;
+      }
+    } catch {}
+    return { isLoggedIn: false, name: '', phone: '', email: '' };
   });
 
   const [registeredCustomers, setRegisteredCustomers] = useState<RegisteredCustomer[]>(() => {
     try {
       const saved = localStorage.getItem('jps_registered_customers');
-      return saved ? JSON.parse(saved) : INITIAL_REGISTERED_CUSTOMERS;
+      if (saved) {
+        const parsed: RegisteredCustomer[] = JSON.parse(saved);
+        return parsed.filter(
+          c => c.phone !== '01712345678' && c.email?.toLowerCase() !== 'tanvir.ahmed@gmail.com'
+        );
+      }
+      return [];
     } catch {
-      return INITIAL_REGISTERED_CUSTOMERS;
+      return [];
     }
   });
 
@@ -479,17 +576,27 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const parsed: CourierConfig[] = JSON.parse(saved);
         return DEFAULT_COURIER_CONFIGS.map(def => {
           const match = parsed.find(p => p.id === def.id);
-          if (def.id === 'Steadfast') {
+          if (!match) return def;
+          // Filter out legacy demo keys
+          const isDemoKey =
+            match.apiKey === 'stf_live_api_jotpot_89312b9' ||
+            match.apiKey === 'rdx_prod_key_jps_38192a' ||
+            match.apiKey === 'pth_client_id_jotpot' ||
+            match.apiKey === 'ppf_api_jotpot_392' ||
+            match.apiKey === 'scs_token_jps_5510' ||
+            match.apiKey === 'eco_api_key_jotpot_21';
+          if (isDemoKey) {
             return {
               ...def,
-              ...(match || {}),
-              isActive: true,
-              connectionStatus: 'connected',
-              accountBalance: match?.accountBalance || 4850,
-              lastConnectedAt: match?.lastConnectedAt || '১২ অক্টোবর ২০২৬, ১১:৪০ AM',
+              apiKey: '',
+              secretKey: '',
+              merchantId: '',
+              connectionStatus: 'disconnected',
+              isActive: false,
+              accountBalance: 0,
             };
           }
-          return match ? { ...def, ...match } : def;
+          return { ...def, ...match };
         });
       }
       return DEFAULT_COURIER_CONFIGS;
@@ -498,8 +605,22 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
-  const [returnPolicySettings, setReturnPolicySettings] = useState<ReturnPolicySettings>(DEFAULT_RETURN_POLICY);
-  const [seoSettings, setSeoSettings] = useState<SeoSettings>(DEFAULT_SEO_SETTINGS);
+  const [returnPolicySettings, setReturnPolicySettings] = useState<ReturnPolicySettings>(() => {
+    try {
+      const saved = localStorage.getItem('jps_return_policy_settings');
+      return saved ? { ...DEFAULT_RETURN_POLICY, ...JSON.parse(saved) } : DEFAULT_RETURN_POLICY;
+    } catch {
+      return DEFAULT_RETURN_POLICY;
+    }
+  });
+  const [seoSettings, setSeoSettings] = useState<SeoSettings>(() => {
+    try {
+      const saved = localStorage.getItem('jps_seo_settings');
+      return saved ? { ...DEFAULT_SEO_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SEO_SETTINGS;
+    } catch {
+      return DEFAULT_SEO_SETTINGS;
+    }
+  });
   const [liveChatSettings, setLiveChatSettings] = useState<LiveChatSettings>(() => {
     try {
       const saved = localStorage.getItem('jps_live_chat_settings');
@@ -508,30 +629,65 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return DEFAULT_LIVE_CHAT_SETTINGS;
     }
   });
-  const [homepageSections, setHomepageSections] = useState<HomepageSectionConfig>(DEFAULT_HOMEPAGE_SECTIONS);
-  const [orderSettings, setOrderSettings] = useState<OrderSettings>(DEFAULT_ORDER_SETTINGS);
-  const [reviewSettings, setReviewSettings] = useState<ReviewSettings>(DEFAULT_REVIEW_SETTINGS);
+  const [homepageSections, setHomepageSections] = useState<HomepageSectionConfig>(() => {
+    try {
+      const saved = localStorage.getItem('jps_homepage_sections');
+      return saved ? { ...DEFAULT_HOMEPAGE_SECTIONS, ...JSON.parse(saved) } : DEFAULT_HOMEPAGE_SECTIONS;
+    } catch {
+      return DEFAULT_HOMEPAGE_SECTIONS;
+    }
+  });
+  const [orderSettings, setOrderSettings] = useState<OrderSettings>(() => {
+    try {
+      const saved = localStorage.getItem('jps_order_settings');
+      return saved ? { ...DEFAULT_ORDER_SETTINGS, ...JSON.parse(saved) } : DEFAULT_ORDER_SETTINGS;
+    } catch {
+      return DEFAULT_ORDER_SETTINGS;
+    }
+  });
+  const [reviewSettings, setReviewSettings] = useState<ReviewSettings>(() => {
+    try {
+      const saved = localStorage.getItem('jps_review_settings');
+      return saved ? { ...DEFAULT_REVIEW_SETTINGS, ...JSON.parse(saved) } : DEFAULT_REVIEW_SETTINGS;
+    } catch {
+      return DEFAULT_REVIEW_SETTINGS;
+    }
+  });
 
   // Dynamic Categories Management with local & Firebase persistence
   const [categories, setCategories] = useState<Category[]>(() => {
-    const saved = localStorage.getItem('jps_categories');
-    return saved ? JSON.parse(saved) : CATEGORIES;
+    try {
+      const saved = localStorage.getItem('jps_categories');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return CATEGORIES;
   });
 
   // Dynamic Hero Banners Management with local & Firebase persistence
   const [heroBanners, setHeroBanners] = useState<HeroBannerSlide[]>(() => {
-    const saved = localStorage.getItem('jps_hero_banners');
-    return saved ? JSON.parse(saved) : DEFAULT_HERO_BANNERS;
+    try {
+      const saved = localStorage.getItem('jps_hero_banners');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return DEFAULT_HERO_BANNERS;
   });
 
   // Dynamic Complete The Look (Combo Bundles) with local storage persistence
   const [bundles, setBundles] = useState<BundleOffer[]>(() => {
     try {
       const saved = localStorage.getItem('jps_bundles');
-      return saved ? JSON.parse(saved) : INITIAL_BUNDLES;
-    } catch {
-      return INITIAL_BUNDLES;
-    }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_BUNDLES;
   });
 
   const [activeBundleId, setActiveBundleIdState] = useState<string | null>(() => {
@@ -638,12 +794,33 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn('Initial hero banners fetch from Firestore:', err);
       });
 
-    // Fetch couriers from Firestore
+    // Fetch and subscribe couriers from Firestore
     fetchCouriersFromFirestore()
       .then(remoteCouriers => {
         if (remoteCouriers && remoteCouriers.length > 0) {
-          setCourierConfigs(remoteCouriers);
-          localStorage.setItem('jps_courier_configs', JSON.stringify(remoteCouriers));
+          const sanitized = remoteCouriers.map(c => {
+            const isDemo =
+              c.apiKey === 'stf_live_api_jotpot_89312b9' ||
+              c.apiKey === 'rdx_prod_key_jps_38192a' ||
+              c.apiKey === 'pth_client_id_jotpot' ||
+              c.apiKey === 'ppf_api_jotpot_392' ||
+              c.apiKey === 'scs_token_jps_5510' ||
+              c.apiKey === 'eco_api_key_jotpot_21';
+            if (isDemo) {
+              return {
+                ...c,
+                apiKey: '',
+                secretKey: '',
+                merchantId: '',
+                connectionStatus: 'disconnected' as const,
+                isActive: false,
+                accountBalance: 0,
+              };
+            }
+            return c;
+          });
+          setCourierConfigs(sanitized);
+          localStorage.setItem('jps_courier_configs', JSON.stringify(sanitized));
         } else {
           saveCouriersToFirestore(DEFAULT_COURIER_CONFIGS).catch(() => {});
         }
@@ -652,7 +829,237 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn('Initial couriers fetch from Firestore:', err);
       });
 
-    return () => unsubscribe();
+    const unsubCouriers = subscribeToCouriers(remoteCouriers => {
+      if (remoteCouriers && remoteCouriers.length > 0) {
+        const sanitized = remoteCouriers.map(c => {
+          const isDemo =
+            c.apiKey === 'stf_live_api_jotpot_89312b9' ||
+            c.apiKey === 'rdx_prod_key_jps_38192a' ||
+            c.apiKey === 'pth_client_id_jotpot';
+          if (isDemo) {
+            return {
+              ...c,
+              apiKey: '',
+              secretKey: '',
+              merchantId: '',
+              connectionStatus: 'disconnected' as const,
+              isActive: false,
+              accountBalance: 0,
+            };
+          }
+          return c;
+        });
+        setCourierConfigs(sanitized);
+      }
+    });
+
+    // Fetch and subscribe Payment Settings from Firestore
+    fetchPaymentSettingsFromFirestore()
+      .then(remotePayment => {
+        if (remotePayment && (remotePayment.bkashNumber || remotePayment.nagadNumber || remotePayment.rocketNumber)) {
+          setPaymentSettings(prev => ({ ...prev, ...remotePayment }));
+          localStorage.setItem('jps_payment_settings', JSON.stringify(remotePayment));
+        } else {
+          savePaymentSettingsToFirestore(DEFAULT_PAYMENT_SETTINGS).catch(() => {});
+        }
+      })
+      .catch(err => {
+        console.warn('Initial payment settings fetch from Firestore:', err);
+      });
+
+    const unsubPayment = subscribeToPaymentSettings(remotePayment => {
+      if (remotePayment) {
+        setPaymentSettings(prev => ({ ...prev, ...remotePayment }));
+      }
+    });
+
+    // Fetch and subscribe Delivery Settings from Firestore
+    fetchDeliverySettingsFromFirestore()
+      .then(remoteDelivery => {
+        if (remoteDelivery && remoteDelivery.insideDhakaFee !== undefined) {
+          setDeliverySettings(prev => ({ ...prev, ...remoteDelivery }));
+          localStorage.setItem('jps_delivery_settings', JSON.stringify(remoteDelivery));
+        } else {
+          saveDeliverySettingsToFirestore(DEFAULT_DELIVERY_SETTINGS).catch(() => {});
+        }
+      })
+      .catch(err => {
+        console.warn('Initial delivery settings fetch from Firestore:', err);
+      });
+
+    const unsubDelivery = subscribeToDeliverySettings(remoteDelivery => {
+      if (remoteDelivery) {
+        setDeliverySettings(prev => ({ ...prev, ...remoteDelivery }));
+      }
+    });
+
+    // Fetch and subscribe Products Catalog from Firestore
+    fetchProductsFromFirestore()
+      .then(remoteProds => {
+        if (remoteProds && remoteProds.length > 0) {
+          setProducts(remoteProds);
+          localStorage.setItem('jps_products', JSON.stringify(remoteProds));
+        } else {
+          // Initialize remote database with current catalog so Netlify visitors get initial products
+          saveProductsToFirestore(products).catch(() => {});
+        }
+      })
+      .catch(err => {
+        console.warn('Initial products fetch from Firestore:', err);
+      });
+
+    const unsubProducts = subscribeToProducts(remoteProds => {
+      if (remoteProds && remoteProds.length > 0) {
+        setProducts(remoteProds);
+      }
+    });
+
+    // Fetch and subscribe Orders from Firestore
+    fetchOrdersFromFirestore()
+      .then(remoteOrders => {
+        if (remoteOrders && remoteOrders.length > 0) {
+          setOrders(remoteOrders);
+          localStorage.setItem('jps_orders', JSON.stringify(remoteOrders));
+        } else {
+          saveOrdersToFirestore(orders).catch(() => {});
+        }
+      })
+      .catch(err => {
+        console.warn('Initial orders fetch from Firestore:', err);
+      });
+
+    const unsubOrders = subscribeToOrders(remoteOrders => {
+      if (remoteOrders && remoteOrders.length > 0) {
+        setOrders(remoteOrders);
+      }
+    });
+
+    // Fetch Combo Bundles from Firestore
+    fetchBundlesFromFirestore()
+      .then(remoteBundles => {
+        if (remoteBundles && remoteBundles.length > 0) {
+          setBundles(remoteBundles);
+          localStorage.setItem('jps_bundles', JSON.stringify(remoteBundles));
+        } else {
+          saveBundlesToFirestore(bundles).catch(() => {});
+        }
+      })
+      .catch(err => {
+        console.warn('Initial bundles fetch from Firestore:', err);
+      });
+
+    // Fetch and subscribe Promo Coupons from Firestore
+    fetchCouponsFromFirestore()
+      .then(remoteCoupons => {
+        if (remoteCoupons && remoteCoupons.length > 0) {
+          setCoupons(remoteCoupons);
+          localStorage.setItem('jps_coupons', JSON.stringify(remoteCoupons));
+        } else {
+          saveCouponsToFirestore(coupons).catch(() => {});
+        }
+      })
+      .catch(err => {
+        console.warn('Initial coupons fetch from Firestore:', err);
+      });
+
+    const unsubCoupons = subscribeToCoupons(remoteCoupons => {
+      if (remoteCoupons && remoteCoupons.length > 0) {
+        setCoupons(remoteCoupons);
+      }
+    });
+
+    // Fetch Return Policy from Firestore
+    fetchReturnPolicyFromFirestore()
+      .then(remotePolicy => {
+        if (remotePolicy) {
+          setReturnPolicySettings(prev => ({ ...prev, ...remotePolicy }));
+          localStorage.setItem('jps_return_policy_settings', JSON.stringify(remotePolicy));
+        }
+      })
+      .catch(() => {});
+
+    // Fetch SEO Settings from Firestore
+    fetchSeoSettingsFromFirestore()
+      .then(remoteSeo => {
+        if (remoteSeo) {
+          setSeoSettings(prev => ({ ...prev, ...remoteSeo }));
+          localStorage.setItem('jps_seo_settings', JSON.stringify(remoteSeo));
+        }
+      })
+      .catch(() => {});
+
+    // Fetch LiveChat Settings from Firestore
+    fetchLiveChatSettingsFromFirestore()
+      .then(remoteChat => {
+        if (remoteChat) {
+          setLiveChatSettings(prev => ({ ...prev, ...remoteChat }));
+          localStorage.setItem('jps_live_chat_settings', JSON.stringify(remoteChat));
+        }
+      })
+      .catch(() => {});
+
+    // Fetch Homepage Sections from Firestore
+    fetchHomepageSectionsFromFirestore()
+      .then(remoteHome => {
+        if (remoteHome) {
+          setHomepageSections(prev => ({ ...prev, ...remoteHome }));
+          localStorage.setItem('jps_homepage_sections', JSON.stringify(remoteHome));
+        }
+      })
+      .catch(() => {});
+
+    // Fetch Order Settings from Firestore
+    fetchOrderSettingsFromFirestore()
+      .then(remoteOrderRules => {
+        if (remoteOrderRules) {
+          setOrderSettings(prev => ({ ...prev, ...remoteOrderRules }));
+          localStorage.setItem('jps_order_settings', JSON.stringify(remoteOrderRules));
+        }
+      })
+      .catch(() => {});
+
+    // Fetch Staff Accounts from Firestore
+    fetchStaffAccountsFromFirestore()
+      .then(remoteStaff => {
+        if (remoteStaff && remoteStaff.length > 0) {
+          const hasMaster = remoteStaff.some(s => s.email === 'mdmahmudulhashan0@gmail.com');
+          const finalStaff = hasMaster ? remoteStaff : [INITIAL_STAFF_ACCOUNTS[0], ...remoteStaff];
+          setStaffAccounts(finalStaff);
+          localStorage.setItem('jps_staff_accounts', JSON.stringify(finalStaff));
+        }
+      })
+    // Fetch and subscribe Registered Customers from Firestore
+    fetchCustomersFromFirestore()
+      .then(remoteCusts => {
+        if (remoteCusts && remoteCusts.length > 0) {
+          const sanitized = remoteCusts.filter(
+            c => c.phone !== '01712345678' && c.email?.toLowerCase() !== 'tanvir.ahmed@gmail.com'
+          );
+          setRegisteredCustomers(sanitized);
+          localStorage.setItem('jps_registered_customers', JSON.stringify(sanitized));
+        }
+      })
+      .catch(() => {});
+
+    const unsubCustomers = subscribeToCustomers(remoteCusts => {
+      if (remoteCusts) {
+        const sanitized = remoteCusts.filter(
+          c => c.phone !== '01712345678' && c.email?.toLowerCase() !== 'tanvir.ahmed@gmail.com'
+        );
+        setRegisteredCustomers(sanitized);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      unsubPayment();
+      unsubDelivery();
+      unsubProducts();
+      unsubOrders();
+      unsubCoupons();
+      unsubCustomers();
+      unsubCouriers();
+    };
   }, []);
 
   // Active modals
@@ -912,15 +1319,36 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addCoupon = (coupon: Coupon) => {
-    setCoupons(prev => [coupon, ...prev]);
+    setCoupons(prev => {
+      const updated = [coupon, ...prev];
+      localStorage.setItem('jps_coupons', JSON.stringify(updated));
+      saveCouponsToFirestore(updated).catch(err => {
+        console.warn('Failed to sync coupon to Firestore:', err);
+      });
+      return updated;
+    });
   };
 
   const updateCoupon = (updated: Coupon) => {
-    setCoupons(prev => prev.map(c => (c.code === updated.code ? updated : c)));
+    setCoupons(prev => {
+      const next = prev.map(c => (c.code === updated.code ? updated : c));
+      localStorage.setItem('jps_coupons', JSON.stringify(next));
+      saveCouponsToFirestore(next).catch(err => {
+        console.warn('Failed to sync updated coupon to Firestore:', err);
+      });
+      return next;
+    });
   };
 
   const deleteCoupon = (code: string) => {
-    setCoupons(prev => prev.filter(c => c.code !== code));
+    setCoupons(prev => {
+      const next = prev.filter(c => c.code !== code);
+      localStorage.setItem('jps_coupons', JSON.stringify(next));
+      saveCouponsToFirestore(next).catch(err => {
+        console.warn('Failed to sync deleted coupon to Firestore:', err);
+      });
+      return next;
+    });
   };
 
   // Addresses
@@ -930,6 +1358,18 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteSavedAddress = (id: string) => {
     setSavedAddresses(prev => prev.filter(a => a.id !== id));
+  };
+
+  // Synchronize orders to React state, localStorage, and Cloud Firestore
+  const syncOrders = (updater: (prev: Order[]) => Order[]) => {
+    setOrders(prev => {
+      const next = updater(prev);
+      localStorage.setItem('jps_orders', JSON.stringify(next));
+      saveOrdersToFirestore(next).catch(err => {
+        console.warn('Failed to sync orders to Firestore:', err);
+      });
+      return next;
+    });
   };
 
   // Order Placement
@@ -943,6 +1383,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     customerNote?: string;
     paymentMethod: 'cod' | 'bkash' | 'nagad' | 'rocket';
     deliveryOption: 'inside' | 'outside' | 'chattogram';
+    preferredCourier?: CourierPartner | 'Auto';
+    courierInstructions?: string;
     orderSource?: 'Website' | 'Facebook' | 'WhatsApp' | 'Phone Call';
     paymentDetails?: {
       senderNumber?: string;
@@ -981,6 +1423,65 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const total = Math.max(0, cartSubtotal - couponDiscount + deliveryCharge);
 
+    // Courier assignment from active configured couriers
+    const isInsideDhaka =
+      orderData.deliveryOption === 'inside' ||
+      districtLower.includes('dhaka') ||
+      orderData.district.includes('ঢাকা');
+
+    let assignedCourier: CourierConfig | undefined = undefined;
+    if (orderData.preferredCourier && orderData.preferredCourier !== 'Auto') {
+      assignedCourier = courierConfigs.find(c => c.id === orderData.preferredCourier && c.isActive);
+    }
+
+    if (!assignedCourier) {
+      if (isInsideDhaka) {
+        assignedCourier = courierConfigs.find(c => c.isActive && c.autoAssignInsideDhaka);
+      } else {
+        assignedCourier = courierConfigs.find(c => c.isActive && c.autoAssignOutsideDhaka);
+      }
+    }
+
+    if (!assignedCourier) {
+      assignedCourier = courierConfigs.find(c => c.isActive);
+    }
+
+    let courierConsignment: CourierConsignmentInfo | undefined = undefined;
+    let trackingNumber = 'PENDING';
+    let courierDisplayName = 'Not Assigned';
+
+    if (assignedCourier) {
+      courierDisplayName = assignedCourier.name;
+      const providerPrefixes: Record<CourierPartner, string> = {
+        Steadfast: 'STF',
+        Pathao: 'PTH',
+        RedX: 'RDX',
+        Paperfly: 'PPF',
+        Sundarban: 'SND',
+        eCourier: 'ECO',
+      };
+      const prefix = providerPrefixes[assignedCourier.id] || 'TRK';
+      const trackingCode = `${prefix}-${Math.floor(100000 + Math.random() * 900000)}BD`;
+      const trackingUrl = assignedCourier.trackingUrlTemplate
+        ? assignedCourier.trackingUrlTemplate.replace('{TRACKING_ID}', trackingCode)
+        : `https://steadfast.com.bd/t/${trackingCode}`;
+
+      trackingNumber = trackingCode;
+      courierConsignment = {
+        courierName: assignedCourier.id,
+        courierNameBn: assignedCourier.nameBn,
+        consignmentId: `CONS-${Date.now()}`,
+        trackingCode: trackingCode,
+        trackingUrl: trackingUrl,
+        courierStatus: 'Pending Pickup',
+        weightKg: 0.5,
+        codAmount: orderData.paymentMethod === 'cod' ? total : 0,
+        shippingCharge: deliveryCharge,
+        dispatchedDate: dateStr,
+        specialInstructions: orderData.courierInstructions || orderData.customerNote,
+      };
+    }
+
     const initialTimeline: OrderTimelineStep[] = [
       {
         status: 'Pending',
@@ -988,7 +1489,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         date: dateStr,
         completed: true,
         description: 'Order placed by customer via web checkout',
-        descriptionBn: 'গ্রাহকের অর্ডার সফলভাবে সিস্টেমে যুক্ত হয়েছে',
+        descriptionBn: assignedCourier
+          ? `অর্ডার সিস্টেমে গ্রহণ করা হয়েছে (${assignedCourier.nameBn} নির্ধারিত)`
+          : 'গ্রাহকের অর্ডার সফলভাবে সিস্টেমে যুক্ত হয়েছে',
       },
     ];
 
@@ -1016,8 +1519,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       customerNote: orderData.customerNote,
       status: 'Pending',
       timeline: initialTimeline,
-      trackingNumber: 'PENDING',
-      courier: 'Not Assigned',
+      trackingNumber: trackingNumber,
+      courier: courierDisplayName,
+      courierInfo: courierConsignment,
       callLogs: [],
     };
 
@@ -1034,7 +1538,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     // Save order
-    setOrders(prev => [newOrder, ...prev]);
+    syncOrders(prev => [newOrder, ...prev]);
+    saveSingleOrderToFirestore(newOrder).catch(() => {});
 
     // Send customer notification
     const orderNotif: UserNotification = {
@@ -1068,7 +1573,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const dateStr =
       now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    setOrders(prev =>
+    syncOrders(prev =>
       prev.map(ord => {
         if (ord.id !== orderId) return ord;
 
@@ -1099,7 +1604,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const dateStr =
       now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    setOrders(prev =>
+    syncOrders(prev =>
       prev.map(ord => {
         if (ord.id !== orderId) return ord;
 
@@ -1136,7 +1641,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const dateStr =
       now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    setOrders(prev =>
+    syncOrders(prev =>
       prev.map(ord => {
         if (ord.id !== orderId) return ord;
 
@@ -1160,7 +1665,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const editOrder = (orderId: string, updatedFields: Partial<Order>) => {
-    setOrders(prev =>
+    syncOrders(prev =>
       prev.map(ord => {
         if (ord.id !== orderId) return ord;
         return {
@@ -1182,7 +1687,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...log,
     };
 
-    setOrders(prev =>
+    syncOrders(prev =>
       prev.map(ord => {
         if (ord.id !== orderId) return ord;
         return {
@@ -1219,7 +1724,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ? courierCfg.trackingUrlTemplate.replace('{TRACKING_ID}', trackingCode)
       : `https://jotpotshop.com/track/${trackingCode}`;
 
-    setOrders(prev =>
+    syncOrders(prev =>
       prev.map(ord => {
         if (ord.id !== orderId) return ord;
 
@@ -1268,7 +1773,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const dateStr =
       now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    setOrders(prev =>
+    syncOrders(prev =>
       prev.map(ord => {
         if (ord.id !== orderId || !ord.courierInfo) return ord;
 
@@ -1325,7 +1830,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateOrderStatus = (orderId: string, status: OrderStatus) => {
-    setOrders(prev =>
+    syncOrders(prev =>
       prev.map(ord => {
         if (ord.id !== orderId) return ord;
 
@@ -1375,6 +1880,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setProducts(prev => {
       const next = [finalProduct, ...prev];
       localStorage.setItem('jps_products', JSON.stringify(next));
+      saveProductsToFirestore(next).catch(err => {
+        console.warn('Failed to sync added product to Firestore:', err);
+      });
       return next;
     });
   };
@@ -1390,6 +1898,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setProducts(prev => {
       const next = prev.map(p => (p.id === finalProduct.id ? finalProduct : p));
       localStorage.setItem('jps_products', JSON.stringify(next));
+      saveProductsToFirestore(next).catch(err => {
+        console.warn('Failed to sync updated product to Firestore:', err);
+      });
       return next;
     });
   };
@@ -1398,6 +1909,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setProducts(prev => {
       const next = prev.filter(p => p.id !== id);
       localStorage.setItem('jps_products', JSON.stringify(next));
+      saveProductsToFirestore(next).catch(err => {
+        console.warn('Failed to sync deleted product to Firestore:', err);
+      });
       return next;
     });
   };
@@ -1407,6 +1921,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setProducts(prev => {
       const next = prev.filter(p => !idSet.has(p.id));
       localStorage.setItem('jps_products', JSON.stringify(next));
+      saveProductsToFirestore(next).catch(err => {
+        console.warn('Failed to sync bulk deleted products to Firestore:', err);
+      });
       return next;
     });
   };
@@ -1426,6 +1943,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       });
       localStorage.setItem('jps_products', JSON.stringify(next));
+      saveProductsToFirestore(next).catch(err => {
+        console.warn('Failed to sync bulk updated products to Firestore:', err);
+      });
       return next;
     });
   };
@@ -1435,6 +1955,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setBundles(prev => {
       const updated = [newBundle, ...prev];
       localStorage.setItem('jps_bundles', JSON.stringify(updated));
+      saveBundlesToFirestore(updated).catch(() => {});
       return updated;
     });
     if (newBundle.isActive !== false) {
@@ -1446,6 +1967,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setBundles(prev => {
       const updated = prev.map(b => (b.id === updatedBundle.id ? updatedBundle : b));
       localStorage.setItem('jps_bundles', JSON.stringify(updated));
+      saveBundlesToFirestore(updated).catch(() => {});
       return updated;
     });
   };
@@ -1454,6 +1976,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setBundles(prev => {
       const updated = prev.filter(b => b.id !== bundleId);
       localStorage.setItem('jps_bundles', JSON.stringify(updated));
+      saveBundlesToFirestore(updated).catch(() => {});
       return updated;
     });
     if (activeBundleId === bundleId) {
@@ -1490,6 +2013,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setProducts(prev => {
       const updated = prev.map(p => (p.id === productId ? { ...p, needTags } : p));
       localStorage.setItem('jps_products', JSON.stringify(updated));
+      saveProductsToFirestore(updated).catch(() => {});
       return updated;
     });
   };
@@ -1505,6 +2029,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return p;
       });
       localStorage.setItem('jps_products', JSON.stringify(updated));
+      saveProductsToFirestore(updated).catch(() => {});
       return updated;
     });
     return taggedCount;
@@ -1522,6 +2047,18 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logoutUser = () => {
     setUser({ isLoggedIn: false, name: '', phone: '', email: '' });
+  };
+
+  // Synchronize registered customers to state, localStorage, and Cloud Firestore
+  const syncCustomers = (updater: (prev: RegisteredCustomer[]) => RegisteredCustomer[]) => {
+    setRegisteredCustomers(prev => {
+      const next = updater(prev);
+      localStorage.setItem('jps_registered_customers', JSON.stringify(next));
+      saveCustomersToFirestore(next).catch(err => {
+        console.warn('Failed to sync customers to Firestore:', err);
+      });
+      return next;
+    });
   };
 
   // Customer Registration with Password
@@ -1549,7 +2086,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createdAt: new Date().toISOString(),
     };
 
-    setRegisteredCustomers(prev => [newCustomer, ...prev]);
+    syncCustomers(prev => [newCustomer, ...prev]);
     setUser({
       isLoggedIn: true,
       name: newCustomer.name,
@@ -1560,24 +2097,10 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true, message: 'কাস্টমার অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে! স্বাগতম।' };
   };
 
-  // Customer Login with Password
+  // Customer Login with Password (Real credentials only, NO demo backdoor)
   const loginCustomerWithPassword = (identifier: string, pass: string) => {
     const cleanId = identifier.trim().toLowerCase();
     const cleanPass = pass.trim();
-
-    // Check demo customer accounts
-    if (
-      (cleanId === '01712345678' || cleanId === 'tanvir.ahmed@gmail.com' || cleanId === 'tanvir') &&
-      (cleanPass === 'password123' || cleanPass === '123456')
-    ) {
-      setUser({
-        isLoggedIn: true,
-        name: 'Tanvir Ahmed (তানভীর আহমেদ)',
-        phone: '01712345678',
-        email: 'tanvir.ahmed@gmail.com',
-      });
-      return { success: true, message: 'লগইন সফল হয়েছে!' };
-    }
 
     const found = registeredCustomers.find(
       c => (c.phone === cleanId || c.email.toLowerCase() === cleanId) && c.password === cleanPass
@@ -1598,22 +2121,23 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // One-click Google Login
   const loginWithGoogle = (googleUser?: { name: string; email: string; avatarUrl?: string }) => {
-    const gName = googleUser?.name || 'গুগল গ্রাহক (Google User)';
-    const gEmail = googleUser?.email || 'google.shopper@gmail.com';
-    const gAvatar = googleUser?.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80';
+    if (!googleUser?.email) return;
+    const gName = googleUser.name || 'Google User';
+    const gEmail = googleUser.email.toLowerCase();
+    const gAvatar = googleUser.avatarUrl || '';
 
-    let existing = registeredCustomers.find(c => c.email.toLowerCase() === gEmail.toLowerCase());
+    let existing = registeredCustomers.find(c => c.email.toLowerCase() === gEmail);
     if (!existing) {
       existing = {
         id: `cust-g-${Date.now()}`,
         name: gName,
-        phone: '01700000000',
+        phone: '',
         email: gEmail,
         isGoogleUser: true,
         avatarUrl: gAvatar,
         createdAt: new Date().toISOString(),
       };
-      setRegisteredCustomers(prev => [existing!, ...prev]);
+      syncCustomers(prev => [existing!, ...prev]);
     }
 
     setUser({
@@ -1638,11 +2162,10 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         name: `গ্রাহক-${cleanPhone.slice(-4)}`,
         phone: cleanPhone,
         email: `${cleanPhone}@customer.jotpotshop.com`,
-        password: 'password123',
         isGoogleUser: false,
         createdAt: new Date().toISOString(),
       };
-      setRegisteredCustomers(prev => [newCust, ...prev]);
+      syncCustomers(prev => [newCust, ...prev]);
       existing = newCust;
     }
 
@@ -1671,7 +2194,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: 'এই নম্বরে কোনো অ্যাকাউন্ট পাওয়া যায়নি। নতুন অ্যাকাউন্ট রেজিস্ট্রেশন করুন।' };
     }
 
-    setRegisteredCustomers(prev =>
+    syncCustomers(prev =>
       prev.map(c => (c.phone.replace(/\D/g, '') === cleanPhone ? { ...c, password: newPass } : c))
     );
 
@@ -1694,9 +2217,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email: (updates.email || prev.email || '').trim(),
     }));
 
-    setRegisteredCustomers(prev =>
+    syncCustomers(prev =>
       prev.map(c =>
-        c.phone === user.phone
+        c.phone === user.phone || (c.email && c.email.toLowerCase() === user.email.toLowerCase())
           ? {
               ...c,
               name: updates.name.trim() || c.name,
@@ -1955,11 +2478,25 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateDeliverySettings = (settings: Partial<DeliverySettings>) => {
-    setDeliverySettings(prev => ({ ...prev, ...settings }));
+    setDeliverySettings(prev => {
+      const merged = { ...prev, ...settings };
+      localStorage.setItem('jps_delivery_settings', JSON.stringify(merged));
+      saveDeliverySettingsToFirestore(merged).catch(err => {
+        console.warn('Failed to sync delivery settings to Firestore:', err);
+      });
+      return merged;
+    });
   };
 
   const updatePaymentSettings = (settings: Partial<PaymentSettings>) => {
-    setPaymentSettings(prev => ({ ...prev, ...settings }));
+    setPaymentSettings(prev => {
+      const merged = { ...prev, ...settings };
+      localStorage.setItem('jps_payment_settings', JSON.stringify(merged));
+      savePaymentSettingsToFirestore(merged).catch(err => {
+        console.warn('Failed to sync payment settings to Firestore:', err);
+      });
+      return merged;
+    });
   };
 
   const updateCourierConfig = (courierId: CourierPartner, config: Partial<CourierConfig>) => {
@@ -1971,27 +2508,66 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateReturnPolicySettings = (settings: Partial<ReturnPolicySettings>) => {
-    setReturnPolicySettings(prev => ({ ...prev, ...settings }));
+    setReturnPolicySettings(prev => {
+      const merged = { ...prev, ...settings };
+      localStorage.setItem('jps_return_policy_settings', JSON.stringify(merged));
+      saveReturnPolicyToFirestore(merged).catch(err => {
+        console.warn('Failed to sync return policy to Firestore:', err);
+      });
+      return merged;
+    });
   };
 
   const updateSeoSettings = (settings: Partial<SeoSettings>) => {
-    setSeoSettings(prev => ({ ...prev, ...settings }));
+    setSeoSettings(prev => {
+      const merged = { ...prev, ...settings };
+      localStorage.setItem('jps_seo_settings', JSON.stringify(merged));
+      saveSeoSettingsToFirestore(merged).catch(err => {
+        console.warn('Failed to sync SEO settings to Firestore:', err);
+      });
+      return merged;
+    });
   };
 
   const updateLiveChatSettings = (settings: Partial<LiveChatSettings>) => {
-    setLiveChatSettings(prev => ({ ...prev, ...settings }));
+    setLiveChatSettings(prev => {
+      const merged = { ...prev, ...settings };
+      localStorage.setItem('jps_live_chat_settings', JSON.stringify(merged));
+      saveLiveChatSettingsToFirestore(merged).catch(err => {
+        console.warn('Failed to sync livechat settings to Firestore:', err);
+      });
+      return merged;
+    });
   };
 
   const updateHomepageSections = (config: Partial<HomepageSectionConfig>) => {
-    setHomepageSections(prev => ({ ...prev, ...config }));
+    setHomepageSections(prev => {
+      const merged = { ...prev, ...config };
+      localStorage.setItem('jps_homepage_sections', JSON.stringify(merged));
+      saveHomepageSectionsToFirestore(merged).catch(err => {
+        console.warn('Failed to sync homepage sections to Firestore:', err);
+      });
+      return merged;
+    });
   };
 
   const updateOrderSettings = (settings: Partial<OrderSettings>) => {
-    setOrderSettings(prev => ({ ...prev, ...settings }));
+    setOrderSettings(prev => {
+      const merged = { ...prev, ...settings };
+      localStorage.setItem('jps_order_settings', JSON.stringify(merged));
+      saveOrderSettingsToFirestore(merged).catch(err => {
+        console.warn('Failed to sync order settings to Firestore:', err);
+      });
+      return merged;
+    });
   };
 
   const updateReviewSettings = (settings: Partial<ReviewSettings>) => {
-    setReviewSettings(prev => ({ ...prev, ...settings }));
+    setReviewSettings(prev => {
+      const merged = { ...prev, ...settings };
+      localStorage.setItem('jps_review_settings', JSON.stringify(merged));
+      return merged;
+    });
   };
 
   // Categories CRUD
@@ -2143,6 +2719,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setStaffAccounts(prev => {
       const updated = [...prev, created];
       localStorage.setItem('jps_staff_accounts', JSON.stringify(updated));
+      saveStaffAccountsToFirestore(updated).catch(err => {
+        console.warn('Failed to sync staff account to Firestore:', err);
+      });
       return updated;
     });
   };
@@ -2151,6 +2730,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setStaffAccounts(prev => {
       const updatedList = prev.map(s => (s.id === updated.id ? updated : s));
       localStorage.setItem('jps_staff_accounts', JSON.stringify(updatedList));
+      saveStaffAccountsToFirestore(updatedList).catch(err => {
+        console.warn('Failed to sync updated staff account to Firestore:', err);
+      });
       return updatedList;
     });
     if (adminUser?.id === updated.id) {
@@ -2164,6 +2746,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Protect master superadmin from deletion
       const updatedList = prev.filter(s => !(s.id === id && s.email === 'mdmahmudulhashan0@gmail.com'));
       localStorage.setItem('jps_staff_accounts', JSON.stringify(updatedList));
+      saveStaffAccountsToFirestore(updatedList).catch(err => {
+        console.warn('Failed to sync deleted staff account to Firestore:', err);
+      });
       return updatedList;
     });
   };

@@ -128,6 +128,7 @@ export const ROLE_PERMITTED_TABS: Record<UserRole, string[]> = {
     'coupons',
     'delivery',
     'reports',
+    'settings',
   ],
   MANAGER: [
     'dashboard',
@@ -917,7 +918,7 @@ export const AdminPanel: React.FC = () => {
             <AccessRestrictedCard
               role={currentRole}
               requiredRole={
-                adminTab === 'roles' || adminTab === 'settings'
+                adminTab === 'roles'
                   ? 'SUPER_ADMIN'
                   : 'ADMIN / SUPER_ADMIN'
               }
