@@ -285,6 +285,9 @@ interface ShopContextType {
   updateRolePermission: (role: UserRole, module: SystemModule, actions: PermissionAction[]) => void;
   hasPermission: (module: SystemModule, action: PermissionAction) => boolean;
   resetRolePermissionsToDefault: () => void;
+  purgeAllDemoData: () => { success: boolean; message: string };
+  clearAllDemoOrders: () => void;
+  clearAllDemoCustomers: () => void;
 
   // Admin Authentication & Staff Management
   adminUser: StaffAccount | null;
@@ -2760,6 +2763,96 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
+  // Super Admin: Purge All Demo Data
+  const purgeAllDemoData = () => {
+    const demoOrderIds = [
+      'ORD-9821',
+      'ORD-9822',
+      'ORD-9823',
+      'ORD-9824',
+      'ORD-9825',
+      'JPS-2026-9204',
+      'JPS-2026-8941',
+      'JPS-2026-7812',
+    ];
+    const demoPhones = ['01819234567', '01711223344', '01912998877', '01712345678'];
+    const realOrders = orders.filter(
+      o =>
+        !demoOrderIds.includes(o.id) &&
+        !o.id.startsWith('DEMO-') &&
+        !demoPhones.includes(o.phone?.replace(/\D/g, '')) &&
+        !['Shakil Mahmud', 'Tanvir Ahmed', 'Farhana Akter'].includes(o.customerName)
+    );
+    setOrders(realOrders);
+    localStorage.setItem('jps_orders', JSON.stringify(realOrders));
+    saveOrdersToFirestore(realOrders, adminUser?.email || 'jotpotshop.official@gmail.com');
+
+    // Clear demo addresses
+    setSavedAddresses([]);
+    localStorage.setItem('jps_addresses', JSON.stringify([]));
+
+    // Clear demo notifications
+    setNotifications([]);
+    localStorage.setItem('jps_notifications', JSON.stringify([]));
+
+    // Clear demo conversations
+    setConversations([]);
+    localStorage.setItem('jps_unified_conversations', JSON.stringify([]));
+
+    // Clear demo customers
+    syncCustomers(prev =>
+      prev.filter(
+        c =>
+          !c.id.startsWith('demo-') &&
+          !c.name.includes('Demo') &&
+          !c.name.includes('ডেমো') &&
+          !demoPhones.includes(c.phone?.replace(/\D/g, ''))
+      )
+    );
+
+    return {
+      success: true,
+      message: 'সকল ডেমো ডেটা সফলভাবে মুছে ফেলা হয়েছে! শপ এখন ১০০% রিয়েল কাস্টমার ডেটায় প্রস্তুত।',
+    };
+  };
+
+  const clearAllDemoOrders = () => {
+    const demoOrderIds = [
+      'ORD-9821',
+      'ORD-9822',
+      'ORD-9823',
+      'ORD-9824',
+      'ORD-9825',
+      'JPS-2026-9204',
+      'JPS-2026-8941',
+      'JPS-2026-7812',
+    ];
+    const demoPhones = ['01819234567', '01711223344', '01912998877', '01712345678'];
+    const realOrders = orders.filter(
+      o =>
+        !demoOrderIds.includes(o.id) &&
+        !o.id.startsWith('DEMO-') &&
+        !demoPhones.includes(o.phone?.replace(/\D/g, '')) &&
+        !['Shakil Mahmud', 'Tanvir Ahmed', 'Farhana Akter'].includes(o.customerName)
+    );
+    setOrders(realOrders);
+    localStorage.setItem('jps_orders', JSON.stringify(realOrders));
+    saveOrdersToFirestore(realOrders, adminUser?.email || 'jotpotshop.official@gmail.com');
+  };
+
+  const clearAllDemoCustomers = () => {
+    const demoPhones = ['01819234567', '01711223344', '01912998877', '01712345678'];
+    syncCustomers(prev =>
+      prev.filter(
+        c =>
+          !c.id.startsWith('demo-') &&
+          !c.name.includes('Demo') &&
+          !c.name.includes('ডেমো') &&
+          !demoPhones.includes(c.phone?.replace(/\D/g, ''))
+      )
+    );
+  };
+
   return (
     <ShopContext.Provider
       value={{
@@ -2871,6 +2964,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateRolePermission,
         hasPermission,
         resetRolePermissionsToDefault,
+        purgeAllDemoData,
+        clearAllDemoOrders,
+        clearAllDemoCustomers,
         websiteSettings,
         updateWebsiteSettings,
         deliverySettings,

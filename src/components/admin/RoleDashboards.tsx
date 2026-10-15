@@ -34,6 +34,7 @@ import {
   FileText,
   Building2,
   ExternalLink,
+  Trash2,
 } from 'lucide-react';
 import { useShop } from '../../context/ShopContext';
 import { UserRole, Order, Product, SystemModule, PermissionAction } from '../../types';
@@ -226,6 +227,7 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
     rolePermissions,
     hasPermission,
     formatPrice,
+    purgeAllDemoData,
     t,
   } = useShop();
 
@@ -246,6 +248,8 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
     .reduce((sum, o) => sum + o.totalAmount, 0);
 
   const unreadChatCount = conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+  const demoOrderIds = ['ORD-9821', 'ORD-9822', 'ORD-9823', 'ORD-9824', 'ORD-9825', 'JPS-2026-9204', 'JPS-2026-8941', 'JPS-2026-7812'];
+  const demoOrdersCount = orders.filter(o => demoOrderIds.includes(o.id) || o.id.startsWith('DEMO-') || ['01819234567', '01711223344', '01912998877'].includes(o.phone.replace(/\D/g, ''))).length;
 
   // Quick product search state for Staff / front desk lookup
   const [staffProductSearch, setStaffProductSearch] = useState('');
@@ -1403,6 +1407,68 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
               <p className="text-[11px] text-gray-400">
                 সমস্ত কাস্টমার মেসেজ এক ইউনিফাইড ইনবক্সে সেন্ট্রালাইজড আছে। এআই সেলস অ্যাসিস্ট্যান্ট নিয়ন্ত্রণযোগ্য।
               </p>
+            </div>
+          </div>
+
+          {/* Super Admin: Clean All Demo Data Card */}
+          <div className="bg-gradient-to-r from-amber-50 via-rose-50 to-orange-50 border border-amber-200/80 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start space-x-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-rose-600/20">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h4 className="font-extrabold text-sm sm:text-base text-gray-900">
+                      সুপার এডমিন: ডেমো ডেটা নিয়ন্ত্রণ ও ক্লিনআপ (Demo Data Purge)
+                    </h4>
+                    <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-2.5 py-0.5 rounded-full border border-rose-200">
+                      👑 সুপার এডমিন ক্ষমতা
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1">
+                    কাস্টমারদের কাছে যেকোনো ডেমো অর্ডার বা ডেমো প্রোফাইল লুকানো হয়েছে। আপনি চাইলে এক ক্লিকে সিস্টেমের সমস্ত ডেমো অর্ডার, ডেমো কাস্টমার ও ডেমো ঠিকানা চিরতরে ডিলিট করতে পারেন।
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm('আপনি কি নিশ্চিত যে সকল ডেমো অর্ডার ও ডেমো কাস্টমার তথ্য মুছে ফেলতে চান? এটি শুধুমাত্র ডেমো ডেটা ডিলিট করবে, রিয়েল কাস্টমারের কোনো তথ্য ক্ষতি হবে না।')) {
+                      const res = purgeAllDemoData();
+                      alert(res.message);
+                    }
+                  }}
+                  className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl flex items-center space-x-1.5 shadow-md shadow-rose-600/20 cursor-pointer transition-all"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>সকল ডেমো মুছে ফেলুন (Purge Demo)</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-xs">
+              <div className="bg-white/80 p-3 rounded-2xl border border-amber-200/60">
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">ডেমো অর্ডার শনাক্ত</span>
+                <span className="font-black text-rose-600 text-sm">{demoOrdersCount} টি</span>
+              </div>
+              <div className="bg-white/80 p-3 rounded-2xl border border-amber-200/60">
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">রিয়েল কাস্টমার অর্ডার</span>
+                <span className="font-black text-emerald-600 text-sm">{orders.length - demoOrdersCount} টি</span>
+              </div>
+              <div className="bg-white/80 p-3 rounded-2xl border border-amber-200/60">
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">কাস্টমার ভিউ স্ট্যাটাস</span>
+                <span className="font-bold text-gray-800 text-[11px] flex items-center space-x-1">
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>১০০% রিয়েলিস্টিক</span>
+                </span>
+              </div>
+              <div className="bg-white/80 p-3 rounded-2xl border border-amber-200/60">
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">মোবাইল OTP গেটওয়ে</span>
+                <span className="font-bold text-emerald-700 text-[11px]">JotPotShop Direct</span>
+              </div>
             </div>
           </div>
 

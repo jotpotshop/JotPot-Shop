@@ -78,6 +78,7 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
     isFirebaseConnected,
     refreshFirebaseConnection,
     saveBrandingToRemote,
+    purgeAllDemoData,
     t,
     language,
   } = useShop();
@@ -644,6 +645,41 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
               </div>
             </div>
           </div>
+
+          {/* Super Admin Demo Data Purge Card */}
+          {isSuperAdmin && (
+            <div className="bg-gradient-to-r from-amber-50 via-rose-50 to-orange-50 border border-amber-200/80 rounded-3xl p-5 shadow-xs space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-rose-600/20">
+                    <Trash2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-gray-900">
+                      সুপার এডমিন: সিস্টেম ডেমো ডেটা মুছে ফেলা (Purge All Demo Data)
+                    </h4>
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      শপের সমস্ত প্রাথমিক ডেমো অর্ডার, ডেমো কাস্টমার ও ডেমো ঠিকানা এক ক্লিকে স্থায়ীভাবে ডিলিট করুন।
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm('আপনি কি নিশ্চিত যে সকল ডেমো অর্ডার ও ডেমো কাস্টমার তথ্য মুছে ফেলতে চান? এটি শুধুমাত্র ডেমো ডেটা ডিলিট করবে, রিয়েল কাস্টমারের কোনো অর্ডার বা অ্যাকাউন্টের ক্ষতি হবে না।')) {
+                      const res = purgeAllDemoData();
+                      alert(res.message);
+                    }
+                  }}
+                  className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl flex items-center space-x-1.5 shadow-md shadow-rose-600/20 cursor-pointer transition-all self-start sm:self-auto shrink-0"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>সকল ডেমো মুছে ফেলুন (Purge Demo)</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* 1. Website Branding & Logo Upload Card */}
           <div className="bg-white rounded-3xl p-6 border border-gray-200 shadow-xs space-y-6 text-xs">

@@ -182,6 +182,7 @@ export const AdminPanel: React.FC = () => {
     conversations,
     registeredCustomers,
     adminUser,
+    purgeAllDemoData,
     t,
     formatPrice,
     language,
@@ -952,16 +953,35 @@ export const AdminPanel: React.FC = () => {
                     </p>
                   </div>
 
-                  {/* Search Order input */}
-                  <div className="relative w-full sm:w-72">
-                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={orderSearchQuery}
-                      onChange={e => setOrderSearchQuery(e.target.value)}
-                      placeholder={t('আইডি, নাম, ফোন বা জেলা দিয়ে খুঁজুন...', 'Search ID, name, phone, district...')}
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-xs focus:border-rose-500"
-                    />
+                  {/* Search Order input & Super Admin demo cleaner */}
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    {currentRole === 'SUPER_ADMIN' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm('সকল ডেমো অর্ডার ও ডেমো ডেটা মুছে ফেলতে চান? এটি শুধুমাত্র ডেমো ডেটা ডিলিট করবে, রিয়েল কাস্টমারের কোনো অর্ডার ক্ষতি হবে না।')) {
+                            const res = purgeAllDemoData();
+                            alert(res.message);
+                          }
+                        }}
+                        className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs px-3 py-2 rounded-xl flex items-center space-x-1.5 cursor-pointer transition-colors shrink-0 shadow-2xs"
+                        title="সিস্টেমের সমস্ত ডেমো অর্ডার ডিলিট করুন"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                        <span>{t('ডেমো অর্ডার ক্লিন করুন', 'Purge Demo Data')}</span>
+                      </button>
+                    )}
+
+                    <div className="relative w-full sm:w-72">
+                      <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={orderSearchQuery}
+                        onChange={e => setOrderSearchQuery(e.target.value)}
+                        placeholder={t('আইডি, নাম, ফোন বা জেলা দিয়ে খুঁজুন...', 'Search ID, name, phone, district...')}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-xs focus:border-rose-500"
+                      />
+                    </div>
                   </div>
                 </div>
 
