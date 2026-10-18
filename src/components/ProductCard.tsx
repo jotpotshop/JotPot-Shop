@@ -2,6 +2,7 @@ import React from 'react';
 import { Heart, Star, ShoppingBag, Eye, Zap, Scale, Check } from 'lucide-react';
 import { Product } from '../types';
 import { useShop } from '../context/ShopContext';
+import { getAvailableStock, getStockStatusInfo } from '../utils/inventory';
 
 interface ProductCardProps {
   product: Product;
@@ -9,6 +10,7 @@ interface ProductCardProps {
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const {
+    products,
     language,
     t,
     formatPrice,
@@ -22,20 +24,29 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     setActiveModal,
   } = useShop();
 
-  const isWished = isInWishlist(product.id);
-  const isCompared = comparisonList.includes(product.id);
-  const saveAmount = product.oldPrice ? product.oldPrice - product.price : 0;
-  const isLowStock = product.stock > 0 && product.stock <= product.lowStockThreshold;
+  const liveProduct = products.find(p => p.id === product.id) || product;
+  const isWished = isInWishlist(liveProduct.id);
+  const isCompared = comparisonList.includes(liveProduct.id);
+  const saveAmount = liveProduct.oldPrice ? liveProduct.oldPrice - liveProduct.price : 0;
+
+  const availableStock = getAvailableStock(liveProduct);
+  const stockInfo = getStockStatusInfo(liveProduct, undefined, undefined, language);
+  const isOutOfStock = stockInfo.isOutOfStock;
+  const isLowStock = stockInfo.isLowStock;
 
   const handleQuickBuy = (e: React.MouseEvent) => {
     e.stopPropagation();
-    addToCart(product, 1);
-    setActiveModal('checkout');
+    if (isOutOfStock) return;
+    const added = addToCart(liveProduct, 1);
+    if (added) {
+      setActiveModal('checkout');
+    }
   };
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();
-    addToCart(product, 1);
+    if (isOutOfStock) return;
+    addToCart(liveProduct, 1);
   };
 
   const handleToggleCompare = (e: React.MouseEvent) => {
@@ -64,20 +75,21 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           className="w-full h-full object-cover object-center group-hover:scale-106 transition-transform duration-500"
         />
 
-        {/* Discount Badge */}
-        {product.discountPercent && (
+        {/* Badges: Out of Stock, Discount, Flash */}
+        {isOutOfStock ? (
+          <div className="absolute top-2.5 left-2.5 bg-gray-950/90 text-rose-300 border border-rose-500/40 text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md shadow-md uppercase tracking-wide backdrop-blur-xs">
+            {t('স্টক আউট', 'OUT OF STOCK')}
+          </div>
+        ) : product.discountPercent ? (
           <div className="absolute top-2.5 left-2.5 bg-rose-600 text-white text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md shadow-xs uppercase tracking-wide">
             {product.discountPercent}% OFF
           </div>
-        )}
-
-        {/* Flash Sale or Trending Badge */}
-        {product.isFlashSale && !product.discountPercent && (
+        ) : product.isFlashSale ? (
           <div className="absolute top-2.5 left-2.5 bg-amber-500 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-xs flex items-center space-x-1">
             <Zap className="w-3 h-3 fill-white" />
             <span>FLASH</span>
           </div>
-        )}
+        ) : null}
 
         {/* Top Right Actions: Wishlist & Compare */}
         <div className="absolute top-2.5 right-2.5 flex flex-col space-y-1.5 z-10">
@@ -145,14 +157,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             {language === 'bn' ? product.nameBn : product.name}
           </h3>
 
-          {/* Low Stock Urgency Tag */}
-          {isLowStock ? (
+          {/* Live Stock Availability Tag */}
+          {isOutOfStock ? (
+            <div className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md inline-block mb-2">
+              ⚠️ {t('স্টক আউট', 'Out of Stock')}
+            </div>
+          ) : isLowStock ? (
             <div className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md inline-block mb-2">
-              {t(`⚠️ মাত্র ${product.stock}টি বাকি আছে!`, `⚠️ Only ${product.stock} left in stock!`)}
+              {t(`⚠️ মাত্র ${availableStock}টি বাকি আছে!`, `⚠️ Only ${availableStock} left in stock!`)}
             </div>
           ) : (
             <div className="text-[10px] font-medium text-emerald-600 inline-block mb-2">
-              ✓ {t('ইন স্টক • দ্রুত ডেলিভারি', 'In Stock • Fast Delivery')}
+              ✓ {t('ইন স্টক • দ্রুত ডেলিভারি', 'In Stock • Fast Delivery')} ({availableStock}টি)
             </div>
           )}
         </div>
@@ -161,11 +177,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         <div className="pt-2 border-t border-gray-100">
           <div className="flex items-baseline space-x-2 mb-2">
             <span className="text-sm sm:text-base font-extrabold text-gray-900">
-              {formatPrice(product.price)}
+              {formatPrice(liveProduct.price)}
             </span>
-            {product.oldPrice && (
+            {liveProduct.oldPrice && (
               <span className="text-xs text-gray-400 line-through">
-                {formatPrice(product.oldPrice)}
+                {formatPrice(liveProduct.oldPrice)}
               </span>
             )}
             {saveAmount > 0 && (
@@ -178,19 +194,29 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           {/* Action Buttons: Add to Cart & Buy Now */}
           <div className="grid grid-cols-2 gap-1.5">
             <button
+              disabled={isOutOfStock}
               onClick={handleAddToCart}
-              className="w-full bg-gray-100 hover:bg-rose-50 hover:text-rose-700 text-gray-800 text-[11px] sm:text-xs font-bold py-2 rounded-xl flex items-center justify-center space-x-1 transition-colors cursor-pointer"
+              className={`w-full text-[11px] sm:text-xs font-bold py-2 rounded-xl flex items-center justify-center space-x-1 transition-colors ${
+                isOutOfStock
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
+                  : 'bg-gray-100 hover:bg-rose-50 hover:text-rose-700 text-gray-800 cursor-pointer'
+              }`}
             >
               <ShoppingBag className="w-3.5 h-3.5" />
-              <span>{t('ব্যাগ', 'Cart')}</span>
+              <span>{isOutOfStock ? t('স্টক নেই', 'No Stock') : t('ব্যাগ', 'Cart')}</span>
             </button>
 
             <button
+              disabled={isOutOfStock}
               onClick={handleQuickBuy}
-              className="w-full bg-rose-600 hover:bg-rose-700 text-white text-[11px] sm:text-xs font-bold py-2 rounded-xl flex items-center justify-center space-x-1 shadow-xs shadow-rose-600/20 transition-all cursor-pointer"
+              className={`w-full text-[11px] sm:text-xs font-bold py-2 rounded-xl flex items-center justify-center space-x-1 shadow-xs transition-all ${
+                isOutOfStock
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60 shadow-none'
+                  : 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20 cursor-pointer'
+              }`}
             >
-              <Zap className="w-3 h-3 fill-white stroke-none" />
-              <span>{t('অর্ডার করুন', 'Buy Now')}</span>
+              <Zap className={`w-3 h-3 ${isOutOfStock ? 'fill-gray-400' : 'fill-white'} stroke-none`} />
+              <span>{isOutOfStock ? t('স্টক আউট', 'Stock Out') : t('অর্ডার করুন', 'Buy Now')}</span>
             </button>
           </div>
         </div>

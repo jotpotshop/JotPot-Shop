@@ -14,6 +14,7 @@ import {
   Share2,
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
+import { getAvailableStock, getStockStatusInfo } from '../utils/inventory';
 
 export const QuickViewModal: React.FC = () => {
   const {
@@ -39,22 +40,34 @@ export const QuickViewModal: React.FC = () => {
 
   if (activeModal !== 'quickView' || !quickViewProduct) return null;
 
-  const product = quickViewProduct;
+  const product = products.find(p => p.id === quickViewProduct.id) || quickViewProduct;
   const isWished = isInWishlist(product.id);
   const currentColor = selectedColor || product.colors[0] || '';
   const currentSize = selectedSize || product.sizes[0] || '';
+
+  const availableStock = getAvailableStock(product, currentColor, currentSize);
+  const stockInfo = getStockStatusInfo(product, currentColor, currentSize, language);
+  const isOutOfStock = stockInfo.isOutOfStock;
+  const isLowStock = stockInfo.isLowStock;
+  const validQuantity = isOutOfStock ? 0 : Math.min(Math.max(1, quantity), availableStock);
 
   // Frequently bought together item
   const relatedProduct = products.find(p => p.id !== product.id && p.category === product.category) || products[0];
 
   const handleAddToCart = () => {
-    addToCart(product, quantity, currentColor, currentSize);
-    setActiveModal('cart');
+    if (isOutOfStock || validQuantity <= 0) return;
+    const added = addToCart(product, validQuantity, currentColor, currentSize);
+    if (added) {
+      setActiveModal('cart');
+    }
   };
 
   const handleBuyNow = () => {
-    addToCart(product, quantity, currentColor, currentSize);
-    setActiveModal('checkout');
+    if (isOutOfStock || validQuantity <= 0) return;
+    const added = addToCart(product, validQuantity, currentColor, currentSize);
+    if (added) {
+      setActiveModal('checkout');
+    }
   };
 
   const handleShare = () => {
@@ -107,11 +120,15 @@ export const QuickViewModal: React.FC = () => {
                 alt={product.name}
                 className="w-full h-full object-cover object-center"
               />
-              {product.discountPercent && (
+              {isOutOfStock ? (
+                <div className="absolute top-3 left-3 bg-gray-950/90 text-rose-300 border border-rose-500/40 text-xs font-black px-2.5 py-1 rounded-md shadow-md uppercase tracking-wider backdrop-blur-xs">
+                  {t('স্টক আউট', 'OUT OF STOCK')}
+                </div>
+              ) : product.discountPercent ? (
                 <div className="absolute top-3 left-3 bg-rose-600 text-white text-xs font-black px-2.5 py-1 rounded-md shadow-xs">
                   {product.discountPercent}% OFF
                 </div>
-              )}
+              ) : null}
             </div>
 
             {/* Thumbnail switcher */}
@@ -192,13 +209,17 @@ export const QuickViewModal: React.FC = () => {
 
               {/* Stock status */}
               <div className="mt-2.5">
-                {product.stock <= 5 && product.stock > 0 ? (
+                {isOutOfStock ? (
+                  <span className="inline-block bg-rose-100 text-rose-800 text-xs font-bold px-2.5 py-1 rounded-md">
+                    ⚠️ {t('স্টক আউট — এই ভ্যারিয়েন্ট বর্তমানে শেষ', 'Out of Stock — this variant is currently unavailable')}
+                  </span>
+                ) : isLowStock ? (
                   <span className="inline-block bg-amber-100 text-amber-900 text-xs font-bold px-2.5 py-1 rounded-md animate-pulse">
-                    {t(`⚠️ মাত্র ${product.stock}টি বাকি আছে! ঝটপট অর্ডার করুন`, `⚠️ Only ${product.stock} left in stock! Order quickly`)}
+                    {stockInfo.statusBadgeText} {t('ঝটপট অর্ডার করুন', 'Order quickly')}
                   </span>
                 ) : (
                   <span className="inline-block text-emerald-600 text-xs font-semibold">
-                    ✓ {t('ইন স্টক — এখনই অর্ডারে প্রস্তুত', 'In Stock — Ready to ship')}
+                    ✓ {t(`ইন স্টক (${availableStock}টি উপলব্ধ) — এখনই অর্ডারে প্রস্তুত`, `In Stock (${availableStock} available) — Ready to ship`)}
                   </span>
                 )}
               </div>
@@ -211,20 +232,29 @@ export const QuickViewModal: React.FC = () => {
                     <span className="text-rose-600">{currentColor}</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {product.colors.map(col => (
-                      <button
-                        key={col}
-                        onClick={() => setSelectedColor(col)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center space-x-1.5 ${
-                          currentColor === col
-                            ? 'border-rose-600 bg-rose-50 text-rose-700 shadow-xs'
-                            : 'border-gray-200 text-gray-700 hover:border-gray-300'
-                        }`}
-                      >
-                        {currentColor === col && <Check className="w-3 h-3 text-rose-600" />}
-                        <span>{col}</span>
-                      </button>
-                    ))}
+                    {product.colors.map(col => {
+                      const colorStock = getAvailableStock(product, col, currentSize || undefined);
+                      const isColorOut = colorStock <= 0;
+                      return (
+                        <button
+                          key={col}
+                          onClick={() => setSelectedColor(col)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center space-x-1.5 ${
+                            currentColor === col
+                              ? 'border-rose-600 bg-rose-50 text-rose-700 shadow-xs'
+                              : isColorOut
+                              ? 'border-gray-200 text-gray-400 bg-gray-50'
+                              : 'border-gray-200 text-gray-700 hover:border-gray-300'
+                          }`}
+                        >
+                          {currentColor === col && <Check className="w-3 h-3 text-rose-600" />}
+                          <span>{col}</span>
+                          {isColorOut && (
+                            <span className="text-[10px] text-rose-500 font-normal">({t('স্টক নেই', 'Out')})</span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -237,19 +267,30 @@ export const QuickViewModal: React.FC = () => {
                     <span className="text-rose-600">{currentSize}</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {product.sizes.map(sz => (
-                      <button
-                        key={sz}
-                        onClick={() => setSelectedSize(sz)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                          currentSize === sz
-                            ? 'border-rose-600 bg-rose-600 text-white shadow-xs'
-                            : 'border-gray-200 text-gray-800 hover:border-gray-300'
-                        }`}
-                      >
-                        {sz}
-                      </button>
-                    ))}
+                    {product.sizes.map(sz => {
+                      const sizeStock = getAvailableStock(product, currentColor || undefined, sz);
+                      const isSizeOut = sizeStock <= 0;
+                      return (
+                        <button
+                          key={sz}
+                          onClick={() => setSelectedSize(sz)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center space-x-1 ${
+                            currentSize === sz
+                              ? 'border-rose-600 bg-rose-600 text-white shadow-xs'
+                              : isSizeOut
+                              ? 'border-gray-200 text-gray-400 bg-gray-50'
+                              : 'border-gray-200 text-gray-800 hover:border-gray-300'
+                          }`}
+                        >
+                          <span>{sz}</span>
+                          {isSizeOut && (
+                            <span className={`text-[10px] font-normal ${currentSize === sz ? 'text-rose-200' : 'text-rose-500'}`}>
+                              ({t('শেষ', 'Out')})
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -259,19 +300,36 @@ export const QuickViewModal: React.FC = () => {
                 <span className="text-xs font-bold text-gray-700">{t('পরিমাণ:', 'Quantity:')}</span>
                 <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-gray-50">
                   <button
-                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="px-3 py-1 text-base font-bold text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer"
+                    disabled={isOutOfStock || validQuantity <= 1}
+                    onClick={() => setQuantity(Math.max(1, validQuantity - 1))}
+                    className={`px-3 py-1 text-base font-bold transition-colors ${
+                      isOutOfStock || validQuantity <= 1
+                        ? 'text-gray-300 cursor-not-allowed'
+                        : 'text-gray-600 hover:bg-gray-200 cursor-pointer'
+                    }`}
                   >
                     -
                   </button>
-                  <span className="px-3 py-1 text-sm font-bold text-gray-900 bg-white">{quantity}</span>
+                  <span className={`px-3 py-1 text-sm font-bold bg-white ${isOutOfStock ? 'text-gray-400' : 'text-gray-900'}`}>
+                    {validQuantity}
+                  </span>
                   <button
-                    onClick={() => setQuantity(Math.min(product.stock, quantity + 1))}
-                    className="px-3 py-1 text-base font-bold text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer"
+                    disabled={isOutOfStock || validQuantity >= availableStock}
+                    onClick={() => setQuantity(Math.min(availableStock, validQuantity + 1))}
+                    className={`px-3 py-1 text-base font-bold transition-colors ${
+                      isOutOfStock || validQuantity >= availableStock
+                        ? 'text-gray-300 cursor-not-allowed'
+                        : 'text-gray-600 hover:bg-gray-200 cursor-pointer'
+                    }`}
                   >
                     +
                   </button>
                 </div>
+                {availableStock > 0 && (
+                  <span className="text-[11px] text-gray-500">
+                    ({t(`সর্বোচ্চ ${availableStock}টি`, `Max ${availableStock}`)})
+                  </span>
+                )}
               </div>
 
               {/* Seller details */}
@@ -293,19 +351,29 @@ export const QuickViewModal: React.FC = () => {
             <div className="space-y-2 pt-4 border-t border-gray-100">
               <div className="grid grid-cols-2 gap-3">
                 <button
+                  disabled={isOutOfStock}
                   onClick={handleAddToCart}
-                  className="w-full bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs sm:text-sm py-3 rounded-2xl flex items-center justify-center space-x-2 transition-colors cursor-pointer"
+                  className={`w-full font-bold text-xs sm:text-sm py-3 rounded-2xl flex items-center justify-center space-x-2 transition-colors ${
+                    isOutOfStock
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
+                      : 'bg-rose-50 hover:bg-rose-100 text-rose-700 cursor-pointer'
+                  }`}
                 >
                   <ShoppingBag className="w-4 h-4" />
-                  <span>{t('ব্যাগে যোগ করুন', 'Add to Cart')}</span>
+                  <span>{isOutOfStock ? t('স্টক আউট', 'Out of Stock') : t('ব্যাগে যোগ করুন', 'Add to Cart')}</span>
                 </button>
 
                 <button
+                  disabled={isOutOfStock}
                   onClick={handleBuyNow}
-                  className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm py-3 rounded-2xl flex items-center justify-center space-x-2 shadow-lg shadow-rose-600/30 transition-all cursor-pointer"
+                  className={`w-full font-bold text-xs sm:text-sm py-3 rounded-2xl flex items-center justify-center space-x-2 transition-all ${
+                    isOutOfStock
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60 shadow-none'
+                      : 'bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/30 cursor-pointer'
+                  }`}
                 >
-                  <Zap className="w-4 h-4 fill-white stroke-none" />
-                  <span>{t('এখনই কিনুন (১-ক্লিক)', 'Buy Now (1-Click)')}</span>
+                  <Zap className={`w-4 h-4 ${isOutOfStock ? 'fill-gray-500' : 'fill-white'} stroke-none`} />
+                  <span>{isOutOfStock ? t('স্টক নেই', 'No Stock') : t('এখনই কিনুন (১-ক্লিক)', 'Buy Now (1-Click)')}</span>
                 </button>
               </div>
 
@@ -371,15 +439,30 @@ export const QuickViewModal: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-3 shrink-0">
-                  <span className="text-sm font-bold text-gray-900">{formatPrice(relatedProduct.price)}</span>
-                  <button
-                    onClick={() => addToCart(relatedProduct, 1)}
-                    className="bg-gray-900 hover:bg-black text-white text-xs font-bold px-3 py-1.5 rounded-xl cursor-pointer transition-colors"
-                  >
-                    + {t('যোগ করুন', 'Add')}
-                  </button>
-                </div>
+                {(() => {
+                  const liveRelated = products.find(p => p.id === relatedProduct.id) || relatedProduct;
+                  const isRelatedOut = getAvailableStock(liveRelated) <= 0;
+
+                  return (
+                    <div className="flex items-center space-x-3 shrink-0">
+                      <span className="text-sm font-bold text-gray-900">{formatPrice(liveRelated.price)}</span>
+                      <button
+                        disabled={isRelatedOut}
+                        onClick={() => {
+                          if (isRelatedOut) return;
+                          addToCart(liveRelated, 1);
+                        }}
+                        className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-colors ${
+                          isRelatedOut
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+                            : 'bg-gray-900 hover:bg-black text-white cursor-pointer'
+                        }`}
+                      >
+                        {isRelatedOut ? t('স্টক নেই', 'No Stock') : `+ ${t('যোগ করুন', 'Add')}`}
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}

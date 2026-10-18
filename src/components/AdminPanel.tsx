@@ -1606,7 +1606,13 @@ export const AdminPanel: React.FC = () => {
                       )}
                       <button
                         onClick={() => {
-                          updateProduct({ ...p, stock: p.stock + 20 });
+                          const nextVariantStocks = p.variantStocks ? { ...p.variantStocks } : undefined;
+                          if (nextVariantStocks) {
+                            Object.keys(nextVariantStocks).forEach(k => {
+                              nextVariantStocks[k] = (nextVariantStocks[k] || 0) + 20;
+                            });
+                          }
+                          updateProduct({ ...p, stock: p.stock + 20, variantStocks: nextVariantStocks });
                           setAdminToast({ message: `"${p.name}" স্টকে ২০টি যোগ করা হয়েছে!`, type: 'success' });
                         }}
                         className="bg-white hover:bg-rose-600 hover:text-white border border-rose-300 text-rose-700 font-bold px-3 py-1.5 rounded-xl cursor-pointer transition-colors shadow-xs"

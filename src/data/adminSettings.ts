@@ -107,7 +107,7 @@ export const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
   nagadAccountType: 'Merchant',
   nagadAccountName: 'JotPotShop Official',
   nagadInstructionsBn: 'নগদ অ্যাপ অথবা *167# ডায়াল করে পেমেন্ট বা সেন্ড মানি করুন।',
-  rocketEnabled: true,
+  rocketEnabled: false,
   rocketNumber: '01912-345678-9',
   rocketAccountType: 'Personal',
   rocketAccountName: 'JotPotShop Official',

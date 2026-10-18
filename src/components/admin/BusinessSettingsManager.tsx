@@ -1542,47 +1542,20 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
             </div>
           </div>
 
-          {/* Rocket Settings */}
-          <div className="bg-purple-50/60 p-4 rounded-2xl border border-purple-200 space-y-3">
+          {/* Rocket Settings (Archived / Disabled) */}
+          <div className="bg-gray-50/80 p-4 rounded-2xl border border-gray-200 space-y-2 opacity-80">
             <div className="flex items-center justify-between">
-              <span className="font-bold text-purple-900 text-xs flex items-center space-x-2">
-                <span className="bg-purple-600 text-white px-2 py-0.5 rounded text-[10px]">Rocket</span>
-                <span>রকেট (DBBL) পেমেন্ট গেটওয়ে / নাম্বার</span>
+              <span className="font-bold text-gray-700 text-xs flex items-center space-x-2">
+                <span className="bg-gray-500 text-white px-2 py-0.5 rounded text-[10px]">Rocket (নিষ্ক্রিয়)</span>
+                <span>রকেট (DBBL) পেমেন্ট অপশন</span>
               </span>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={Boolean(paymentSettings.rocketEnabled)}
-                  onChange={e => updatePaymentSettings({ rocketEnabled: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 peer-checked:bg-purple-600" />
-              </label>
+              <span className="text-[11px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
+                গ্রাহকদের জন্য বন্ধ (Disabled)
+              </span>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-gray-700 font-semibold mb-1">রকেট অ্যাকাউন্ট নম্বর (১২ ডিজিট)</label>
-                <input
-                  type="text"
-                  value={paymentSettings.rocketNumber || ''}
-                  onChange={e => updatePaymentSettings({ rocketNumber: e.target.value })}
-                  placeholder="01912-345678-9"
-                  className="w-full bg-white border border-purple-200 rounded-xl p-2 text-xs font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-gray-700 font-semibold mb-1">অ্যাকাউন্ট টাইপ</label>
-                <select
-                  value={paymentSettings.rocketAccountType || 'Personal'}
-                  onChange={e => updatePaymentSettings({ rocketAccountType: e.target.value as any })}
-                  className="w-full bg-white border border-purple-200 rounded-xl p-2 text-xs font-semibold"
-                >
-                  <option value="Personal">Personal (পার্সোনাল - সেন্ড মানি)</option>
-                  <option value="Merchant">Merchant (মার্চেন্ট - পেমেন্ট)</option>
-                </select>
-              </div>
-            </div>
+            <p className="text-[11px] text-gray-500">
+              রকেট পেমেন্ট মাধ্যমটি নতুন অর্ডারের জন্য স্থায়ীভাবে বন্ধ রাখা হয়েছে। অতীতের যেসকল অর্ডার রকেটের মাধ্যমে সম্পন্ন হয়েছিল সেগুলোর রিপোর্ট ও রেকর্ড সুরক্ষিত রয়েছে।
+            </p>
           </div>
         </div>
       )}

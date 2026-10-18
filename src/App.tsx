@@ -56,6 +56,8 @@ const MainContent: React.FC = () => {
     language,
     t,
     websiteSettings,
+    shopToast,
+    setShopToast,
   } = useShop();
 
   const [activeSubcategory, setActiveSubcategory] = useState<string | null>(null);
@@ -501,6 +503,25 @@ const MainContent: React.FC = () => {
 
       {/* Floating Contact Widget (Live Chat, Messenger, WhatsApp, Call) */}
       <FloatingContactWidget />
+
+      {/* Global Shop Notification Toast */}
+      {shopToast && (
+        <div className="fixed top-5 right-5 z-[9999] max-w-sm w-full mx-4 sm:mx-0 bg-slate-900/95 text-white p-4 rounded-2xl shadow-2xl border border-slate-700/80 backdrop-blur-md flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4 duration-200">
+          <div className="flex items-center space-x-2.5 text-xs font-bold">
+            {shopToast.type === 'error' && <span className="text-rose-400 text-base">⚠️</span>}
+            {shopToast.type === 'warning' && <span className="text-amber-400 text-base">⚠️</span>}
+            {shopToast.type === 'success' && <span className="text-emerald-400 text-base">✅</span>}
+            {shopToast.type === 'info' && <span className="text-blue-400 text-base">ℹ️</span>}
+            <span>{shopToast.message}</span>
+          </div>
+          <button
+            onClick={() => setShopToast(null)}
+            className="text-gray-400 hover:text-white p-1 rounded-lg cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 };

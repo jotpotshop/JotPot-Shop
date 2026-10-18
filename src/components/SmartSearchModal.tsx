@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { parseSmartSearchQuery, filterProductsBySmartSearch } from '../utils/searchParser';
+import { getAvailableStock } from '../utils/inventory';
 
 export const SmartSearchModal: React.FC = () => {
   const {
@@ -316,17 +317,31 @@ export const SmartSearchModal: React.FC = () => {
                         </span>
                       )}
 
-                      <div className="mt-2 flex items-center space-x-1.5">
-                        <button
-                          onClick={() => {
-                            addToCart(prod, 1);
-                          }}
-                          className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center space-x-1 cursor-pointer transition-colors"
-                        >
-                          <ShoppingBag className="w-3 h-3" />
-                          <span>{t('ব্যাগে নিন', 'Add')}</span>
-                        </button>
-                      </div>
+                      {(() => {
+                        const liveProd = products.find(p => p.id === prod.id) || prod;
+                        const available = getAvailableStock(liveProd);
+                        const isOut = available <= 0;
+
+                        return (
+                          <div className="mt-2 flex items-center space-x-1.5 justify-end">
+                            {isOut ? (
+                              <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded-md">
+                                {t('স্টক আউট', 'Out of Stock')}
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  addToCart(liveProd, 1);
+                                }}
+                                className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center space-x-1 cursor-pointer transition-colors shadow-2xs"
+                              >
+                                <ShoppingBag className="w-3 h-3" />
+                                <span>{t('ব্যাগে নিন', 'Add')}</span>
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 ))}

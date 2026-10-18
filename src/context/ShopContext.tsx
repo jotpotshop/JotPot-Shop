@@ -84,6 +84,7 @@ import {
   saveProductsToFirestore,
   fetchProductsFromFirestore,
   subscribeToProducts,
+  executeAtomicOrderCheckout,
   saveOrdersToFirestore,
   saveSingleOrderToFirestore,
   fetchOrdersFromFirestore,
@@ -113,6 +114,7 @@ import {
   FirebaseConnectionDiagnostic,
   FIREBASE_PROJECT_INFO,
 } from '../lib/firebase';
+import { getAvailableStock } from '../utils/inventory';
 
 export const FREE_DELIVERY_THRESHOLD = 1500;
 export const INSIDE_CITY_DELIVERY = 60;
@@ -141,7 +143,7 @@ interface ShopContextType {
 
   // Cart
   cart: CartItem[];
-  addToCart: (product: Product, quantity?: number, color?: string, size?: string) => void;
+  addToCart: (product: Product, quantity?: number, color?: string, size?: string) => boolean;
   removeFromCart: (productId: string, color?: string, size?: string) => void;
   updateCartQuantity: (productId: string, quantity: number, color?: string, size?: string) => void;
   clearCart: () => void;
@@ -197,7 +199,7 @@ interface ShopContextType {
       amount?: number;
       accountType?: 'Merchant' | 'Personal';
     };
-  }) => Order;
+  }) => Promise<{ success: boolean; order?: Order; error?: string }>;
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
   confirmOrder: (orderId: string, confirmedBy?: string) => void;
   cancelOrder: (orderId: string, reason: string) => void;
@@ -228,11 +230,14 @@ interface ShopContextType {
   replyToConversation: (conversationId: string, replyText: string, staffName?: string, attachedProductId?: string) => void;
   toggleAiSalesAgent: (enabled?: boolean) => void;
 
-  // Notifications
+  // Notifications & Toast
   notifications: UserNotification[];
   markNotificationRead: (id: string) => void;
   hasNewOrderAlert: boolean;
   dismissNewOrderAlert: () => void;
+  shopToast: { message: string; type: 'success' | 'error' | 'warning' | 'info' } | null;
+  setShopToast: (toast: { message: string; type: 'success' | 'error' | 'warning' | 'info' } | null) => void;
+  showToast: (message: string, type?: 'success' | 'error' | 'warning' | 'info') => void;
 
   // Location
   selectedLocation: string;
@@ -357,6 +362,12 @@ interface ShopContextType {
 
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
 
+export const getCustomerCartStorageKey = (phoneOrEmail?: string): string => {
+  if (!phoneOrEmail || !phoneOrEmail.trim()) return 'jps_cart_guest';
+  const clean = phoneOrEmail.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+  return `jps_cart_cust_${clean}`;
+};
+
 export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>(() => {
     try {
@@ -381,8 +392,23 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [cart, setCart] = useState<CartItem[]>(() => {
     try {
-      const saved = localStorage.getItem('jps_cart');
-      return saved ? JSON.parse(saved) : [];
+      const savedUserStr = localStorage.getItem('jps_user');
+      let customerId = '';
+      if (savedUserStr) {
+        const parsed = JSON.parse(savedUserStr);
+        if (parsed?.isLoggedIn && (parsed.phone || parsed.email)) {
+          customerId = parsed.phone || parsed.email;
+        }
+      }
+      const cartKey = getCustomerCartStorageKey(customerId);
+      const savedCart = localStorage.getItem(cartKey);
+      if (savedCart) {
+        const parsed = JSON.parse(savedCart);
+        if (Array.isArray(parsed)) return parsed;
+      }
+      // Clean up legacy unsandboxed key so old items don't leak to other customers
+      localStorage.removeItem('jps_cart');
+      return [];
     } catch {
       return [];
     }
@@ -442,6 +468,18 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [notifications, setNotifications] = useState<UserNotification[]>(INITIAL_NOTIFICATIONS);
   const [hasNewOrderAlert, setHasNewOrderAlert] = useState<boolean>(false);
+  const [shopToast, setShopToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' | 'info' } | null>(null);
+
+  useEffect(() => {
+    if (shopToast) {
+      const timer = setTimeout(() => setShopToast(null), 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [shopToast]);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => {
+    setShopToast({ message, type });
+  };
 
   const [selectedLocation, setSelectedLocation] = useState<string>('Dhaka (ঢাকা)');
 
@@ -567,9 +605,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(() => {
     try {
       const saved = localStorage.getItem('jps_payment_settings');
-      return saved ? { ...DEFAULT_PAYMENT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_PAYMENT_SETTINGS;
+      return saved ? { ...DEFAULT_PAYMENT_SETTINGS, ...JSON.parse(saved), rocketEnabled: false } : { ...DEFAULT_PAYMENT_SETTINGS, rocketEnabled: false };
     } catch {
-      return DEFAULT_PAYMENT_SETTINGS;
+      return { ...DEFAULT_PAYMENT_SETTINGS, rocketEnabled: false };
     }
   });
 
@@ -860,11 +898,11 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Fetch and subscribe Payment Settings from Firestore
     fetchPaymentSettingsFromFirestore()
       .then(remotePayment => {
-        if (remotePayment && (remotePayment.bkashNumber || remotePayment.nagadNumber || remotePayment.rocketNumber)) {
-          setPaymentSettings(prev => ({ ...prev, ...remotePayment }));
-          localStorage.setItem('jps_payment_settings', JSON.stringify(remotePayment));
+        if (remotePayment && (remotePayment.bkashNumber || remotePayment.nagadNumber)) {
+          setPaymentSettings(prev => ({ ...prev, ...remotePayment, rocketEnabled: false }));
+          localStorage.setItem('jps_payment_settings', JSON.stringify({ ...remotePayment, rocketEnabled: false }));
         } else {
-          savePaymentSettingsToFirestore(DEFAULT_PAYMENT_SETTINGS).catch(() => {});
+          savePaymentSettingsToFirestore({ ...DEFAULT_PAYMENT_SETTINGS, rocketEnabled: false }).catch(() => {});
         }
       })
       .catch(err => {
@@ -873,7 +911,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const unsubPayment = subscribeToPaymentSettings(remotePayment => {
       if (remotePayment) {
-        setPaymentSettings(prev => ({ ...prev, ...remotePayment }));
+        setPaymentSettings(prev => ({ ...prev, ...remotePayment, rocketEnabled: false }));
       }
     });
 
@@ -1093,8 +1131,30 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [products]);
 
   useEffect(() => {
-    localStorage.setItem('jps_cart', JSON.stringify(cart));
-  }, [cart]);
+    const customerId = user.isLoggedIn ? (user.phone || user.email) : '';
+    const cartKey = getCustomerCartStorageKey(customerId);
+    localStorage.setItem(cartKey, JSON.stringify(cart));
+
+    // Also persist customer's cart to their registered customer profile & Firestore if logged in
+    if (user.isLoggedIn && customerId) {
+      const cleanPhone = user.phone ? user.phone.replace(/\D/g, '') : '';
+      const cleanEmail = (user.email || '').toLowerCase().trim();
+      setRegisteredCustomers(prev => {
+        const idx = prev.findIndex(
+          c => (cleanPhone && c.phone.replace(/\D/g, '') === cleanPhone) ||
+               (cleanEmail && c.email.toLowerCase().trim() === cleanEmail)
+        );
+        if (idx !== -1 && JSON.stringify(prev[idx].cart || []) !== JSON.stringify(cart)) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], cart };
+          localStorage.setItem('jps_registered_customers', JSON.stringify(next));
+          saveCustomersToFirestore(next).catch(() => {});
+          return next;
+        }
+        return prev;
+      });
+    }
+  }, [cart, user.isLoggedIn, user.phone, user.email]);
 
   useEffect(() => {
     localStorage.setItem('jps_wishlist', JSON.stringify(wishlist));
@@ -1167,31 +1227,76 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Cart operations
-  const addToCart = (product: Product, quantity = 1, color?: string, size?: string) => {
+  const addToCart = (product: Product, quantity = 1, color?: string, size?: string): boolean => {
+    const liveProd = products.find(p => p.id === product.id) || product;
+    const targetColor = color || liveProd.colors[0];
+    const targetSize = size || liveProd.sizes[0];
+    const available = getAvailableStock(liveProd, targetColor, targetSize);
+
+    if (available <= 0) {
+      showToast(
+        language === 'bn'
+          ? `দুঃখিত! "${liveProd.nameBn || liveProd.name}" বর্তমানে স্টক আউট!`
+          : `Sorry! "${liveProd.name}" is out of stock!`,
+        'error'
+      );
+      return false;
+    }
+
+    let wasAdded = true;
     setCart(prev => {
       const existingIndex = prev.findIndex(
         item =>
-          item.product.id === product.id &&
-          item.selectedColor === (color || product.colors[0]) &&
-          item.selectedSize === (size || product.sizes[0])
+          item.product.id === liveProd.id &&
+          item.selectedColor === targetColor &&
+          item.selectedSize === targetSize
       );
 
       if (existingIndex > -1) {
+        const currentQty = prev[existingIndex].quantity;
+        if (currentQty >= available) {
+          showToast(
+            language === 'bn'
+              ? `স্টকে মাত্র ${available}টি উপলব্ধ এবং তা ইতিমধ্যে ব্যাগে রয়েছে!`
+              : `Only ${available} units available and already in cart!`,
+            'warning'
+          );
+          wasAdded = false;
+          return prev;
+        }
+
+        const newQty = Math.min(available, currentQty + quantity);
         const next = [...prev];
-        next[existingIndex].quantity += quantity;
+        next[existingIndex] = {
+          ...next[existingIndex],
+          quantity: newQty,
+          product: liveProd,
+        };
         return next;
       }
 
+      const initialQty = Math.min(available, Math.max(1, quantity));
       return [
         ...prev,
         {
-          product,
-          quantity,
-          selectedColor: color || product.colors[0],
-          selectedSize: size || product.sizes[0],
+          product: liveProd,
+          quantity: initialQty,
+          selectedColor: targetColor,
+          selectedSize: targetSize,
         },
       ];
     });
+
+    if (wasAdded) {
+      showToast(
+        language === 'bn'
+          ? `✓ "${liveProd.nameBn || liveProd.name}" আপনার ব্যাগে যোগ হয়েছে!`
+          : `✓ Added "${liveProd.name}" to your shopping bag!`,
+        'success'
+      );
+    }
+
+    return wasAdded;
   };
 
   const removeFromCart = (productId: string, color?: string, size?: string) => {
@@ -1210,6 +1315,24 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       removeFromCart(productId, color, size);
       return;
     }
+    const liveProd = products.find(p => p.id === productId);
+    const available = getAvailableStock(liveProd, color, size);
+
+    if (quantity > available) {
+      showToast(
+        language === 'bn'
+          ? `দুঃখিত, স্টকে মাত্র ${available}টি অবশিষ্ট আছে!`
+          : `Sorry, only ${available} left in stock!`,
+        'warning'
+      );
+    }
+
+    const finalQty = Math.min(Math.max(1, quantity), available);
+    if (finalQty <= 0) {
+      removeFromCart(productId, color, size);
+      return;
+    }
+
     setCart(prev =>
       prev.map(item => {
         if (
@@ -1217,7 +1340,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           (!color || item.selectedColor === color) &&
           (!size || item.selectedSize === size)
         ) {
-          return { ...item, quantity };
+          return { ...item, quantity: finalQty, product: liveProd || item.product };
         }
         return item;
       })
@@ -1227,10 +1350,44 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearCart = () => {
     setCart([]);
     setAppliedCoupon(null);
+    const customerId = user.isLoggedIn ? (user.phone || user.email) : '';
+    const cartKey = getCustomerCartStorageKey(customerId);
+    localStorage.removeItem(cartKey);
+    localStorage.removeItem('jps_cart_guest');
+    localStorage.removeItem('jps_cart');
+
+    if (user.isLoggedIn && customerId) {
+      const cleanPhone = user.phone ? user.phone.replace(/\D/g, '') : '';
+      const cleanEmail = (user.email || '').toLowerCase().trim();
+      setRegisteredCustomers(prev => {
+        const next = prev.map(c =>
+          (cleanPhone && c.phone.replace(/\D/g, '') === cleanPhone) ||
+          (cleanEmail && c.email.toLowerCase().trim() === cleanEmail)
+            ? { ...c, cart: [] }
+            : c
+        );
+        localStorage.setItem('jps_registered_customers', JSON.stringify(next));
+        saveCustomersToFirestore(next).catch(() => {});
+        return next;
+      });
+    }
   };
 
   const addBundleToCart = (productIds: string[], _bundleDiscountPrice: number) => {
     const itemsToAdd = products.filter(p => productIds.includes(p.id));
+    const outOfStockItems = itemsToAdd.filter(p => getAvailableStock(p) <= 0);
+
+    if (outOfStockItems.length > 0) {
+      const names = outOfStockItems.map(p => `"${p.nameBn || p.name}"`).join(', ');
+      showToast(
+        language === 'bn'
+          ? `বান্ডেলের কিছু পণ্য (${names}) স্টক আউট থাকায় যোগ করা যায়নি।`
+          : `Cannot add bundle because some items (${names}) are out of stock.`,
+        'error'
+      );
+      return;
+    }
+
     itemsToAdd.forEach(p => {
       addToCart(p, 1, p.colors[0], p.sizes[0]);
     });
@@ -1377,7 +1534,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Order Placement
-  const placeOrder = (orderData: {
+  const placeOrder = async (orderData: {
     customerName: string;
     phone: string;
     alternativePhone?: string;
@@ -1396,7 +1553,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       amount?: number;
       accountType?: 'Merchant' | 'Personal';
     };
-  }): Order => {
+  }): Promise<{ success: boolean; order?: Order; error?: string }> => {
     const now = new Date();
     const dateStr =
       now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -1529,21 +1686,72 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       callLogs: [],
     };
 
-    // Update product stock (Stock decrement)
+    // Step 1: Pre-validate client cart against current local stock before calling server
+    const clientOutOfStock = cart.filter(ci => {
+      const p = products.find(prod => prod.id === ci.product.id) || ci.product;
+      return getAvailableStock(p, ci.selectedColor, ci.selectedSize) < ci.quantity;
+    });
+
+    if (clientOutOfStock.length > 0) {
+      const issues = clientOutOfStock
+        .map(ci => `"${ci.product.nameBn || ci.product.name}"`)
+        .join(', ');
+      return {
+        success: false,
+        error:
+          language === 'bn'
+            ? `দুঃখিত! ব্যাগে থাকা কিছু পণ্যের পর্যাপ্ত স্টক নেই (${issues})। অনুগ্রহ করে ব্যাগে চেক করুন।`
+            : `Some items in your cart exceed available stock (${issues}). Please adjust your cart.`,
+      };
+    }
+
+    // Step 2: Atomic backend checkout with Firestore runTransaction
+    const checkoutResult = await executeAtomicOrderCheckout(
+      newOrder,
+      adminUser?.email || 'jotpotshop.official@gmail.com'
+    );
+
+    if (!checkoutResult.success) {
+      return {
+        success: false,
+        error:
+          checkoutResult.error ||
+          (language === 'bn'
+            ? 'স্টক ঘাটতির কারণে অর্ডার সম্পন্ন করা যায়নি।'
+            : 'Could not place order due to insufficient stock.'),
+      };
+    }
+
+    const confirmedOrder = checkoutResult.order || newOrder;
+
+    // Step 3: Optimistically update product stock and variant stocks locally
     setProducts(prev => {
       return prev.map(p => {
         const orderedItem = cart.find(ci => ci.product.id === p.id);
         if (orderedItem) {
           const newStock = Math.max(0, p.stock - orderedItem.quantity);
-          return { ...p, stock: newStock };
+          let newVariants = p.variantStocks ? { ...p.variantStocks } : undefined;
+          if (newVariants) {
+            const color = orderedItem.selectedColor?.trim();
+            const size = orderedItem.selectedSize?.trim();
+            if (color && size && typeof newVariants[`${color}-${size}`] === 'number') {
+              newVariants[`${color}-${size}`] = Math.max(0, newVariants[`${color}-${size}`] - orderedItem.quantity);
+            }
+            if (color && typeof newVariants[color] === 'number') {
+              newVariants[color] = Math.max(0, newVariants[color] - orderedItem.quantity);
+            }
+            if (size && typeof newVariants[size] === 'number') {
+              newVariants[size] = Math.max(0, newVariants[size] - orderedItem.quantity);
+            }
+          }
+          return { ...p, stock: newStock, variantStocks: newVariants };
         }
         return p;
       });
     });
 
     // Save order
-    syncOrders(prev => [newOrder, ...prev]);
-    saveSingleOrderToFirestore(newOrder).catch(() => {});
+    syncOrders(prev => [confirmedOrder, ...prev.filter(o => o.id !== confirmedOrder.id)]);
 
     // Send customer notification
     const orderNotif: UserNotification = {
@@ -1564,7 +1772,10 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Clear cart
     clearCart();
 
-    return newOrder;
+    return {
+      success: true,
+      order: confirmedOrder,
+    };
   };
 
   const dismissNewOrderAlert = () => {
@@ -2039,6 +2250,44 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return taggedCount;
   };
 
+  // Helper to switch cart to a specific customer's isolated bag
+  const switchCustomerCart = (customerId: string, registeredCust?: RegisteredCustomer) => {
+    const targetCartKey = getCustomerCartStorageKey(customerId);
+    const savedCustomerCart = localStorage.getItem(targetCartKey);
+    let loadedCart: CartItem[] = [];
+
+    if (savedCustomerCart) {
+      try {
+        const parsed = JSON.parse(savedCustomerCart);
+        if (Array.isArray(parsed) && parsed.length > 0) loadedCart = parsed;
+      } catch {}
+    }
+
+    if (loadedCart.length === 0 && registeredCust?.cart && registeredCust.cart.length > 0) {
+      loadedCart = registeredCust.cart;
+    }
+
+    // If customer has no prior saved cart, but just browsed as guest in this immediate session, carry over guest items
+    if (loadedCart.length === 0) {
+      const guestCartStr = localStorage.getItem('jps_cart_guest');
+      if (guestCartStr) {
+        try {
+          const guestParsed = JSON.parse(guestCartStr);
+          if (Array.isArray(guestParsed) && guestParsed.length > 0) {
+            loadedCart = guestParsed;
+          }
+        } catch {}
+      }
+    }
+
+    // Always clear guest and legacy cart once logged in
+    localStorage.removeItem('jps_cart_guest');
+    localStorage.removeItem('jps_cart');
+
+    setCart(loadedCart);
+    localStorage.setItem(targetCartKey, JSON.stringify(loadedCart));
+  };
+
   // User auth
   const loginUser = (info: { name: string; phone: string; email: string }) => {
     setUser({
@@ -2047,9 +2296,20 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       phone: info.phone,
       email: info.email,
     });
+    switchCustomerCart(info.phone || info.email);
   };
 
   const logoutUser = () => {
+    // 1. Save current customer's cart under their personal storage key
+    if (user.isLoggedIn && (user.phone || user.email)) {
+      const key = getCustomerCartStorageKey(user.phone || user.email);
+      localStorage.setItem(key, JSON.stringify(cart));
+    }
+    // 2. Clear active in-memory cart completely so no other user or guest sees this customer's bag
+    setCart([]);
+    setAppliedCoupon(null);
+    localStorage.removeItem('jps_cart_guest');
+    localStorage.removeItem('jps_cart');
     setUser({ isLoggedIn: false, name: '', phone: '', email: '' });
   };
 
@@ -2088,6 +2348,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       password: info.password,
       isGoogleUser: false,
       createdAt: new Date().toISOString(),
+      cart: [...cart],
     };
 
     syncCustomers(prev => [newCustomer, ...prev]);
@@ -2097,6 +2358,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       phone: newCustomer.phone,
       email: newCustomer.email,
     });
+    switchCustomerCart(newCustomer.phone || newCustomer.email, newCustomer);
 
     return { success: true, message: 'কাস্টমার অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে! স্বাগতম।' };
   };
@@ -2117,6 +2379,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         phone: found.phone,
         email: found.email,
       });
+      switchCustomerCart(found.phone || found.email, found);
       return { success: true, message: 'লগইন সফল হয়েছে!' };
     }
 
@@ -2140,6 +2403,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isGoogleUser: true,
         avatarUrl: gAvatar,
         createdAt: new Date().toISOString(),
+        cart: [...cart],
       };
       syncCustomers(prev => [existing!, ...prev]);
     }
@@ -2150,6 +2414,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       phone: existing.phone,
       email: existing.email,
     });
+    switchCustomerCart(existing.email, existing);
   };
 
   // Instant Phone OTP Login
@@ -2168,6 +2433,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: `${cleanPhone}@customer.jotpotshop.com`,
         isGoogleUser: false,
         createdAt: new Date().toISOString(),
+        cart: [...cart],
       };
       syncCustomers(prev => [newCust, ...prev]);
       existing = newCust;
@@ -2179,6 +2445,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       phone: existing.phone,
       email: existing.email,
     });
+    switchCustomerCart(existing.phone || existing.email, existing);
 
     return { success: true, message: `স্বাগতম ${existing.name}! ওটিপি যাচাই সফল হয়েছে।` };
   };
@@ -2208,6 +2475,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       phone: found.phone,
       email: found.email,
     });
+    switchCustomerCart(found.phone || found.email, found);
 
     return { success: true, message: 'পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে এবং আপনি লগইন হয়েছেন!' };
   };
@@ -2922,6 +3190,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         markNotificationRead,
         hasNewOrderAlert,
         dismissNewOrderAlert,
+        shopToast,
+        setShopToast,
+        showToast,
         selectedLocation,
         setSelectedLocation,
         cartSubtotal,

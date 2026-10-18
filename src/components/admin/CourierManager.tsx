@@ -639,6 +639,7 @@ export const CourierManager: React.FC = () => {
           <div className="bg-white rounded-2xl p-2 border border-gray-200 shadow-xs flex flex-wrap gap-2">
             {(Object.keys(COURIER_SETUP_GUIDES) as CourierPartner[]).map(providerId => {
               const guide = COURIER_SETUP_GUIDES[providerId];
+              if (!guide) return null;
               const isSelected = selectedGuidePartner === providerId;
               return (
                 <button
@@ -659,7 +660,8 @@ export const CourierManager: React.FC = () => {
 
           {/* Guide Content Card */}
           {(() => {
-            const currentGuide = COURIER_SETUP_GUIDES[selectedGuidePartner];
+            const currentGuide = COURIER_SETUP_GUIDES[selectedGuidePartner] || COURIER_SETUP_GUIDES['Steadfast'];
+            if (!currentGuide) return null;
             const matchingConfig = courierConfigs.find(c => c.id === selectedGuidePartner);
 
             return (

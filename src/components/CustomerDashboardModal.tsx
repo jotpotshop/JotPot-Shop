@@ -1140,8 +1140,10 @@ export const CustomerDashboardModal: React.FC = () => {
 
                               <button
                                 onClick={() => {
-                                  addToCart(it.product, it.quantity, it.selectedColor, it.selectedSize);
-                                  setActiveModal('cart');
+                                  const added = addToCart(it.product, it.quantity, it.selectedColor, it.selectedSize);
+                                  if (added) {
+                                    setActiveModal('cart');
+                                  }
                                 }}
                                 className="bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 hover:border-rose-300 px-3 py-1.5 rounded-xl font-bold text-[11px] flex items-center space-x-1 cursor-pointer transition-colors"
                               >

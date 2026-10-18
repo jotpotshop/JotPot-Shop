@@ -58,6 +58,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
   const [isTrending, setIsTrending] = useState(false);
   const [needTags, setNeedTags] = useState<NeedTag[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [variantStocks, setVariantStocks] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (product) {
@@ -71,6 +72,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
       setOldPrice(product.oldPrice || 0);
       setCostPrice(product.costPrice || 0);
       setStock(product.stock || 0);
+      setVariantStocks(product.variantStocks ? { ...product.variantStocks } : {});
       setLowStockThreshold(product.lowStockThreshold || 5);
       setColors(product.colors ? product.colors.join(', ') : '');
       setSizes(product.sizes ? product.sizes.join(', ') : '');
@@ -132,6 +134,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
       discountPercent: discountP,
       costPrice: Number(costPrice),
       stock: Number(stock),
+      variantStocks: Object.keys(variantStocks).length > 0 ? variantStocks : product.variantStocks,
       lowStockThreshold: Number(lowStockThreshold),
       colors: colors
         .split(',')
@@ -396,6 +399,57 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               />
             </div>
           </div>
+
+          {/* Variant Stocks Breakdown */}
+          {((colors && colors.trim().length > 0) || (sizes && sizes.trim().length > 0) || Object.keys(variantStocks).length > 0) && (
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-gray-800 text-xs">ভ্যারিয়েন্ট স্টক ম্যানেজমেন্ট (Variant Stocks)</span>
+                <span className="text-[10px] text-gray-500 font-medium">প্রতিটি ভ্যারিয়েন্টের আলাদা স্টক পরিমাণ</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-44 overflow-y-auto pt-1">
+                {(() => {
+                  const colorList = colors.split(',').map(s => s.trim()).filter(Boolean);
+                  const sizeList = sizes.split(',').map(s => s.trim()).filter(Boolean);
+                  
+                  const keysSet = new Set<string>(Object.keys(variantStocks));
+                  if (colorList.length > 0 && sizeList.length > 0) {
+                    colorList.forEach(c => {
+                      keysSet.add(c);
+                      sizeList.forEach(s => keysSet.add(`${c}-${s}`));
+                    });
+                  } else if (colorList.length > 0) {
+                    colorList.forEach(c => keysSet.add(c));
+                  } else if (sizeList.length > 0) {
+                    sizeList.forEach(s => keysSet.add(s));
+                  }
+                  
+                  const variantKeys = Array.from(keysSet);
+                  if (variantKeys.length === 0) {
+                    return (
+                      <p className="text-[11px] text-gray-400 col-span-3 py-1">কালার বা সাইজ লিখলে এখানে ভ্যারিয়েন্ট স্টক দেখতে পাবেন</p>
+                    );
+                  }
+
+                  return variantKeys.map(k => (
+                    <div key={k} className="bg-white border border-gray-200 rounded-xl p-2 flex items-center justify-between gap-1 shadow-2xs">
+                      <span className="text-[11px] font-semibold text-gray-700 truncate" title={k}>{k}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={variantStocks[k] ?? stock}
+                        onChange={e => {
+                          const val = Math.max(0, parseInt(e.target.value) || 0);
+                          setVariantStocks(prev => ({ ...prev, [k]: val }));
+                        }}
+                        className="w-16 bg-gray-50 border border-gray-200 rounded-lg px-1.5 py-0.5 text-xs text-right font-bold text-emerald-700 focus:bg-white focus:border-rose-500 transition-colors"
+                      />
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+          )}
 
           {/* Badges / Flags */}
           <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-gray-100">

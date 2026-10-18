@@ -27,6 +27,7 @@ export interface Product {
   costPrice: number;
   stock: number;
   lowStockThreshold: number;
+  variantStocks?: Record<string, number>;
   colors: string[];
   sizes: string[];
   images: string[];
@@ -270,6 +271,7 @@ export interface RegisteredCustomer {
   isGoogleUser?: boolean;
   avatarUrl?: string;
   createdAt: string;
+  cart?: CartItem[];
 }
 
 export interface StaffAccount {

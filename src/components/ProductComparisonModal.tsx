@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, Trash2, ShoppingBag, Star, CheckCircle, Truck, ShieldCheck, Scale } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
+import { getAvailableStock, getStockStatusInfo } from '../utils/inventory';
 
 export const ProductComparisonModal: React.FC = () => {
   const {
@@ -182,23 +183,64 @@ export const ProductComparisonModal: React.FC = () => {
                     ))}
                   </tr>
 
-                  {/* Row 8: Action button */}
+                  {/* Row 8: Stock Availability */}
+                  <tr className="border-b border-gray-100 bg-gray-50/40">
+                    <td className="py-3 px-4 font-bold text-gray-500">{t('স্টক স্ট্যাটাস', 'Stock Status')}</td>
+                    {comparedProducts.map(prod => {
+                      const live = products.find(p => p.id === prod.id) || prod;
+                      const stockInfo = getStockStatusInfo(live, undefined, undefined, language);
+                      const available = getAvailableStock(live);
+
+                      return (
+                        <td key={prod.id} className="py-3 px-4 text-xs font-bold">
+                          {stockInfo.isOutOfStock ? (
+                            <span className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md inline-block">
+                              ⚠️ {t('স্টক নেই', 'Out of Stock')}
+                            </span>
+                          ) : stockInfo.isLowStock ? (
+                            <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md inline-block">
+                              {t(`মাত্র ${available}টি বাকি`, `Only ${available} left`)}
+                            </span>
+                          ) : (
+                            <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md inline-block">
+                              ✓ {t('ইন স্টক', 'In Stock')} ({available})
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+
+                  {/* Row 9: Action button */}
                   <tr>
                     <td className="py-4 px-4 font-bold text-gray-500">{t('অ্যাকশন', 'Action')}</td>
-                    {comparedProducts.map(prod => (
-                      <td key={prod.id} className="py-4 px-4">
-                        <button
-                          onClick={() => {
-                            addToCart(prod, 1);
-                            setActiveModal('cart');
-                          }}
-                          className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-4 py-2 rounded-xl flex items-center space-x-1.5 shadow-xs cursor-pointer transition-colors"
-                        >
-                          <ShoppingBag className="w-3.5 h-3.5" />
-                          <span>{t('ব্যাগে যোগ করুন', 'Add to Cart')}</span>
-                        </button>
-                      </td>
-                    ))}
+                    {comparedProducts.map(prod => {
+                      const live = products.find(p => p.id === prod.id) || prod;
+                      const isOut = getAvailableStock(live) <= 0;
+
+                      return (
+                        <td key={prod.id} className="py-4 px-4">
+                          <button
+                            disabled={isOut}
+                            onClick={() => {
+                              if (isOut) return;
+                              const added = addToCart(live, 1);
+                              if (added) {
+                                setActiveModal('cart');
+                              }
+                            }}
+                            className={`font-bold text-xs px-4 py-2 rounded-xl flex items-center space-x-1.5 transition-colors ${
+                              isOut
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200 shadow-none'
+                                : 'bg-rose-600 hover:bg-rose-700 text-white shadow-xs cursor-pointer'
+                            }`}
+                          >
+                            <ShoppingBag className="w-3.5 h-3.5" />
+                            <span>{isOut ? t('স্টক আউট', 'Out of Stock') : t('ব্যাগে যোগ করুন', 'Add to Cart')}</span>
+                          </button>
+                        </td>
+                      );
+                    })}
                   </tr>
                 </tbody>
               </table>

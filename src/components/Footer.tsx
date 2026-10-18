@@ -157,9 +157,6 @@ export const Footer: React.FC = () => {
               <span className="bg-amber-900/40 text-amber-300 border border-amber-700/50 px-2.5 py-1 rounded-md font-bold text-[10px]">
                 Nagad নগদ
               </span>
-              <span className="bg-purple-900/40 text-purple-300 border border-purple-700/50 px-2.5 py-1 rounded-md font-bold text-[10px]">
-                Rocket রকেট
-              </span>
               <span className="bg-emerald-900/40 text-emerald-300 border border-emerald-700/50 px-2.5 py-1 rounded-md font-bold text-[10px]">
                 Cash On Delivery ক্যাশ অন ডেলিভারি
               </span>

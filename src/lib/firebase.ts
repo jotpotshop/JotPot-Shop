@@ -14,6 +14,7 @@ import {
   setDoc,
   getDocFromServer,
   onSnapshot,
+  runTransaction,
   Unsubscribe,
 } from 'firebase/firestore';
 import {
@@ -43,6 +44,8 @@ import {
   StaffAccount,
   RegisteredCustomer,
 } from '../types';
+import { getAvailableStock } from '../utils/inventory';
+import { INITIAL_PRODUCTS } from '../data/mockData';
 import firebaseConfigJson from '../../firebase-applet-config.json';
 
 // Project Configuration matching user specifications
@@ -812,6 +815,38 @@ export async function saveProductsToFirestore(
 }
 
 /**
+ * Sanitizes raw product items from Firestore to guarantee valid numeric stock and safety
+ */
+export function sanitizeProductRecords(rawItems: any[]): Product[] {
+  if (!Array.isArray(rawItems)) return [];
+  return rawItems.map(item => {
+    let sanitizedVariantStocks: Record<string, number> | undefined = undefined;
+    if (item.variantStocks && typeof item.variantStocks === 'object') {
+      sanitizedVariantStocks = {};
+      for (const [key, val] of Object.entries(item.variantStocks)) {
+        if (typeof val === 'number' && !isNaN(val)) {
+          sanitizedVariantStocks[key] = Math.max(0, Math.floor(val));
+        } else {
+          sanitizedVariantStocks[key] = 0;
+        }
+      }
+    }
+    return {
+      ...item,
+      stock:
+        typeof item.stock === 'number' && !isNaN(item.stock)
+          ? Math.max(0, Math.floor(item.stock))
+          : 0,
+      lowStockThreshold:
+        typeof item.lowStockThreshold === 'number' && !isNaN(item.lowStockThreshold)
+          ? item.lowStockThreshold
+          : 5,
+      variantStocks: sanitizedVariantStocks,
+    };
+  }) as Product[];
+}
+
+/**
  * Fetches Products Catalog from Cloud Firestore
  */
 export async function fetchProductsFromFirestore(): Promise<Product[] | null> {
@@ -819,7 +854,7 @@ export async function fetchProductsFromFirestore(): Promise<Product[] | null> {
     const docRef = doc(db, 'settings', 'products_catalog');
     const docSnap = await getDoc(docRef);
     if (docSnap.exists() && Array.isArray(docSnap.data()?.items)) {
-      return docSnap.data().items as Product[];
+      return sanitizeProductRecords(docSnap.data().items);
     }
     return null;
   } catch (err) {
@@ -839,13 +874,191 @@ export function subscribeToProducts(
     docRef,
     snapshot => {
       if (snapshot.exists() && Array.isArray(snapshot.data()?.items)) {
-        onUpdate(snapshot.data().items as Product[]);
+        onUpdate(sanitizeProductRecords(snapshot.data().items));
       }
     },
     error => {
       console.warn('Products live subscription error:', error);
     }
   );
+}
+
+/**
+ * Atomic Order Checkout & Stock Deduction via Firestore runTransaction
+ *
+ * Architectural Invariants:
+ * 1. Checks if order already exists (Idempotency key to prevent duplicate deductions on retry)
+ * 2. Fetches latest products catalog directly from Firestore within transaction (Trusted Backend Check)
+ * 3. Enforces strict stock validation for all ordered items & variants
+ * 4. ALL READS EXECUTE BEFORE ALL WRITES (Strict Firestore Transaction invariant)
+ * 5. Atomically updates products catalog with deducted stock and writes order record
+ * 6. If stock is insufficient, throws error which rolls back any mutation
+ */
+export async function executeAtomicOrderCheckout(
+  order: Order,
+  adminUserEmail = 'jotpotshop.official@gmail.com'
+): Promise<{ success: boolean; order?: Order; error?: string }> {
+  try {
+    const result = await runTransaction(db, async (transaction) => {
+      // Step 1: ALL READS FIRST (Strict Firestore rule: All gets must precede sets)
+      const orderDocRef = doc(db, 'orders', order.id);
+      const existingOrderSnap = await transaction.get(orderDocRef);
+
+      const catalogRef = doc(db, 'settings', 'products_catalog');
+      const catalogSnap = await transaction.get(catalogRef);
+
+      const ordersDataRef = doc(db, 'settings', 'orders_data');
+      const ordersDataSnap = await transaction.get(ordersDataRef);
+
+      // Idempotency check: if order was already recorded, return it without duplicate deduction
+      if (existingOrderSnap.exists()) {
+        return {
+          success: true,
+          order: existingOrderSnap.data() as Order,
+        };
+      }
+
+      // Step 2: Extract & sanitize live products catalog from database
+      let dbProducts: Product[] = [];
+      if (catalogSnap.exists() && Array.isArray(catalogSnap.data()?.items)) {
+        dbProducts = sanitizeProductRecords(catalogSnap.data()!.items);
+      } else {
+        // Safe fallback to initial products if remote catalog document hasn't been created yet
+        dbProducts = sanitizeProductRecords(INITIAL_PRODUCTS);
+      }
+
+      if (dbProducts.length === 0) {
+        throw new Error('DATABASE_CATALOG_EMPTY');
+      }
+
+      // Step 3: Validate stock strictly against trusted database state
+      const outOfStockErrors: string[] = [];
+
+      for (const cartItem of order.items) {
+        const liveProduct = dbProducts.find(p => p.id === cartItem.product.id);
+        if (!liveProduct) {
+          outOfStockErrors.push(`"${cartItem.product.name}" (পণ্যটি আর তালিকায় নেই)`);
+          continue;
+        }
+
+        const available = getAvailableStock(liveProduct, cartItem.selectedColor, cartItem.selectedSize);
+        if (available < cartItem.quantity) {
+          const variantDesc = [cartItem.selectedColor, cartItem.selectedSize].filter(Boolean).join(' / ');
+          const variantText = variantDesc ? ` (${variantDesc})` : '';
+          outOfStockErrors.push(
+            `"${liveProduct.nameBn || liveProduct.name}"${variantText}: বর্তমানে মাত্র ${available}টি অবশিষ্ট আছে, কিন্তু ${cartItem.quantity}টি চাওয়া হয়েছে`
+          );
+        }
+      }
+
+      if (outOfStockErrors.length > 0) {
+        throw new Error(`INSUFFICIENT_STOCK: ${outOfStockErrors.join(' • ')}`);
+      }
+
+      // Step 4: Compute updated stocks for each product and variant
+      const updatedProducts = dbProducts.map(p => {
+        const itemsForProduct = order.items.filter(ci => ci.product.id === p.id);
+        if (itemsForProduct.length === 0) return p;
+
+        let currentStock = p.stock;
+        let updatedVariantStocks = p.variantStocks ? { ...p.variantStocks } : undefined;
+
+        for (const item of itemsForProduct) {
+          currentStock = Math.max(0, currentStock - item.quantity);
+
+          if (updatedVariantStocks) {
+            const color = item.selectedColor?.trim();
+            const size = item.selectedSize?.trim();
+
+            if (color && size) {
+              const comboKey = `${color}-${size}`;
+              if (typeof updatedVariantStocks[comboKey] === 'number') {
+                updatedVariantStocks[comboKey] = Math.max(0, updatedVariantStocks[comboKey] - item.quantity);
+              }
+            }
+            if (color && typeof updatedVariantStocks[color] === 'number') {
+              updatedVariantStocks[color] = Math.max(0, updatedVariantStocks[color] - item.quantity);
+            }
+            if (size && typeof updatedVariantStocks[size] === 'number') {
+              updatedVariantStocks[size] = Math.max(0, updatedVariantStocks[size] - item.quantity);
+            }
+          }
+        }
+
+        return {
+          ...p,
+          stock: currentStock,
+          variantStocks: updatedVariantStocks,
+        };
+      });
+
+      // Step 5: ALL WRITES AFTER READS (Atomically commit all mutations)
+      // 5a. Save updated catalog in settings/products_catalog
+      transaction.set(
+        catalogRef,
+        {
+          items: updatedProducts,
+          updatedAt: new Date().toISOString(),
+          updatedBy: `Checkout #${order.id}`,
+          projectId: FIREBASE_PROJECT_INFO.projectId,
+        },
+        { merge: true }
+      );
+
+      // 5b. Write/update individual product documents under /products/{productId}
+      for (const item of order.items) {
+        const updatedP = updatedProducts.find(p => p.id === item.product.id);
+        if (updatedP) {
+          const individualProductRef = doc(db, 'products', updatedP.id);
+          transaction.set(individualProductRef, updatedP, { merge: true });
+        }
+      }
+
+      // 5c. Write order document
+      transaction.set(orderDocRef, {
+        ...order,
+        syncedAt: new Date().toISOString(),
+      });
+
+      // 5d. Update global orders ledger in settings/orders_data
+      const existingOrders: Order[] =
+        ordersDataSnap.exists() && Array.isArray(ordersDataSnap.data()?.items)
+          ? ordersDataSnap.data()!.items
+          : [];
+
+      transaction.set(
+        ordersDataRef,
+        {
+          items: [order, ...existingOrders.filter(o => o.id !== order.id)],
+          updatedAt: new Date().toISOString(),
+          updatedBy: adminUserEmail,
+        },
+        { merge: true }
+      );
+
+      return {
+        success: true,
+        order,
+      };
+    });
+
+    return result;
+  } catch (err: any) {
+    const errorMsg = err?.message || String(err);
+    if (errorMsg.includes('INSUFFICIENT_STOCK:')) {
+      return {
+        success: false,
+        error: errorMsg.replace('INSUFFICIENT_STOCK:', '').trim(),
+      };
+    }
+    console.warn('Atomic order checkout transaction exception:', err);
+    return {
+      success: false,
+      error: errorMsg.includes('DATABASE_CATALOG')
+        ? 'ডেটাবেস ক্যাটালগ সাময়িকভাবে পাওয়া যায়নি।'
+        : `অর্ডার প্রক্রিয়াকরণে সমস্যা হয়েছে: ${errorMsg}`,
+    };
+  }
 }
 
 /**

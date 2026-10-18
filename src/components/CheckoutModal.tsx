@@ -15,6 +15,7 @@ import {
   Check,
 } from 'lucide-react';
 import { useShop, FREE_DELIVERY_THRESHOLD } from '../context/ShopContext';
+import { getAvailableStock } from '../utils/inventory';
 import { BD_DISTRICTS } from '../data/mockData';
 
 export const CheckoutModal: React.FC = () => {
@@ -22,6 +23,7 @@ export const CheckoutModal: React.FC = () => {
     activeModal,
     setActiveModal,
     cart,
+    products,
     cartSubtotal,
     couponDiscount,
     placeOrder,
@@ -43,10 +45,9 @@ export const CheckoutModal: React.FC = () => {
   const [fullAddress, setFullAddress] = useState('');
   const [customerNote, setCustomerNote] = useState('');
   const [deliveryOption, setDeliveryOption] = useState<'inside' | 'outside' | 'chattogram'>('inside');
-  const [paymentMethod, setPaymentMethod] = useState<'cod' | 'bkash' | 'nagad' | 'rocket'>('cod');
+  const [paymentMethod, setPaymentMethod] = useState<'cod' | 'bkash' | 'nagad'>('cod');
   const [bkashNumber, setBkashNumber] = useState('');
   const [nagadNumber, setNagadNumber] = useState('');
-  const [rocketNumber, setRocketNumber] = useState('');
   const [personalSenderNumber, setPersonalSenderNumber] = useState(user.phone || '');
   const [personalTrxId, setPersonalTrxId] = useState('');
   const [personalAmount, setPersonalAmount] = useState('');
@@ -104,9 +105,25 @@ export const CheckoutModal: React.FC = () => {
     }
   };
 
-  const handleSubmitOrder = (e: React.FormEvent) => {
+  const inventoryIssues = cart.filter(item => {
+    const live = products.find(p => p.id === item.product.id) || item.product;
+    return getAvailableStock(live, item.selectedColor, item.selectedSize) < item.quantity;
+  });
+  const hasInventoryErrors = inventoryIssues.length > 0;
+
+  const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
+
+    if (hasInventoryErrors) {
+      setErrorMessage(
+        t(
+          'ব্যাগে থাকা কিছু পণ্যের পর্যাপ্ত স্টক নেই। অনুগ্রহ করে ব্যাগে গিয়ে পরিমাণ ঠিক করুন।',
+          'Some items in your cart exceed available stock. Please adjust your cart.'
+        )
+      );
+      return;
+    }
 
     if (!name.trim()) {
       setErrorMessage(t('দয়া করে আপনার পূর্ণ নাম লিখুন', 'Please enter your full name'));
@@ -158,23 +175,6 @@ export const CheckoutModal: React.FC = () => {
       }
     }
 
-    if (paymentMethod === 'rocket') {
-      const isPersonal = (paymentSettings.rocketAccountType || 'Personal') === 'Personal';
-      if (isPersonal) {
-        if (!personalSenderNumber.trim()) {
-          setErrorMessage(t('যে রকেট নম্বর থেকে টাকা পাঠিয়েছেন তা প্রদান করুন', 'Please enter your sender Rocket number'));
-          return;
-        }
-        if (!personalTrxId.trim()) {
-          setErrorMessage(t('রকেট সেন্ড মানি করার পর ট্রানজেকশন আইডি (TrxID) প্রদান করুন', 'Please enter your Rocket Transaction ID (TrxID)'));
-          return;
-        }
-      } else if (!rocketNumber.trim()) {
-        setErrorMessage(t('রকেট অ্যাকাউন্ট নম্বর প্রদান করুন', 'Please enter your Rocket account number'));
-        return;
-      }
-    }
-
     setIsSubmitting(true);
 
     let paymentDetailsObj: {
@@ -200,18 +200,11 @@ export const CheckoutModal: React.FC = () => {
         amount: isPersonal ? (Number(personalAmount) || totalAmount) : totalAmount,
         accountType: isPersonal ? 'Personal' : 'Merchant',
       };
-    } else if (paymentMethod === 'rocket') {
-      const isPersonal = (paymentSettings.rocketAccountType || 'Personal') === 'Personal';
-      paymentDetailsObj = {
-        senderNumber: isPersonal ? personalSenderNumber.trim() : rocketNumber.trim(),
-        trxId: isPersonal ? personalTrxId.trim().toUpperCase() : undefined,
-        amount: isPersonal ? (Number(personalAmount) || totalAmount) : totalAmount,
-        accountType: isPersonal ? 'Personal' : 'Merchant',
-      };
     }
 
-    setTimeout(() => {
-      const order = placeOrder({
+    setIsSubmitting(true);
+    try {
+      const result = await placeOrder({
         customerName: name,
         phone: phone,
         alternativePhone: alternativePhone || undefined,
@@ -226,9 +219,24 @@ export const CheckoutModal: React.FC = () => {
       });
 
       setIsSubmitting(false);
-      setSelectedOrderForInvoice(order);
+
+      if (!result.success || !result.order) {
+        setErrorMessage(
+          result.error ||
+            t('অর্ডার সম্পন্ন করা যায়নি। অনুগ্রহ করে স্টক চেক করুন।', 'Failed to place order. Please check stock.')
+        );
+        return;
+      }
+
+      setSelectedOrderForInvoice(result.order);
       setActiveModal('orderConfirmation');
-    }, 600);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setErrorMessage(
+        err?.message ||
+          t('অর্ডার প্রক্রিয়াকরণে সমস্যা হয়েছে। আবার চেষ্টা করুন।', 'Error placing order. Please try again.')
+      );
+    }
   };
 
   return (
@@ -507,7 +515,7 @@ export const CheckoutModal: React.FC = () => {
                 <span>{t('পেমেন্ট মাধ্যম নির্বাচন করুন', 'Payment Method')}</span>
               </h4>
 
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 {/* Cash on Delivery */}
                 <button
                   type="button"
@@ -557,23 +565,6 @@ export const CheckoutModal: React.FC = () => {
                     <span className="text-xs font-bold text-amber-700">Nagad (নগদ)</span>
                   </div>
                   <p className="text-[10px] text-gray-500 mt-1">{t('নগদ মোবাইল পেমেন্ট', 'Nagad Online Pay')}</p>
-                </button>
-
-                {/* Rocket (DBBL) */}
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('rocket')}
-                  className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
-                    paymentMethod === 'rocket'
-                      ? 'border-purple-600 bg-purple-50 text-purple-950 font-bold shadow-xs'
-                      : 'border-gray-200 bg-white text-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center space-x-1.5">
-                    <span className="w-4 h-4 rounded-full bg-purple-600 text-white text-[9px] font-bold flex items-center justify-center">র</span>
-                    <span className="text-xs font-bold text-purple-700">Rocket (রকেট)</span>
-                  </div>
-                  <p className="text-[10px] text-gray-500 mt-1">{t('ডিবিবিএল রকেট পেমেন্ট', 'DBBL Rocket Pay')}</p>
                 </button>
               </div>
 
@@ -808,119 +799,6 @@ export const CheckoutModal: React.FC = () => {
                   )}
                 </div>
               )}
-
-              {/* Rocket Payment Form & Instructions */}
-              {paymentMethod === 'rocket' && (
-                <div className="mt-2 bg-purple-50/80 p-3.5 rounded-2xl border border-purple-200 space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-purple-200/60">
-                    <div className="flex items-center space-x-2">
-                      <span className="w-5 h-5 rounded-full bg-purple-600 text-white text-[10px] font-bold flex items-center justify-center">
-                        র
-                      </span>
-                      <span className="text-xs font-black text-purple-900">
-                        {(paymentSettings.rocketAccountType || 'Personal') === 'Personal'
-                          ? t('রকেট পার্সোনাল সেন্ড মানি', 'Rocket Personal Send Money')
-                          : t('রকেট মার্চেন্ট পেমেন্ট', 'Rocket Merchant Payment')}
-                      </span>
-                    </div>
-                    <span className="bg-purple-200/70 text-purple-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                      {(paymentSettings.rocketAccountType || 'Personal') === 'Personal' ? 'Personal Account' : 'Merchant Gateway'}
-                    </span>
-                  </div>
-
-                  {(paymentSettings.rocketAccountType || 'Personal') === 'Personal' ? (
-                    <div className="space-y-3">
-                      <div className="bg-white p-3 rounded-xl border border-purple-200 space-y-2">
-                        <p className="text-[11px] text-purple-900 font-medium">
-                          {paymentSettings.rocketInstructionsBn ||
-                            'রকেট অ্যাপ অথবা *322# ডায়াল করে নিচের ১২ ডিজিটের নম্বরে সেন্ড মানি (Send Money) সম্পন্ন করুন:'}
-                        </p>
-                        <div className="flex items-center justify-between bg-purple-50 p-2 rounded-lg border border-purple-100">
-                          <div>
-                            <span className="text-[10px] text-gray-500 block">পার্সোনাল রকেট নম্বর (১২ ডিজিট):</span>
-                            <span className="text-xs font-mono font-black text-purple-700">
-                              {paymentSettings.rocketNumber || '01912-345678-9'}
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              navigator.clipboard.writeText(paymentSettings.rocketNumber || '01912-345678-9');
-                              setCopiedNumber(true);
-                              setTimeout(() => setCopiedNumber(false), 2000);
-                            }}
-                            className="bg-white hover:bg-purple-100 text-purple-700 border border-purple-200 px-2 py-1 rounded text-[10px] font-bold flex items-center space-x-1 cursor-pointer transition-colors"
-                          >
-                            {copiedNumber ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                            <span>{copiedNumber ? 'কপি হয়েছে' : 'কপি করুন'}</span>
-                          </button>
-                        </div>
-                        <div className="flex items-center justify-between text-xs text-purple-950 font-bold pt-1">
-                          <span>সেন্ড মানি অ্যামাউন্ট:</span>
-                          <span className="text-rose-600 font-extrabold">{formatPrice(totalAmount)}</span>
-                        </div>
-                      </div>
-
-                      {/* Customer inputs after sending money */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        <div>
-                          <label className="block text-[11px] font-bold text-purple-950 mb-1">
-                            {t('১. আপনার রকেট নম্বর * (১২ ডিজিট)', '1. Your Sender Rocket Number *')}
-                          </label>
-                          <input
-                            type="tel"
-                            required
-                            value={personalSenderNumber}
-                            onChange={e => setPersonalSenderNumber(e.target.value)}
-                            placeholder="যেমন: 019XXXXXXXXX"
-                            className="w-full bg-white border border-purple-300 rounded-xl p-2 text-xs font-mono focus:border-purple-500"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[11px] font-bold text-purple-950 mb-1">
-                            {t('২. ট্রানজেকশন আইডি (TrxID) *', '2. Transaction ID (TrxID) *')}
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            value={personalTrxId}
-                            onChange={e => setPersonalTrxId(e.target.value)}
-                            placeholder="যেমন: 98K2P4M"
-                            className="w-full bg-white border border-purple-300 rounded-xl p-2 text-xs font-mono uppercase focus:border-purple-500"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-purple-950 mb-1">
-                          {t('৩. প্রেরিত টাকার পরিমাণ (৳ অ্যামাউন্ট)', '3. Paid Amount (৳) *')}
-                        </label>
-                        <input
-                          type="number"
-                          value={personalAmount || totalAmount}
-                          onChange={e => setPersonalAmount(e.target.value)}
-                          placeholder={String(totalAmount)}
-                          className="w-full bg-white border border-purple-300 rounded-xl p-2 text-xs font-bold text-gray-900 focus:border-purple-500 font-mono"
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="block text-xs font-bold text-purple-900 mb-1">
-                        {t('আপনার রকেট নম্বর প্রদান করুন:', 'Enter Your Rocket Number:')}
-                      </label>
-                      <input
-                        type="tel"
-                        value={rocketNumber}
-                        onChange={e => setRocketNumber(e.target.value)}
-                        placeholder="01XXXXXXXXX"
-                        className="w-full bg-white border border-purple-300 rounded-xl p-2 text-xs font-mono"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           </div>
 
@@ -985,6 +863,24 @@ export const CheckoutModal: React.FC = () => {
               </div>
             </div>
 
+            {/* Inventory Warning Banner */}
+            {hasInventoryErrors && (
+              <div className="bg-amber-50 border border-amber-300 text-amber-900 text-xs p-3.5 rounded-xl flex items-start space-x-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="font-bold text-amber-950">
+                    {t('স্টক ঘাটতি সতর্কতা:', 'Stock Insufficiency Alert:')}
+                  </div>
+                  <div>
+                    {t(
+                      'আপনার ব্যাগের কিছু পণ্য বর্তমানে স্টকে নেই বা পর্যাপ্ত স্টক নেই। অনুগ্রহ করে ব্যাগে গিয়ে পরিমাণ কমিয়ে নিন।',
+                      'Some items in your cart are out of stock or exceed available quantity. Please adjust your cart before checkout.'
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Error banner */}
             {errorMessage && (
               <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3 rounded-xl flex items-center space-x-2">
@@ -997,11 +893,13 @@ export const CheckoutModal: React.FC = () => {
             <div className="space-y-3">
               <button
                 type="submit"
-                disabled={isSubmitting}
-                className="w-full bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-sm sm:text-base py-4 rounded-2xl flex items-center justify-center space-x-2 shadow-xl shadow-rose-600/30 transition-all cursor-pointer disabled:opacity-50"
+                disabled={isSubmitting || hasInventoryErrors}
+                className="w-full bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-sm sm:text-base py-4 rounded-2xl flex items-center justify-center space-x-2 shadow-xl shadow-rose-600/30 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:shadow-none"
               >
                 {isSubmitting ? (
                   <span>{t('অর্ডার প্রসেস হচ্ছে...', 'Processing Order...')}</span>
+                ) : hasInventoryErrors ? (
+                  <span>{t('পর্যাপ্ত স্টক নেই (স্টক চেক করুন)', 'Stock Unavailable — Check Cart')}</span>
                 ) : (
                   <>
                     <CheckCircle className="w-5 h-5" />

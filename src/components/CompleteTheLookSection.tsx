@@ -1,6 +1,7 @@
 import React from 'react';
 import { Sparkles, ShoppingBag, Plus, Check } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
+import { getAvailableStock } from '../utils/inventory';
 
 export const CompleteTheLookSection: React.FC = () => {
   const {
@@ -21,6 +22,8 @@ export const CompleteTheLookSection: React.FC = () => {
 
   const bundleProducts = products.filter(p => bundle.productIds.includes(p.id));
   if (bundleProducts.length === 0) return null;
+
+  const isBundleInStock = bundleProducts.every(p => getAvailableStock(p) > 0);
 
   const calculatedRegularPrice = bundle.regularPrice > 0
     ? bundle.regularPrice
@@ -84,53 +87,88 @@ export const CompleteTheLookSection: React.FC = () => {
             </div>
 
             <button
+              disabled={!isBundleInStock}
               onClick={() => addBundleToCart(bundle.productIds, bundle.bundlePrice)}
-              className="mt-3 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs sm:text-sm px-5 py-2.5 rounded-xl flex items-center space-x-2 shadow-lg shadow-rose-600/30 transition-all cursor-pointer"
+              className={`mt-3 font-extrabold text-xs sm:text-sm px-5 py-2.5 rounded-xl flex items-center space-x-2 transition-all ${
+                !isBundleInStock
+                  ? 'bg-gray-700/80 text-gray-400 cursor-not-allowed border border-gray-600'
+                  : 'bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/30 cursor-pointer'
+              }`}
             >
               <ShoppingBag className="w-4 h-4" />
-              <span>{t('সম্পূর্ণ লুক ব্যাগে নিন', 'Add Full Bundle to Cart')}</span>
+              <span>
+                {isBundleInStock
+                  ? t('সম্পূর্ণ লুক ব্যাগে নিন', 'Add Full Bundle to Cart')
+                  : t('বান্ডেল স্টক আউট', 'Bundle Out of Stock')}
+              </span>
             </button>
           </div>
         </div>
 
         {/* Bundle Items Visual Chain */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
-          {bundleProducts.map((prod, index) => (
-            <React.Fragment key={prod.id}>
-              <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-3.5 flex items-center space-x-3.5">
-                <img
-                  src={prod.images[0]}
-                  alt={prod.name}
-                  className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-xl border border-white/20 shrink-0"
-                />
-                <div className="min-w-0">
-                  <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider block">
-                    {language === 'bn' ? prod.categoryBn : prod.category}
-                  </span>
-                  <h4 className="text-xs sm:text-sm font-bold text-white line-clamp-2 mt-0.5">
-                    {language === 'bn' ? prod.nameBn : prod.name}
-                  </h4>
-                  <div className="flex items-center space-x-2 mt-1">
-                    <span className="text-xs font-extrabold text-amber-400">
-                      {formatPrice(prod.price)}
-                    </span>
-                    <span className="text-[10px] text-emerald-400 flex items-center">
-                      <Check className="w-3 h-3 mr-0.5" />
-                      {t('বান্ডেল অন্তর্ভুক্ত', 'Included')}
-                    </span>
-                  </div>
-                </div>
-              </div>
+          {bundleProducts.map((prod, index) => {
+            const prodStock = getAvailableStock(prod);
+            const isItemOut = prodStock <= 0;
 
-              {index < bundleProducts.length - 1 && (
-                <div className="hidden sm:flex items-center justify-center text-white/50 -mx-6 z-10 pointer-events-none">
-                  <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center">
-                    <Plus className="w-4 h-4 text-white" />
+            return (
+              <React.Fragment key={prod.id}>
+                <div
+                  className={`border rounded-2xl p-3.5 flex items-center space-x-3.5 transition-all ${
+                    isItemOut
+                      ? 'bg-rose-950/40 border-rose-500/30 opacity-75'
+                      : 'bg-white/10 backdrop-blur-md border-white/15'
+                  }`}
+                >
+                  <div className="relative shrink-0">
+                    <img
+                      src={prod.images[0]}
+                      alt={prod.name}
+                      className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-xl border border-white/20"
+                    />
+                    {isItemOut && (
+                      <div className="absolute inset-0 bg-black/60 rounded-xl flex items-center justify-center p-1">
+                        <span className="text-[9px] font-black text-rose-300 uppercase tracking-tighter text-center">
+                          {t('স্টক নেই', 'No Stock')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider block">
+                      {language === 'bn' ? prod.categoryBn : prod.category}
+                    </span>
+                    <h4 className="text-xs sm:text-sm font-bold text-white line-clamp-2 mt-0.5">
+                      {language === 'bn' ? prod.nameBn : prod.name}
+                    </h4>
+                    <div className="flex items-center space-x-2 mt-1">
+                      <span className="text-xs font-extrabold text-amber-400">
+                        {formatPrice(prod.price)}
+                      </span>
+                      {isItemOut ? (
+                        <span className="text-[10px] text-rose-400 font-bold">
+                          ⚠️ {t('স্টক আউট', 'Out of stock')}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-emerald-400 flex items-center">
+                          <Check className="w-3 h-3 mr-0.5" />
+                          {t('বান্ডেল অন্তর্ভুক্ত', 'Included')}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              )}
-            </React.Fragment>
-          ))}
+
+                {index < bundleProducts.length - 1 && (
+                  <div className="hidden sm:flex items-center justify-center text-white/50 -mx-6 z-10 pointer-events-none">
+                    <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center">
+                      <Plus className="w-4 h-4 text-white" />
+                    </div>
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          })}
         </div>
       </div>
     </section>

@@ -11,12 +11,14 @@ import {
   Truck,
 } from 'lucide-react';
 import { useShop, FREE_DELIVERY_THRESHOLD } from '../context/ShopContext';
+import { getAvailableStock } from '../utils/inventory';
 
 export const CartDrawer: React.FC = () => {
   const {
     activeModal,
     setActiveModal,
     cart,
+    products,
     removeFromCart,
     updateCartQuantity,
     toggleWishlist,
@@ -32,6 +34,7 @@ export const CartDrawer: React.FC = () => {
     language,
     t,
     formatPrice,
+    user,
   } = useShop();
 
   const [couponInput, setCouponInput] = useState('');
@@ -62,14 +65,23 @@ export const CartDrawer: React.FC = () => {
       <div className="bg-white w-full max-w-md h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-          <div className="flex items-center space-x-2">
-            <ShoppingBag className="w-5 h-5 text-rose-600" />
-            <h3 className="font-extrabold text-base text-gray-900">
-              {t('আপনার শপিং ব্যাগ', 'Your Shopping Cart')}
-            </h3>
-            <span className="bg-rose-100 text-rose-700 text-xs font-bold px-2 py-0.5 rounded-full">
-              {cart.reduce((s, i) => s + i.quantity, 0)}
-            </span>
+          <div className="flex items-center space-x-2.5">
+            <ShoppingBag className="w-5 h-5 text-rose-600 shrink-0" />
+            <div className="flex flex-col">
+              <div className="flex items-center space-x-2">
+                <h3 className="font-extrabold text-base text-gray-900 leading-tight">
+                  {t('আপনার শপিং ব্যাগ', 'Your Shopping Cart')}
+                </h3>
+                <span className="bg-rose-100 text-rose-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                  {cart.reduce((s, i) => s + i.quantity, 0)}
+                </span>
+              </div>
+              {user.isLoggedIn && (
+                <span className="text-[11px] text-gray-500 font-medium leading-tight">
+                  {t('ব্যক্তিগত ব্যাগ:', 'Personal Bag:')} <strong className="text-gray-800">{user.name || user.phone}</strong>
+                </span>
+              )}
+            </div>
           </div>
 
           <button
@@ -132,10 +144,21 @@ export const CartDrawer: React.FC = () => {
           ) : (
             cart.map((item, idx) => {
               const { product, quantity, selectedColor, selectedSize } = item;
+              const live = products.find(p => p.id === product.id) || product;
+              const available = getAvailableStock(live, selectedColor, selectedSize);
+              const isOutOfStock = available <= 0;
+              const isOverStock = quantity > available;
+
               return (
                 <div
                   key={`${product.id}-${selectedColor}-${selectedSize}-${idx}`}
-                  className="bg-white p-3.5 rounded-2xl border border-gray-100 shadow-xs flex gap-3 relative group"
+                  className={`p-3.5 rounded-2xl border shadow-xs flex gap-3 relative group transition-colors ${
+                    isOutOfStock
+                      ? 'bg-rose-50/50 border-rose-200'
+                      : isOverStock
+                      ? 'bg-amber-50/40 border-amber-200'
+                      : 'bg-white border-gray-100'
+                  }`}
                 >
                   <img
                     src={product.images[0]}
@@ -162,6 +185,21 @@ export const CartDrawer: React.FC = () => {
                           </span>
                         )}
                       </div>
+
+                      {/* Live Stock Warning Badges */}
+                      {isOutOfStock ? (
+                        <div className="text-[10px] font-bold text-rose-600 bg-rose-100/80 px-2 py-0.5 rounded-md inline-block mt-1">
+                          ⚠️ {t('স্টক আউট! অনুগ্রহ করে বাদ দিন', 'Out of stock! Please remove')}
+                        </div>
+                      ) : isOverStock ? (
+                        <div className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md inline-block mt-1">
+                          ⚠️ {t(`স্টকে মাত্র ${available}টি আছে!`, `Only ${available} left in stock!`)}
+                        </div>
+                      ) : available <= 5 ? (
+                        <div className="text-[10px] font-semibold text-amber-700 mt-1">
+                          {t(`⚠️ মাত্র ${available}টি বাকি`, `Only ${available} left`)}
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="flex items-center justify-between mt-2">
@@ -187,8 +225,14 @@ export const CartDrawer: React.FC = () => {
                         </button>
                         <span className="px-2 py-0.5 font-bold text-gray-900 bg-white">{quantity}</span>
                         <button
+                          disabled={quantity >= available}
                           onClick={() => updateCartQuantity(product.id, quantity + 1, selectedColor, selectedSize)}
-                          className="px-2 py-0.5 font-bold text-gray-600 hover:bg-gray-200 cursor-pointer"
+                          className={`px-2 py-0.5 font-bold ${
+                            quantity >= available
+                              ? 'text-gray-300 cursor-not-allowed bg-gray-100'
+                              : 'text-gray-600 hover:bg-gray-200 cursor-pointer'
+                          }`}
+                          title={quantity >= available ? t(`সর্বোচ্চ ${available}টি`, `Max ${available}`) : undefined}
                         >
                           +
                         </button>
@@ -309,14 +353,32 @@ export const CartDrawer: React.FC = () => {
             </div>
 
             {/* Checkout CTA */}
-            <button
-              onClick={handleProceedCheckout}
-              className="w-full bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-sm py-3.5 rounded-2xl flex items-center justify-center space-x-2 shadow-lg shadow-rose-600/30 transition-all cursor-pointer"
-            >
-              <Sparkles className="w-4 h-4 fill-white stroke-none" />
-              <span>{t('অর্ডার সম্পন্ন করুন (চেকআউট)', 'Proceed to Checkout')}</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            {(() => {
+              const hasInventoryIssues = cart.some(item => {
+                const live = products.find(p => p.id === item.product.id) || item.product;
+                return getAvailableStock(live, item.selectedColor, item.selectedSize) < item.quantity;
+              });
+
+              return (
+                <button
+                  disabled={hasInventoryIssues}
+                  onClick={handleProceedCheckout}
+                  className={`w-full font-extrabold text-sm py-3.5 rounded-2xl flex items-center justify-center space-x-2 transition-all ${
+                    hasInventoryIssues
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
+                      : 'bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/30 cursor-pointer'
+                  }`}
+                >
+                  <Sparkles className={`w-4 h-4 ${hasInventoryIssues ? 'fill-gray-500' : 'fill-white'} stroke-none`} />
+                  <span>
+                    {hasInventoryIssues
+                      ? t('স্টক সমস্যা রয়েছে — পরিমাণ ঠিক করুন', 'Stock unavailable — adjust quantity')
+                      : t('অর্ডার সম্পন্ন করুন (চেকআউট)', 'Proceed to Checkout')}
+                  </span>
+                  {!hasInventoryIssues && <ArrowRight className="w-4 h-4" />}
+                </button>
+              );
+            })()}
           </div>
         )}
       </div>
