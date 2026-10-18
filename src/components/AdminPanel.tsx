@@ -488,6 +488,7 @@ export const AdminPanel: React.FC = () => {
               setIsAdminView(false);
               if (typeof window !== 'undefined') {
                 window.history.pushState(null, '', '/');
+                window.dispatchEvent(new PopStateEvent('popstate'));
               }
             }}
             className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-2xl text-gray-700 transition-colors cursor-pointer"

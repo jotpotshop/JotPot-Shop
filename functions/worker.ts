@@ -11,7 +11,18 @@ export default {
 
     // Fall back to Cloudflare Static Assets (dist)
     if (env.ASSETS) {
-      return env.ASSETS.fetch(request);
+      const response = await env.ASSETS.fetch(request);
+      // SPA Fallback: If asset not found on a page navigation route (e.g. /bondhame), serve index.html with 200
+      if (
+        response.status === 404 &&
+        request.method === 'GET' &&
+        !url.pathname.startsWith('/api') &&
+        !url.pathname.includes('.')
+      ) {
+        const indexUrl = new URL('/', request.url);
+        return env.ASSETS.fetch(new Request(indexUrl.toString(), request));
+      }
+      return response;
     }
 
     return new Response('Not Found', { status: 404 });

@@ -66,7 +66,17 @@ const MainContent: React.FC = () => {
   // Track route to handle /bondhame vs / (and block /admin)
   const [currentRoute, setCurrentRoute] = useState<string>(() => {
     if (typeof window === 'undefined') return '/';
-    return (window.location.pathname || '/').toLowerCase();
+    const path = (window.location.pathname || '/').toLowerCase().replace(/\/+$/, '');
+    const hash = (window.location.hash || '').toLowerCase();
+    if (
+      path === '/bondhame' ||
+      path.startsWith('/bondhame/') ||
+      hash === '#bondhame' ||
+      hash.startsWith('#bondhame')
+    ) {
+      return '/bondhame';
+    }
+    return path || '/';
   });
 
   React.useEffect(() => {
@@ -83,7 +93,12 @@ const MainContent: React.FC = () => {
         return;
       }
 
-      if (path === '/bondhame' || hash === '#bondhame') {
+      if (
+        path === '/bondhame' ||
+        path.startsWith('/bondhame/') ||
+        hash === '#bondhame' ||
+        hash.startsWith('#bondhame')
+      ) {
         setCurrentRoute('/bondhame');
         setIsAdminView(true);
       } else {
