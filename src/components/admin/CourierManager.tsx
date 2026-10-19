@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Truck,
   Zap,
@@ -24,6 +24,8 @@ import {
   Clock,
   ArrowRight,
   Check,
+  Activity,
+  AlertTriangle,
 } from 'lucide-react';
 import { useShop } from '../../context/ShopContext';
 import { CourierConfig, CourierPartner, Order } from '../../types';
@@ -31,6 +33,8 @@ import {
   COURIER_SETUP_GUIDES,
   testCourierApiConnection,
   CourierConnectionTestResult,
+  checkSteadfastServerStatus,
+  pingSteadfastWebhook,
 } from '../../services/courierService';
 
 export const CourierManager: React.FC = () => {
@@ -53,6 +57,12 @@ export const CourierManager: React.FC = () => {
   // Connection testing states
   const [testingCourierId, setTestingCourierId] = useState<CourierPartner | null>(null);
   const [testResults, setTestResults] = useState<Record<string, CourierConnectionTestResult>>({});
+
+  // Live Steadfast status & error tracking
+  const [isLiveChecking, setIsLiveChecking] = useState(false);
+  const [lastUpdateFailed, setLastUpdateFailed] = useState<string | null>(null);
+  const [pingingWebhook, setPingingWebhook] = useState(false);
+  const [webhookTestResult, setWebhookTestResult] = useState<{ checked: boolean; success: boolean; message: string } | null>(null);
 
   // Show/hide password states for API keys
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
@@ -80,8 +90,129 @@ export const CourierManager: React.FC = () => {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  // Test connection handler
+  // Helper to dynamically construct the live Webhook URL based on deployed domain
+  const getEffectiveWebhookUrl = (config: CourierConfig): string => {
+    if (config.id === 'Steadfast') {
+      const origin =
+        typeof window !== 'undefined' && window.location.origin
+          ? window.location.origin
+          : 'https://jotpotshop.com';
+      return `${origin}/api/steadfast/webhook`;
+    }
+    return config.webhookUrl || '';
+  };
+
+  // Auto-fetch live Steadfast status & balance on mount
+  useEffect(() => {
+    let isMounted = true;
+    const fetchLiveStatus = async () => {
+      const sf = courierConfigs.find(c => c.id === 'Steadfast');
+      if (!sf) return;
+      setIsLiveChecking(true);
+      try {
+        const res = await checkSteadfastServerStatus();
+        if (!isMounted) return;
+
+        if (res.connected) {
+          const nowTime = new Date().toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' });
+          updateCourierConfig('Steadfast', {
+            connectionStatus: 'connected',
+            accountBalance: typeof res.balance === 'number' ? res.balance : sf.accountBalance,
+            lastConnectedAt: nowTime,
+          });
+          setLastUpdateFailed(null);
+        } else {
+          // If credentials missing or connection dropped, do not show connected
+          updateCourierConfig('Steadfast', {
+            connectionStatus: 'disconnected',
+          });
+          if (res.messageBn) {
+            setLastUpdateFailed(res.messageBn);
+          }
+        }
+      } catch (err: any) {
+        if (!isMounted) return;
+        setLastUpdateFailed(err?.message || 'সার্ভারে সংযোগ করতে সমস্যা হয়েছে');
+      } finally {
+        if (isMounted) setIsLiveChecking(false);
+      }
+    };
+
+    fetchLiveStatus();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Live Refresh handler for Balance & Connection test
+  const handleRefreshSteadfastBalance = async () => {
+    setIsLiveChecking(true);
+    setLastUpdateFailed(null);
+    const sf = courierConfigs.find(c => c.id === 'Steadfast');
+
+    try {
+      const result = await testCourierApiConnection(sf);
+      setTestResults(prev => ({ ...prev, Steadfast: result }));
+
+      if (result.success) {
+        const newBalance = typeof result.balance === 'number' ? result.balance : (sf?.accountBalance || 0);
+        updateCourierConfig('Steadfast', {
+          connectionStatus: 'connected',
+          lastConnectedAt: result.verifiedAt,
+          accountBalance: newBalance,
+        });
+        setLastUpdateFailed(null);
+        showToast(`✅ ব্যালেন্স সফলভাবে রিফ্রেশ হয়েছে: ৳${newBalance.toLocaleString('bn-BD')}`);
+      } else {
+        // PRESERVE previous successful balance — do NOT wipe to 0 or null!
+        updateCourierConfig('Steadfast', {
+          connectionStatus: 'disconnected',
+        });
+        const failMessage = result.messageBn || 'ব্যালেন্স আপডেট ব্যর্থ হয়েছে';
+        setLastUpdateFailed(failMessage);
+        showToast(`⚠️ সর্বশেষ আপডেট ব্যর্থ: ${failMessage} (পূর্বের ব্যালেন্স অক্ষত রাখা হয়েছে)`);
+      }
+    } catch (err: any) {
+      const failMessage = err?.message || 'সার্ভারে সংযোগ ব্যর্থ হয়েছে';
+      setLastUpdateFailed(failMessage);
+      showToast(`⚠️ ব্যালেন্স রিফ্রেশ ব্যর্থ: ${failMessage}`);
+    } finally {
+      setIsLiveChecking(false);
+    }
+  };
+
+  // Diagnostic Test Ping for Webhook Endpoint
+  const handlePingWebhook = async () => {
+    setPingingWebhook(true);
+    try {
+      const res = await pingSteadfastWebhook();
+      setWebhookTestResult({
+        checked: true,
+        success: res.success,
+        message: res.messageBn || res.message || 'Webhook রেসপন্স এসেছে',
+      });
+      if (res.success) {
+        showToast(`✅ ${res.messageBn || 'Webhook এন্ডপয়েন্ট সক্রিয় ও সফলভাবে রেসপন্স করেছে!'}`);
+      } else {
+        showToast(`❌ ${res.messageBn || 'Webhook এন্ডপয়েন্টে সংযোগ ব্যর্থ'}`);
+      }
+    } catch (err: any) {
+      setWebhookTestResult({
+        checked: true,
+        success: false,
+        message: err?.message || 'Webhook পিং ব্যর্থ',
+      });
+      showToast(`❌ Webhook পিং ব্যর্থ: ${err?.message}`);
+    } finally {
+      setPingingWebhook(false);
+    }
+  };
+
+  // Test connection handler for other couriers
   const handleTestConnection = async (config: CourierConfig) => {
+    if (config.id === 'Steadfast') {
+      return handleRefreshSteadfastBalance();
+    }
     setTestingCourierId(config.id);
     try {
       const result = await testCourierApiConnection(config);
@@ -89,11 +220,11 @@ export const CourierManager: React.FC = () => {
       updateCourierConfig(config.id, {
         connectionStatus: result.success ? 'connected' : 'disconnected',
         lastConnectedAt: result.verifiedAt,
-        accountBalance: result.balance,
+        accountBalance: typeof result.balance === 'number' ? result.balance : config.accountBalance,
       });
 
       if (result.success) {
-        showToast(`✅ ${config.nameBn} এপিআই টেস্ট সফল! ব্যালেন্স: ৳${result.balance?.toLocaleString('bn-BD') || 0}`);
+        showToast(`✅ ${config.nameBn} এপিআই টেস্ট সফল! ব্যালেন্স: ৳${(result.balance || 0).toLocaleString('bn-BD')}`);
       } else {
         showToast(`❌ ${result.messageBn}`);
       }
@@ -250,7 +381,17 @@ export const CourierManager: React.FC = () => {
             if (!steadfast) return null;
             const isConnected = steadfast.connectionStatus === 'connected';
             const assignedOrders = orders.filter(o => o.courierInfo?.courierName === 'Steadfast');
-            const deliveredCount = assignedOrders.filter(o => o.status === 'Delivered').length;
+            const deliveredCount = assignedOrders.filter(
+              o => o.courierInfo?.courierName === 'Steadfast' && (o.status === 'Delivered' || o.courierInfo?.courierStatus === 'Delivered')
+            ).length;
+
+            const autoAssignRuleLabel = (() => {
+              if (!steadfast.isActive) return 'নিষ্ক্রিয় (Inactive)';
+              if (steadfast.autoAssignInsideDhaka && steadfast.autoAssignOutsideDhaka) return 'ঢাকা ও সারাদেশে সচল';
+              if (steadfast.autoAssignInsideDhaka) return 'শুধু ঢাকায় সচল';
+              if (steadfast.autoAssignOutsideDhaka) return 'শুধু ঢাকার বাইরে সচল';
+              return 'ম্যানুয়াল নির্বাচন';
+            })();
 
             return (
               <div className="bg-gradient-to-br from-emerald-900 via-teal-900 to-gray-900 text-white rounded-3xl p-6 sm:p-7 shadow-xl border border-emerald-500/40 relative overflow-hidden">
@@ -268,13 +409,25 @@ export const CourierManager: React.FC = () => {
                           <h3 className="text-xl font-black text-white">
                             Steadfast Courier (স্টেডফাস্ট কুরিয়ার)
                           </h3>
-                          <span className="bg-emerald-400 text-emerald-950 font-black text-[11px] px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center space-x-1 shadow-xs">
-                            <span className="w-2 h-2 rounded-full bg-emerald-950 animate-ping inline-block" />
-                            <span>{isConnected ? 'সফলভাবে সংযুক্ত (CONNECTED)' : 'সংযুক্ত করুন'}</span>
+                          <span
+                            className={`font-black text-[11px] px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center space-x-1 shadow-xs ${
+                              isConnected
+                                ? 'bg-emerald-400 text-emerald-950'
+                                : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                            }`}
+                          >
+                            {isConnected && <span className="w-2 h-2 rounded-full bg-emerald-950 animate-ping inline-block" />}
+                            <span>
+                              {isLiveChecking
+                                ? 'যাচাই হচ্ছে...'
+                                : isConnected
+                                ? 'সফলভাবে সংযুক্ত (CONNECTED)'
+                                : 'সংযোগ বিচ্ছিন্ন / আনকনফিগারড'}
+                            </span>
                           </span>
                         </div>
                         <p className="text-xs text-emerald-200 mt-0.5">
-                          অফিসিয়াল API ইন্টিগ্রেশন সক্রিয় • সারাদেশের ৬৪ জেলায় ক্যাশ অন ডেলিভারি (COD) ও হোম ডেলিভারি
+                          সার্ভার-সাইড API ইন্টিগ্রেশন • সারাদেশে ক্যাশ অন ডেলিভারি (COD) ও হোম ডেলিভারি
                         </p>
                       </div>
                     </div>
@@ -283,24 +436,40 @@ export const CourierManager: React.FC = () => {
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 text-xs">
                       <div className="bg-white/10 backdrop-blur-xs p-2.5 rounded-2xl border border-white/10">
                         <span className="text-[10px] text-emerald-300 block font-bold uppercase">মার্চেন্ট আইডি</span>
-                        <span className="font-mono font-bold text-white text-xs">{steadfast.merchantId || 'JPS-STEAD-4019'}</span>
+                        <span className="font-mono font-bold text-white text-xs truncate block" title={steadfast.merchantId || 'কনফিগার করা হয়নি'}>
+                          {steadfast.merchantId ? steadfast.merchantId : 'সেট করা হয়নি'}
+                        </span>
+                        <span className="text-[9px] text-emerald-300/70 block mt-0.5">মার্চেন্ট প্রোফাইল</span>
                       </div>
 
                       <div className="bg-white/10 backdrop-blur-xs p-2.5 rounded-2xl border border-white/10">
                         <span className="text-[10px] text-emerald-300 block font-bold uppercase">লেজার ব্যালেন্স</span>
                         <span className="font-mono font-black text-amber-300 text-sm">
-                          {formatPrice(steadfast.accountBalance || 4850)}
+                          {formatPrice(steadfast.accountBalance || 0)}
                         </span>
+                        {lastUpdateFailed ? (
+                          <span className="text-[9px] text-amber-200 block font-medium mt-0.5 truncate" title={lastUpdateFailed}>
+                            ⚠️ সর্বশেষ আপডেট ব্যর্থ (পূর্বের ব্যালেন্স)
+                          </span>
+                        ) : steadfast.lastConnectedAt ? (
+                          <span className="text-[9px] text-emerald-300/80 block font-medium mt-0.5">
+                            আপডেট: {steadfast.lastConnectedAt}
+                          </span>
+                        ) : (
+                          <span className="text-[9px] text-emerald-300/60 block mt-0.5">এখনো রিফ্রেশ হয়নি</span>
+                        )}
                       </div>
 
                       <div className="bg-white/10 backdrop-blur-xs p-2.5 rounded-2xl border border-white/10">
                         <span className="text-[10px] text-emerald-300 block font-bold uppercase">মোট পার্সেল</span>
                         <span className="font-bold text-white text-xs">{assignedOrders.length}টি ({deliveredCount} ডেলিভার্ড)</span>
+                        <span className="text-[9px] text-emerald-300/70 block mt-0.5 font-medium">উৎস: ফায়ারবেস অর্ডার রেকর্ডস</span>
                       </div>
 
                       <div className="bg-white/10 backdrop-blur-xs p-2.5 rounded-2xl border border-white/10">
                         <span className="text-[10px] text-emerald-300 block font-bold uppercase">অটো-অ্যাসাইন রুল</span>
-                        <span className="font-bold text-emerald-300 text-xs">সারাদেশে সচল (Active)</span>
+                        <span className="font-bold text-emerald-300 text-xs">{autoAssignRuleLabel}</span>
+                        <span className="text-[9px] text-emerald-300/70 block mt-0.5 font-medium">চেকআউট নিয়মানুযায়ী প্রয়োগ</span>
                       </div>
                     </div>
                   </div>
@@ -309,12 +478,12 @@ export const CourierManager: React.FC = () => {
                   <div className="flex flex-col sm:flex-row lg:flex-col gap-2.5 w-full lg:w-auto shrink-0">
                     <button
                       type="button"
-                      disabled={testingCourierId === 'Steadfast'}
-                      onClick={() => handleTestConnection(steadfast)}
+                      disabled={isLiveChecking}
+                      onClick={handleRefreshSteadfastBalance}
                       className="bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-black px-5 py-2.5 rounded-xl text-xs flex items-center justify-center space-x-2 transition-all shadow-md cursor-pointer disabled:opacity-50"
                     >
-                      <Zap className={`w-4 h-4 ${testingCourierId === 'Steadfast' ? 'animate-spin' : ''}`} />
-                      <span>{testingCourierId === 'Steadfast' ? 'ভেরিফাই হচ্ছে...' : 'ব্যালেন্স ও কানেকশন রিফ্রেশ'}</span>
+                      <Zap className={`w-4 h-4 ${isLiveChecking ? 'animate-spin' : ''}`} />
+                      <span>{isLiveChecking ? 'ব্যালেন্স যাচাই হচ্ছে...' : 'ব্যালেন্স ও কানেকশন রিফ্রেশ'}</span>
                     </button>
 
                     <button

@@ -250,3 +250,46 @@ export async function fetchSteadfastTracking(
     };
   }
 }
+
+/**
+ * Diagnostic test to verify if the Steadfast Webhook endpoint is deployed and operational
+ */
+export async function pingSteadfastWebhook(): Promise<{
+  success: boolean;
+  status?: string;
+  endpoint?: string;
+  message?: string;
+  messageBn?: string;
+  configured?: boolean;
+}> {
+  try {
+    const res = await fetch('/api/steadfast/webhook?test=ping', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (res.ok) {
+      const data = (await res.json()) as any;
+      return {
+        success: true,
+        status: data.status || 'online',
+        endpoint: data.endpoint,
+        message: data.message || 'Webhook endpoint verified and active!',
+        messageBn: data.messageBn || 'Webhook এন্ডপয়েন্ট সক্রিয় ও সংযুক্ত!',
+        configured: data.configured,
+      };
+    }
+
+    return {
+      success: false,
+      message: `Webhook endpoint responded with status ${res.status}`,
+      messageBn: `Webhook এন্ডপয়েন্ট রেসপন্স কোড: ${res.status}`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err?.message || 'Failed to ping webhook endpoint',
+      messageBn: 'Webhook এন্ডপয়েন্টে সংযোগ ব্যর্থ হয়েছে।',
+    };
+  }
+}
