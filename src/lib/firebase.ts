@@ -791,6 +791,64 @@ export function subscribeToDeliverySettings(
 }
 
 /**
+ * Recursively cleans any object or array before committing to Cloud Firestore.
+ * Cloud Firestore strictly rejects any field whose value is `undefined` (even in nested arrays/objects).
+ * This utility:
+ * 1. Strips any property whose value is `undefined`
+ * 2. Filters out `undefined` entries in arrays
+ * 3. Deeply sanitizes nested objects and arrays
+ * 4. Preserves primitives, `null`, and Date instances
+ */
+export function cleanFirestorePayload<T>(value: T): T {
+  if (value === null || value === undefined) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .filter(item => item !== undefined)
+      .map(item => cleanFirestorePayload(item)) as unknown as T;
+  }
+  if (typeof value === 'object' && !(value instanceof Date)) {
+    const cleaned: Record<string, any> = {};
+    for (const [key, val] of Object.entries(value)) {
+      if (val !== undefined) {
+        const cleanedVal = cleanFirestorePayload(val);
+        if (cleanedVal !== undefined) {
+          cleaned[key] = cleanedVal;
+        }
+      }
+    }
+    return cleaned as T;
+  }
+  return value;
+}
+
+/**
+ * Validates that an object contains zero `undefined` values before Firestore transaction/write.
+ * Returns array of field paths containing `undefined` if any are detected.
+ */
+export function findUndefinedPathsInPayload(data: any, currentPath = ''): string[] {
+  if (data === undefined) return [currentPath || 'ROOT'];
+  if (data === null || typeof data !== 'object') return [];
+  const found: string[] = [];
+  if (Array.isArray(data)) {
+    data.forEach((item, idx) => {
+      found.push(...findUndefinedPathsInPayload(item, `${currentPath}[${idx}]`));
+    });
+  } else {
+    for (const [key, val] of Object.entries(data)) {
+      const p = currentPath ? `${currentPath}.${key}` : key;
+      if (val === undefined) {
+        found.push(p);
+      } else if (typeof val === 'object' && val !== null) {
+        found.push(...findUndefinedPathsInPayload(val, p));
+      }
+    }
+  }
+  return found;
+}
+
+/**
  * Saves Products Catalog to Cloud Firestore
  */
 export async function saveProductsToFirestore(
@@ -799,14 +857,15 @@ export async function saveProductsToFirestore(
 ): Promise<void> {
   try {
     const docRef = doc(db, 'settings', 'products_catalog');
+    const sanitizedProducts = cleanFirestorePayload(sanitizeProductRecords(products));
     await setDoc(
       docRef,
-      {
-        items: products,
+      cleanFirestorePayload({
+        items: sanitizedProducts,
         updatedAt: new Date().toISOString(),
         updatedBy: adminUserEmail,
         projectId: FIREBASE_PROJECT_INFO.projectId,
-      },
+      }),
       { merge: true }
     );
   } catch (err) {
@@ -815,24 +874,29 @@ export async function saveProductsToFirestore(
 }
 
 /**
- * Sanitizes raw product items from Firestore to guarantee valid numeric stock and safety
+ * Sanitizes raw product items from Firestore to guarantee valid numeric stock and safety,
+ * ensuring no property with value `undefined` is returned.
  */
 export function sanitizeProductRecords(rawItems: any[]): Product[] {
   if (!Array.isArray(rawItems)) return [];
   return rawItems.map(item => {
     let sanitizedVariantStocks: Record<string, number> | undefined = undefined;
     if (item.variantStocks && typeof item.variantStocks === 'object') {
-      sanitizedVariantStocks = {};
+      const vStocks: Record<string, number> = {};
       for (const [key, val] of Object.entries(item.variantStocks)) {
         if (typeof val === 'number' && !isNaN(val)) {
-          sanitizedVariantStocks[key] = Math.max(0, Math.floor(val));
+          vStocks[key] = Math.max(0, Math.floor(val));
         } else {
-          sanitizedVariantStocks[key] = 0;
+          vStocks[key] = 0;
         }
       }
+      if (Object.keys(vStocks).length > 0) {
+        sanitizedVariantStocks = vStocks;
+      }
     }
-    return {
-      ...item,
+
+    const sanitized: any = {
+      ...cleanFirestorePayload(item),
       stock:
         typeof item.stock === 'number' && !isNaN(item.stock)
           ? Math.max(0, Math.floor(item.stock))
@@ -841,9 +905,16 @@ export function sanitizeProductRecords(rawItems: any[]): Product[] {
         typeof item.lowStockThreshold === 'number' && !isNaN(item.lowStockThreshold)
           ? item.lowStockThreshold
           : 5,
-      variantStocks: sanitizedVariantStocks,
     };
-  }) as Product[];
+
+    if (sanitizedVariantStocks) {
+      sanitized.variantStocks = sanitizedVariantStocks;
+    } else {
+      delete sanitized.variantStocks;
+    }
+
+    return cleanFirestorePayload(sanitized) as Product;
+  });
 }
 
 /**
@@ -898,6 +969,37 @@ export async function executeAtomicOrderCheckout(
   order: Order,
   adminUserEmail = 'jotpotshop.official@gmail.com'
 ): Promise<{ success: boolean; order?: Order; error?: string }> {
+  // Step 0: Input Validation — Ensure all required fields exist and are valid before opening transaction
+  if (!order || typeof order !== 'object') {
+    return { success: false, error: 'অর্ডারের তথ্য পাওয়া যায়নি।' };
+  }
+  if (!order.id || typeof order.id !== 'string') {
+    return { success: false, error: 'অর্ডার আইডি অনুপস্থিত বা অবৈধ।' };
+  }
+  if (!order.customerName || !order.customerName.trim()) {
+    return { success: false, error: 'গ্রাহকের নাম প্রদান করা আবশ্যক।' };
+  }
+  if (!order.phone || !order.phone.trim()) {
+    return { success: false, error: 'গ্রাহকের মোবাইল নম্বর প্রদান করা আবশ্যক।' };
+  }
+  if (!order.address || !order.address.fullAddress || !order.address.district) {
+    return { success: false, error: 'সম্পূর্ণ ডেলিভারি ঠিকানা এবং জেলা প্রদান করা আবশ্যক।' };
+  }
+  if (!Array.isArray(order.items) || order.items.length === 0) {
+    return { success: false, error: 'শপিং ব্যাগে কোনো পণ্য নেই।' };
+  }
+  for (const ci of order.items) {
+    if (!ci.product || !ci.product.id) {
+      return { success: false, error: 'অর্ডারে অন্তর্ভুক্ত পণ্যের তথ্য অসম্পূর্ণ।' };
+    }
+    if (typeof ci.quantity !== 'number' || ci.quantity <= 0 || isNaN(ci.quantity)) {
+      return {
+        success: false,
+        error: `"${ci.product.nameBn || ci.product.name}": পণ্যের পরিমাণ সঠিক নয়।`,
+      };
+    }
+  }
+
   try {
     const result = await runTransaction(db, async (transaction) => {
       // Step 1: ALL READS FIRST (Strict Firestore rule: All gets must precede sets)
@@ -958,7 +1060,9 @@ export async function executeAtomicOrderCheckout(
       // Step 4: Compute updated stocks for each product and variant
       const updatedProducts = dbProducts.map(p => {
         const itemsForProduct = order.items.filter(ci => ci.product.id === p.id);
-        if (itemsForProduct.length === 0) return p;
+        if (itemsForProduct.length === 0) {
+          return cleanFirestorePayload(p);
+        }
 
         let currentStock = p.stock;
         let updatedVariantStocks = p.variantStocks ? { ...p.variantStocks } : undefined;
@@ -985,40 +1089,48 @@ export async function executeAtomicOrderCheckout(
           }
         }
 
-        return {
+        const updated: any = {
           ...p,
           stock: currentStock,
-          variantStocks: updatedVariantStocks,
         };
+        if (updatedVariantStocks && Object.keys(updatedVariantStocks).length > 0) {
+          updated.variantStocks = updatedVariantStocks;
+        } else {
+          delete updated.variantStocks;
+        }
+
+        return cleanFirestorePayload(updated) as Product;
       });
 
-      // Step 5: ALL WRITES AFTER READS (Atomically commit all mutations)
+      // Step 5: ALL WRITES AFTER READS (Atomically commit all mutations with guaranteed clean payloads)
       // 5a. Save updated catalog in settings/products_catalog
+      const cleanUpdatedProducts = cleanFirestorePayload(updatedProducts);
       transaction.set(
         catalogRef,
-        {
-          items: updatedProducts,
+        cleanFirestorePayload({
+          items: cleanUpdatedProducts,
           updatedAt: new Date().toISOString(),
           updatedBy: `Checkout #${order.id}`,
           projectId: FIREBASE_PROJECT_INFO.projectId,
-        },
+        }),
         { merge: true }
       );
 
       // 5b. Write/update individual product documents under /products/{productId}
       for (const item of order.items) {
-        const updatedP = updatedProducts.find(p => p.id === item.product.id);
+        const updatedP = cleanUpdatedProducts.find(p => p.id === item.product.id);
         if (updatedP) {
           const individualProductRef = doc(db, 'products', updatedP.id);
-          transaction.set(individualProductRef, updatedP, { merge: true });
+          transaction.set(individualProductRef, cleanFirestorePayload(updatedP), { merge: true });
         }
       }
 
-      // 5c. Write order document
-      transaction.set(orderDocRef, {
+      // 5c. Write clean order document
+      const cleanOrderDoc = cleanFirestorePayload({
         ...order,
         syncedAt: new Date().toISOString(),
       });
+      transaction.set(orderDocRef, cleanOrderDoc);
 
       // 5d. Update global orders ledger in settings/orders_data
       const existingOrders: Order[] =
@@ -1028,17 +1140,17 @@ export async function executeAtomicOrderCheckout(
 
       transaction.set(
         ordersDataRef,
-        {
-          items: [order, ...existingOrders.filter(o => o.id !== order.id)],
+        cleanFirestorePayload({
+          items: [cleanOrderDoc, ...existingOrders.filter(o => o.id !== order.id).map(o => cleanFirestorePayload(o))],
           updatedAt: new Date().toISOString(),
           updatedBy: adminUserEmail,
-        },
+        }),
         { merge: true }
       );
 
       return {
         success: true,
-        order,
+        order: cleanOrderDoc as Order,
       };
     });
 
@@ -1072,12 +1184,12 @@ export async function saveOrdersToFirestore(
     const docRef = doc(db, 'settings', 'orders_data');
     await setDoc(
       docRef,
-      {
-        items: orders,
+      cleanFirestorePayload({
+        items: orders.map(o => cleanFirestorePayload(o)),
         updatedAt: new Date().toISOString(),
         updatedBy: adminUserEmail,
         projectId: FIREBASE_PROJECT_INFO.projectId,
-      },
+      }),
       { merge: true }
     );
   } catch (err) {
@@ -1091,10 +1203,14 @@ export async function saveOrdersToFirestore(
 export async function saveSingleOrderToFirestore(order: Order): Promise<void> {
   try {
     const docRef = doc(db, 'orders', order.id);
-    await setDoc(docRef, {
-      ...order,
-      syncedAt: new Date().toISOString(),
-    }, { merge: true });
+    await setDoc(
+      docRef,
+      cleanFirestorePayload({
+        ...order,
+        syncedAt: new Date().toISOString(),
+      }),
+      { merge: true }
+    );
   } catch (err) {
     console.warn('Failed to save single order to Firestore:', err);
   }

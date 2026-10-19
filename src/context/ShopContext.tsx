@@ -84,6 +84,7 @@ import {
   saveProductsToFirestore,
   fetchProductsFromFirestore,
   subscribeToProducts,
+  cleanFirestorePayload,
   executeAtomicOrderCheckout,
   saveOrdersToFirestore,
   saveSingleOrderToFirestore,
@@ -1656,35 +1657,37 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       },
     ];
 
-    const newOrder: Order = {
+    const rawOrder: Order = {
       id: orderId,
-      customerName: orderData.customerName,
-      phone: orderData.phone,
-      alternativePhone: orderData.alternativePhone,
+      customerName: orderData.customerName.trim(),
+      phone: orderData.phone.trim(),
+      alternativePhone: orderData.alternativePhone?.trim() || undefined,
       address: {
-        district: orderData.district,
-        area: orderData.area,
-        fullAddress: orderData.fullAddress,
+        district: orderData.district.trim(),
+        area: orderData.area.trim(),
+        fullAddress: orderData.fullAddress.trim(),
       },
       items: [...cart],
       subtotal: cartSubtotal,
       discount: couponDiscount,
-      couponCode: appliedCoupon?.code,
+      couponCode: appliedCoupon?.code || undefined,
       deliveryFee: deliveryCharge,
       totalAmount: total,
       paymentMethod: orderData.paymentMethod,
       paymentStatus: orderData.paymentMethod === 'cod' ? 'Pending' : 'Paid',
-      paymentDetails: orderData.paymentDetails,
+      paymentDetails: orderData.paymentDetails ? cleanFirestorePayload(orderData.paymentDetails) : undefined,
       orderDate: dateStr,
       orderSource: orderData.orderSource || 'Website',
-      customerNote: orderData.customerNote,
+      customerNote: orderData.customerNote?.trim() || undefined,
       status: 'Pending',
       timeline: initialTimeline,
       trackingNumber: trackingNumber,
       courier: courierDisplayName,
-      courierInfo: courierConsignment,
+      courierInfo: courierConsignment ? cleanFirestorePayload(courierConsignment) : undefined,
       callLogs: [],
     };
+
+    const newOrder = cleanFirestorePayload(rawOrder) as Order;
 
     // Step 1: Pre-validate client cart against current local stock before calling server
     const clientOutOfStock = cart.filter(ci => {
