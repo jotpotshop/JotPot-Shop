@@ -27,7 +27,7 @@ function steadfastDevPlugin(): Plugin {
               body: req.method === 'POST' ? bodyText : undefined,
             });
 
-            const { handleSteadfastRequest } = await import('./src/server/steadfastHandler');
+            const { handleSteadfastRequest } = await import('./src/server/steadfastHandler.ts');
             const webRes = await handleSteadfastRequest(webReq, {
               STEADFAST_API_KEY: process.env.STEADFAST_API_KEY,
               STEADFAST_SECRET_KEY: process.env.STEADFAST_SECRET_KEY,
