@@ -99,7 +99,7 @@ export const OrderTrackingModal: React.FC = () => {
                 type="text"
                 value={searchId}
                 onChange={e => setSearchId(e.target.value)}
-                placeholder={t('অর্ডার আইডি লিখুন (যেমন: JPS-2026-8941)', 'Enter Order ID (e.g. JPS-2026-8941)')}
+                placeholder={t('আপনার অর্ডার আইডি লিখুন (যেমন: JPS-1001)', 'Enter your Order ID (e.g. JPS-1001)')}
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-3 py-2.5 text-xs font-mono focus:outline-hidden focus:border-rose-500 uppercase"
               />
             </div>

@@ -12,6 +12,7 @@ import {
   ExternalLink,
   ShieldCheck,
   Zap,
+  RefreshCw,
 } from 'lucide-react';
 import { useShop } from '../../context/ShopContext';
 import { CourierConfig, CourierPartner, Order } from '../../types';
@@ -20,7 +21,19 @@ interface CourierDispatchModalContentProps {
   order: Order;
   courierConfigs: CourierConfig[];
   onClose: () => void;
-  sendToCourier: (orderId: string, courierName: CourierPartner, weightKg: number, specialInstructions?: string) => void;
+  sendToCourier: (
+    orderId: string,
+    courierName: CourierPartner,
+    weightKg: number,
+    specialInstructions?: string
+  ) => Promise<{
+    success: boolean;
+    consignmentId?: string;
+    trackingCode?: string;
+    trackingUrl?: string;
+    error?: string;
+    errorBn?: string;
+  }>;
   setOrderForShippingLabel: (order: Order | null) => void;
   t: (bn: string, en: string) => string;
   formatPrice: (amount: number) => string;
@@ -38,6 +51,14 @@ const CourierDispatchModalContent: React.FC<CourierDispatchModalContentProps> = 
   const [selectedCourier, setSelectedCourier] = useState<CourierPartner>('Steadfast');
   const [weightKg, setWeightKg] = useState<number>(0.5);
   const [specialInstructions, setSpecialInstructions] = useState('পণ্য ডেলিভারির পূর্বে গ্রাহককে কল দিন। সাবধানে পরিবহন করুন।');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [bookingSuccess, setBookingSuccess] = useState<{ consignmentId: string; trackingCode: string } | null>(null);
+
+  const isAlreadyBooked = Boolean(
+    order.courierInfo?.consignmentId ||
+      (order.trackingNumber && order.trackingNumber !== 'PENDING' && order.status === 'Shipped')
+  );
 
   const courierConfig = courierConfigs.find(c => c.id === selectedCourier);
   const isInsideDhaka = order.address.district.includes('Dhaka') || order.address.district.includes('ঢাকা');
@@ -48,18 +69,37 @@ const CourierDispatchModalContent: React.FC<CourierDispatchModalContentProps> = 
 
   const codToCollect = order.paymentMethod === 'cod' ? order.totalAmount : 0;
 
-  const handleDispatch = (e: React.FormEvent) => {
+  const handleDispatch = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting || isAlreadyBooked) return;
 
-    sendToCourier(order.id, selectedCourier, weightKg, specialInstructions);
+    setApiError(null);
+    setIsSubmitting(true);
 
-    // Close courier modal and ask or open shipping label
-    onClose();
+    try {
+      const res = await sendToCourier(order.id, selectedCourier, weightKg, specialInstructions);
 
-    // Find the freshly updated order to show shipping label
-    setTimeout(() => {
-      setOrderForShippingLabel(order);
-    }, 200);
+      if (!res.success) {
+        setApiError(res.errorBn || res.error || 'Steadfast বুকিং ব্যর্থ হয়েছে।');
+        setIsSubmitting(false);
+        return;
+      }
+
+      setBookingSuccess({
+        consignmentId: res.consignmentId || '',
+        trackingCode: res.trackingCode || '',
+      });
+      setIsSubmitting(false);
+
+      // Automatically open shipping label after 1.5 seconds so admin clearly sees success
+      setTimeout(() => {
+        onClose();
+        setOrderForShippingLabel(order);
+      }, 1500);
+    } catch (err: any) {
+      setApiError(err?.message || 'সার্ভার যোগাযোগে সমস্যা হয়েছে।');
+      setIsSubmitting(false);
+    }
   };
 
   const courierPartnersList: Array<{
@@ -274,11 +314,45 @@ const CourierDispatchModalContent: React.FC<CourierDispatchModalContentProps> = 
             />
           </div>
 
+          {/* Already Booked Notice */}
+          {isAlreadyBooked && (
+            <div className="bg-amber-50 p-3.5 rounded-xl border border-amber-300 flex items-center space-x-2 text-amber-900 text-xs font-bold">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>
+                এই অর্ডারটি ইতিমধ্যে বুকিং করা হয়েছে (কনসাইনমেন্ট: #{order.courierInfo?.consignmentId || order.trackingNumber})। নতুন করে ডুপ্লিকেট বুকিং প্রতিরোধ করা হয়েছে।
+              </span>
+            </div>
+          )}
+
+          {/* API Error Alert */}
+          {apiError && (
+            <div className="bg-rose-50 p-3.5 rounded-xl border border-rose-300 flex items-start space-x-2 text-rose-800 text-xs font-medium">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <strong className="font-bold block text-rose-900 mb-0.5">বুকিং ব্যর্থ হয়েছে:</strong>
+                <span>{apiError}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Booking Success Banner */}
+          {bookingSuccess && (
+            <div className="bg-emerald-50 p-3.5 rounded-xl border border-emerald-300 flex items-center space-x-2.5 text-emerald-900 text-xs font-bold animate-in fade-in">
+              <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+              <div>
+                <p className="text-emerald-900 font-extrabold">🎉 Steadfast কুরিয়ারে বুকিং সফল হয়েছে!</p>
+                <p className="text-emerald-700 text-[11px] font-mono mt-0.5">
+                  কনসাইনমেন্ট আইডি: #{bookingSuccess.consignmentId} • ট্র্যাকিং কোড: {bookingSuccess.trackingCode}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* API Info Notice */}
           <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-200 flex items-center space-x-2 text-emerald-800 text-[11px]">
             <Zap className="w-4 h-4 shrink-0 text-emerald-600" />
             <span>
-              {selectedCourier} এপিআই (API) কানেকশন সক্রিয়। কনফার্ম করার সাথে সাথে কনসাইনমেন্ট আইডি তৈরি হবে এবং কাস্টমার এসএমএস/ট্র্যাকিং লিংক পেয়ে যাবে।
+              {selectedCourier} সার্ভার এপিআই সক্রিয়। কনফার্ম করার সাথে সাথে ক্লাউডফ্লেয়ার সার্ভারের মাধ্যমে সরাসরি Steadfast Merchant পোর্টালে রিয়েল কনসাইনমেন্ট বুকিং হবে।
             </span>
           </div>
 
@@ -287,17 +361,33 @@ const CourierDispatchModalContent: React.FC<CourierDispatchModalContentProps> = 
             <button
               type="button"
               onClick={onClose}
-              className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-4 py-2.5 rounded-xl text-xs cursor-pointer transition-colors"
+              disabled={isSubmitting}
+              className="bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 font-bold px-4 py-2.5 rounded-xl text-xs cursor-pointer transition-colors"
             >
               {t('বাতিল', 'Cancel')}
             </button>
 
             <button
               type="submit"
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs flex items-center space-x-1.5 shadow-md cursor-pointer transition-colors"
+              disabled={isSubmitting || isAlreadyBooked}
+              className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold px-5 py-2.5 rounded-xl text-xs flex items-center space-x-1.5 shadow-md cursor-pointer transition-colors"
             >
-              <Send className="w-4 h-4" />
-              <span>{t('কুরিয়ারে বুকিং সম্পন্ন করুন ও চালান দেখুন', 'Confirm & Generate Consignment')}</span>
+              {isSubmitting ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Steadfast সার্ভারে বুকিং হচ্ছে...</span>
+                </>
+              ) : isAlreadyBooked ? (
+                <>
+                  <CheckCircle className="w-4 h-4" />
+                  <span>ইতিমধ্যে বুকিং সম্পন্ন</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  <span>{t('কুরিয়ারে বুকিং সম্পন্ন করুন ও চালান দেখুন', 'Confirm & Generate Consignment')}</span>
+                </>
+              )}
             </button>
           </div>
         </form>

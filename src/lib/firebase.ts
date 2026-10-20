@@ -43,6 +43,7 @@ import {
   OrderSettings,
   StaffAccount,
   RegisteredCustomer,
+  UnifiedConversation,
 } from '../types';
 import { getAvailableStock } from '../utils/inventory';
 import { INITIAL_PRODUCTS } from '../data/mockData';
@@ -1766,7 +1767,63 @@ export function verifyCustomerOtp(
   }
 }
 
+/**
+ * Saves Live Chat Conversations to Cloud Firestore
+ */
+export async function saveConversationsToFirestore(
+  conversations: UnifiedConversation[],
+  adminUserEmail = 'jotpotshop.official@gmail.com'
+): Promise<void> {
+  try {
+    const docRef = doc(db, 'settings', 'live_chat_conversations');
+    await setDoc(
+      docRef,
+      cleanFirestorePayload({
+        items: conversations.map(c => cleanFirestorePayload(c)),
+        updatedAt: new Date().toISOString(),
+        updatedBy: adminUserEmail,
+        projectId: FIREBASE_PROJECT_INFO.projectId,
+      }),
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn('Failed to save conversations to Firestore:', err);
+  }
+}
 
+/**
+ * Fetches Live Chat Conversations from Cloud Firestore
+ */
+export async function fetchConversationsFromFirestore(): Promise<UnifiedConversation[] | null> {
+  try {
+    const docRef = doc(db, 'settings', 'live_chat_conversations');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists() && Array.isArray(docSnap.data()?.items)) {
+      return docSnap.data().items;
+    }
+    return null;
+  } catch (err) {
+    console.warn('Could not fetch conversations from Firestore:', err);
+    return null;
+  }
+}
 
-
-
+/**
+ * Subscribes to live Live Chat Conversations updates from Cloud Firestore
+ */
+export function subscribeToConversations(
+  onUpdate: (conversations: UnifiedConversation[]) => void
+): Unsubscribe {
+  const docRef = doc(db, 'settings', 'live_chat_conversations');
+  return onSnapshot(
+    docRef,
+    snapshot => {
+      if (snapshot.exists() && Array.isArray(snapshot.data()?.items)) {
+        onUpdate(snapshot.data().items);
+      }
+    },
+    error => {
+      console.warn('Conversations live subscription error:', error);
+    }
+  );
+}

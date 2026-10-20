@@ -210,6 +210,21 @@ export async function handleSteadfastRequest(
         const consignmentId = String(consignment.consignment_id || consignment.id || '');
         const trackingCode = String(consignment.tracking_code || '');
 
+        if (!consignmentId && !trackingCode) {
+          console.warn(`[Steadfast API] Empty consignment returned for invoice #${invoice}. Body:`, responseBody);
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: responseBody.message || 'Steadfast did not return a valid consignment ID or tracking code.',
+              errorBn: responseBody.message || 'Steadfast থেকে কোনো ভ্যালিড কনসাইনমেন্ট বা ট্র্যাকিং কোড আসেনি।',
+              details: responseBody,
+            }),
+            { status: 400, headers: corsHeaders }
+          );
+        }
+
+        console.log(`[Steadfast API] Successfully booked invoice #${invoice}. Consignment ID: ${consignmentId}, Tracking: ${trackingCode}`);
+
         return new Response(
           JSON.stringify({
             success: true,
@@ -227,13 +242,18 @@ export async function handleSteadfastRequest(
       } else {
         const errorMsg =
           responseBody?.message ||
-          (responseBody?.errors ? JSON.stringify(responseBody.errors) : null) ||
+          (responseBody?.errors ? (typeof responseBody.errors === 'string' ? responseBody.errors : JSON.stringify(responseBody.errors)) : null) ||
           `Steadfast booking failed with status ${sfRes.status}`;
+
+        console.warn(`[Steadfast API] Booking error for invoice #${invoice}. Status: ${sfRes.status}, Error:`, errorMsg);
 
         return new Response(
           JSON.stringify({
             success: false,
             error: errorMsg,
+            errorBn: sfRes.status === 401 || sfRes.status === 403
+              ? 'অননুমোদিত: ক্লাউডফ্লেয়ার সার্ভারে কনফিগার করা Steadfast API Key বা Secret Key সঠিক নয়।'
+              : `Steadfast বুকিং এরর (${sfRes.status}): ${errorMsg}`,
             details: responseBody,
           }),
           { status: sfRes.status >= 400 && sfRes.status < 500 ? sfRes.status : 400, headers: corsHeaders }

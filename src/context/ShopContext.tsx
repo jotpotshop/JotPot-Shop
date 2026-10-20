@@ -110,11 +110,15 @@ import {
   saveCustomersToFirestore,
   fetchCustomersFromFirestore,
   subscribeToCustomers,
+  saveConversationsToFirestore,
+  fetchConversationsFromFirestore,
+  subscribeToConversations,
   signInWithGooglePopup,
   resizeDataUrl,
   FirebaseConnectionDiagnostic,
   FIREBASE_PROJECT_INFO,
 } from '../lib/firebase';
+import { bookSteadfastConsignment } from '../services/courierService';
 import { getAvailableStock } from '../utils/inventory';
 
 export const FREE_DELIVERY_THRESHOLD = 1500;
@@ -207,7 +211,25 @@ interface ShopContextType {
   holdOrder: (orderId: string, reason: string) => void;
   editOrder: (orderId: string, updatedFields: Partial<Order>) => void;
   addCallLog: (orderId: string, log: Omit<OrderCallLog, 'id' | 'timestamp'>) => void;
-  sendToCourier: (orderId: string, courierName: CourierPartner, weightKg: number, specialInstructions?: string) => void;
+  sendToCourier: (
+    orderId: string,
+    courierName: CourierPartner,
+    weightKg: number,
+    specialInstructions?: string,
+    overrides?: {
+      recipient_name?: string;
+      recipient_phone?: string;
+      recipient_address?: string;
+      cod_amount?: number;
+    }
+  ) => Promise<{
+    success: boolean;
+    consignmentId?: string;
+    trackingCode?: string;
+    trackingUrl?: string;
+    error?: string;
+    errorBn?: string;
+  }>;
   updateCourierStatus: (orderId: string, courierStatus: any) => void;
   findOrderById: (orderId: string) => Order | undefined;
 
@@ -450,24 +472,44 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>(() => {
     try {
       const saved = localStorage.getItem('jps_addresses');
-      return saved ? JSON.parse(saved) : INITIAL_SAVED_ADDRESSES;
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return INITIAL_SAVED_ADDRESSES;
+      return [];
     }
   });
+
+  const isDemoOrderRecord = (o: any): boolean => {
+    if (!o) return true;
+    const demoIds = [
+      'ORD-9821', 'ORD-9822', 'ORD-9823', 'ORD-9824', 'ORD-9825',
+      'JPS-2026-9204', 'JPS-2026-9190', 'JPS-2026-8941', 'JPS-2026-7812', 'test-order-999'
+    ];
+    const demoPhones = ['01819234567', '01711223344', '01912998877', '01712345678', '01700000000'];
+    const phoneClean = (o.phone || '').replace(/\D/g, '');
+    const idStr = String(o.id || '');
+    return (
+      demoIds.includes(idStr) ||
+      idStr.startsWith('DEMO-') ||
+      idStr.startsWith('demo-') ||
+      demoPhones.includes(phoneClean)
+    );
+  };
 
   const [orders, setOrders] = useState<Order[]>(() => {
     try {
       const saved = localStorage.getItem('jps_orders');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          // Filter out legacy demo orders so only real customer orders are loaded
+          return parsed.filter(o => !isDemoOrderRecord(o));
+        }
       }
     } catch {}
-    return INITIAL_ORDERS;
+    return [];
   });
 
-  const [notifications, setNotifications] = useState<UserNotification[]>(INITIAL_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<UserNotification[]>([]);
   const [hasNewOrderAlert, setHasNewOrderAlert] = useState<boolean>(false);
   const [shopToast, setShopToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' | 'info' } | null>(null);
 
@@ -517,9 +559,15 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [conversations, setConversations] = useState<UnifiedConversation[]>(() => {
     try {
       const saved = localStorage.getItem('jps_unified_conversations');
-      return saved ? JSON.parse(saved) : INITIAL_CONVERSATIONS;
+      if (saved) {
+        const parsed: UnifiedConversation[] = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(c => !['conv-live-01', 'conv-wa-02', 'conv-fb-03'].includes(c.id));
+        }
+      }
+      return [];
     } catch {
-      return INITIAL_CONVERSATIONS;
+      return [];
     }
   });
 
@@ -773,6 +821,36 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Test Firebase connection on mount
     refreshFirebaseConnection();
 
+    // Purge legacy demo orders and demo conversations from localStorage if present
+    try {
+      const savedOrders = localStorage.getItem('jps_orders');
+      if (savedOrders) {
+        const parsed = JSON.parse(savedOrders);
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter(
+            (o: any) => !['JPS-2026-9204', 'JPS-2026-9190', 'JPS-2026-8941'].includes(o.id)
+          );
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem('jps_orders', JSON.stringify(cleaned));
+            setOrders(cleaned);
+          }
+        }
+      }
+      const savedConvs = localStorage.getItem('jps_unified_conversations');
+      if (savedConvs) {
+        const parsed = JSON.parse(savedConvs);
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter(
+            (c: any) => !['conv-live-01', 'conv-wa-02', 'conv-fb-03'].includes(c.id)
+          );
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem('jps_unified_conversations', JSON.stringify(cleaned));
+            setConversations(cleaned);
+          }
+        }
+      }
+    } catch {}
+
     // Clean up oversized local logo data URL if any exists from previous sessions
     const localSaved = localStorage.getItem('jps_website_settings');
     if (localSaved) {
@@ -957,14 +1035,15 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
-    // Fetch and subscribe Orders from Firestore
+    // Fetch and subscribe Orders from Firestore (pure real customer orders, no demo data)
     fetchOrdersFromFirestore()
       .then(remoteOrders => {
-        if (remoteOrders && remoteOrders.length > 0) {
-          setOrders(remoteOrders);
-          localStorage.setItem('jps_orders', JSON.stringify(remoteOrders));
-        } else {
-          saveOrdersToFirestore(orders).catch(() => {});
+        if (remoteOrders) {
+          const realOrders = remoteOrders.filter(
+            o => !['JPS-2026-9204', 'JPS-2026-9190', 'JPS-2026-8941'].includes(o.id)
+          );
+          setOrders(realOrders);
+          localStorage.setItem('jps_orders', JSON.stringify(realOrders));
         }
       })
       .catch(err => {
@@ -972,8 +1051,35 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
     const unsubOrders = subscribeToOrders(remoteOrders => {
-      if (remoteOrders && remoteOrders.length > 0) {
-        setOrders(remoteOrders);
+      if (remoteOrders) {
+        const realOrders = remoteOrders.filter(
+          o => !['JPS-2026-9204', 'JPS-2026-9190', 'JPS-2026-8941'].includes(o.id)
+        );
+        setOrders(realOrders);
+      }
+    });
+
+    // Fetch and subscribe Live Chat Conversations from Firestore
+    fetchConversationsFromFirestore()
+      .then(remoteConvs => {
+        if (remoteConvs) {
+          const realConvs = remoteConvs.filter(
+            c => !['conv-live-01', 'conv-wa-02', 'conv-fb-03'].includes(c.id)
+          );
+          setConversations(realConvs);
+          localStorage.setItem('jps_unified_conversations', JSON.stringify(realConvs));
+        }
+      })
+      .catch(err => {
+        console.warn('Initial conversations fetch from Firestore:', err);
+      });
+
+    const unsubConversations = subscribeToConversations(remoteConvs => {
+      if (remoteConvs) {
+        const realConvs = remoteConvs.filter(
+          c => !['conv-live-01', 'conv-wa-02', 'conv-fb-03'].includes(c.id)
+        );
+        setConversations(realConvs);
       }
     });
 
@@ -1102,6 +1208,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubCoupons();
       unsubCustomers();
       unsubCouriers();
+      unsubConversations();
     };
   }, []);
 
@@ -1199,6 +1306,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     localStorage.setItem('jps_unified_conversations', JSON.stringify(conversations));
+    saveConversationsToFirestore(conversations).catch(() => {});
   }, [conversations]);
 
   useEffect(() => {
@@ -1916,63 +2024,186 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
-  // Courier Dispatch
-  const sendToCourier = (
+  // Real Courier Dispatch via Official Courier API
+  const sendToCourier = async (
     orderId: string,
     courierName: CourierPartner,
     weightKg: number,
-    specialInstructions = ''
-  ) => {
+    specialInstructions = '',
+    overrides?: {
+      recipient_name?: string;
+      recipient_phone?: string;
+      recipient_address?: string;
+      cod_amount?: number;
+    }
+  ): Promise<{
+    success: boolean;
+    consignmentId?: string;
+    trackingCode?: string;
+    trackingUrl?: string;
+    error?: string;
+    errorBn?: string;
+  }> => {
+    const targetOrder = orders.find(o => o.id === orderId);
+    if (!targetOrder) {
+      return {
+        success: false,
+        error: 'Order not found in state',
+        errorBn: 'অর্ডারটি খুঁজে পাওয়া যায়নি।',
+      };
+    }
+
+    // Double-booking check: prevent duplicate consignments if already booked
+    if (
+      targetOrder.courierInfo?.consignmentId ||
+      (targetOrder.trackingNumber &&
+        targetOrder.trackingNumber !== 'PENDING' &&
+        targetOrder.status === 'Shipped')
+    ) {
+      const existingId = targetOrder.courierInfo?.consignmentId || targetOrder.trackingNumber;
+      return {
+        success: false,
+        error: `Order already dispatched with consignment: ${existingId}`,
+        errorBn: `এই অর্ডারটির জন্য ইতিমধ্যে কুরিয়ার বুকিং সম্পন্ন হয়েছে (কনসাইনমেন্ট: ${existingId})। ডুপ্লিকেট বুকিং প্রতিরোধ করা হয়েছে।`,
+      };
+    }
+
+    const finalRecipientName = (overrides?.recipient_name || targetOrder.customerName || '').trim();
+    const rawPhone = overrides?.recipient_phone || targetOrder.phone || '';
+    const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+    const finalAddress = (
+      overrides?.recipient_address ||
+      `${targetOrder.address.fullAddress.trim()}${
+        targetOrder.address.area ? ', ' + targetOrder.address.area.trim() : ''
+      }, ${targetOrder.address.district.trim()}`
+    ).trim().substring(0, 250);
+
+    // Customer & address validation before booking
+    if (!finalRecipientName || finalRecipientName.length < 2) {
+      return {
+        success: false,
+        error: 'Recipient customer name is missing or too short',
+        errorBn: 'গ্রাহকের নাম অসম্পূর্ণ বা অনুপস্থিত (কমপক্ষে ২ অক্ষর আবশ্যক)।',
+      };
+    }
+
+    if (cleanPhone.length < 11) {
+      return {
+        success: false,
+        error: 'Recipient phone number must be a valid 11-digit mobile number',
+        errorBn: 'গ্রাহকের ফোন নম্বর সঠিক নয় (১১ ডিজিটের মোবাইল নম্বর আবশ্যক)।',
+      };
+    }
+
+    if (!finalAddress || finalAddress.length < 5) {
+      return {
+        success: false,
+        error: 'Recipient delivery address is missing or too short',
+        errorBn: 'গ্রাহকের পূর্ণ ডেলিভারি ঠিকানা প্রদান করা আবশ্যক (কমপক্ষে ৫ অক্ষর)।',
+      };
+    }
+
     const now = new Date();
     const dateStr =
       now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    const prefixes: Record<CourierPartner, string> = {
-      Steadfast: 'STF',
-      RedX: 'RDX',
-      Pathao: 'PTH',
-      Paperfly: 'PPF',
-      Sundarban: 'SND',
-      eCourier: 'ECO',
+    const courierCfg = courierConfigs.find(c => c.id === courierName);
+
+    // Accurate COD calculation:
+    // If cash on delivery, collect totalAmount (or override if modified).
+    // If prepaid (bkash, nagad, rocket), COD is 0.
+    const codAmount = typeof overrides?.cod_amount === 'number'
+      ? Math.max(0, overrides.cod_amount)
+      : targetOrder.paymentMethod === 'cod'
+      ? Math.max(0, targetOrder.totalAmount)
+      : 0;
+
+    let realConsignmentId = '';
+    let realTrackingCode = '';
+    let realTrackingUrl = '';
+    let courierStatus: CourierConsignmentInfo['courierStatus'] = 'Pending Pickup';
+
+    const mapSteadfastStatus = (statusStr: string): CourierConsignmentInfo['courierStatus'] => {
+      const lower = (statusStr || '').toLowerCase();
+      if (lower.includes('delivered')) return 'Delivered';
+      if (lower.includes('return')) return 'Returned';
+      if (lower.includes('transit')) return 'In Transit';
+      if (lower.includes('out_for_delivery')) return 'Out for Delivery';
+      if (lower.includes('in_review') || lower.includes('pending')) return 'Pending Pickup';
+      return 'In Transit';
     };
 
-    const courierCfg = courierConfigs.find(c => c.id === courierName);
-    const trackingCode = `${prefixes[courierName]}-${Math.floor(1000000 + Math.random() * 9000000)}BD`;
-    const trackingUrl = courierCfg
-      ? courierCfg.trackingUrlTemplate.replace('{TRACKING_ID}', trackingCode)
-      : `https://jotpotshop.com/track/${trackingCode}`;
+    if (courierName === 'Steadfast') {
+      const bookingRes = await bookSteadfastConsignment({
+        orderId: targetOrder.id,
+        invoice: targetOrder.id,
+        recipient_name: finalRecipientName,
+        recipient_phone: cleanPhone,
+        recipient_address: finalAddress,
+        cod_amount: codAmount,
+        note: (specialInstructions || targetOrder.customerNote || 'JotPotShop E-Commerce Parcel').substring(0, 250),
+      });
+
+      if (!bookingRes.success) {
+        return {
+          success: false,
+          error: bookingRes.error,
+          errorBn: bookingRes.errorBn || bookingRes.error || 'Steadfast বুকিং ব্যর্থ হয়েছে।',
+        };
+      }
+
+      realConsignmentId = String(bookingRes.consignment_id || '');
+      realTrackingCode = String(bookingRes.tracking_code || realConsignmentId);
+      realTrackingUrl = bookingRes.tracking_url || `https://steadfast.com.bd/t/${realTrackingCode}`;
+      courierStatus = mapSteadfastStatus(bookingRes.status || 'in_review');
+    } else {
+      // Manual fallback for other couriers without API integration
+      realTrackingCode = `${courierName.substring(0, 3).toUpperCase()}-${Date.now().toString().slice(-7)}BD`;
+      realConsignmentId = realTrackingCode;
+      realTrackingUrl = courierCfg
+        ? courierCfg.trackingUrlTemplate.replace('{TRACKING_ID}', realTrackingCode)
+        : `https://jotpotshop.com/track/${realTrackingCode}`;
+      courierStatus = 'Handed to Courier';
+    }
+
+    const shippingCharge =
+      targetOrder.address.district.includes('Dhaka') || targetOrder.address.district.includes('ঢাকা')
+        ? courierCfg?.baseChargeDhaka || 60
+        : courierCfg?.baseChargeOutside || 120;
+
+    const shippedStep: OrderTimelineStep = {
+      status: 'Shipped',
+      statusBn: `${courierCfg?.nameBn || courierName}-এ পার্সেল হস্তান্তর সম্পন্ন`,
+      date: dateStr,
+      completed: true,
+      description: `Consignment created with ${courierName}. Tracking: ${realTrackingCode}`,
+      descriptionBn: `${courierCfg?.nameBn || courierName} কুরিয়ারে বুকিং সফল হয়েছে। কনসাইনমেন্ট: #${realConsignmentId}, ট্র্যাকিং: ${realTrackingCode}`,
+    };
+
+    let updatedOrderObj: Order | null = null;
 
     syncOrders(prev =>
       prev.map(ord => {
         if (ord.id !== orderId) return ord;
 
-        const codAmount = ord.paymentMethod === 'cod' ? ord.totalAmount : 0;
-        const shippingCharge =
-          ord.address.district.includes('Dhaka') || ord.address.district.includes('ঢাকা')
-            ? courierCfg?.baseChargeDhaka || 60
-            : courierCfg?.baseChargeOutside || 120;
-
-        const shippedStep: OrderTimelineStep = {
-          status: 'Shipped',
-          statusBn: `${courierCfg?.nameBn || courierName}-এ হস্তান্তর সম্পন্ন`,
-          date: dateStr,
-          completed: true,
-          description: `Dispatched via ${courierName}. Tracking: ${trackingCode}`,
-          descriptionBn: `${courierCfg?.nameBn || courierName} কুরিয়ারে বুকিং সম্পন্ন হয়েছে। ট্র্যাকিং: ${trackingCode}`,
-        };
-
-        return {
+        const updated: Order = {
           ...ord,
+          customerName: finalRecipientName,
+          phone: cleanPhone,
+          address: {
+            ...ord.address,
+            fullAddress: overrides?.recipient_address || ord.address.fullAddress,
+          },
           status: 'Shipped',
-          trackingNumber: trackingCode,
+          trackingNumber: realTrackingCode,
           courier: courierCfg?.name || courierName,
           courierInfo: {
             courierName,
             courierNameBn: courierCfg?.nameBn || courierName,
-            consignmentId: trackingCode,
-            trackingCode,
-            trackingUrl,
-            courierStatus: 'In Transit',
+            consignmentId: realConsignmentId,
+            trackingCode: realTrackingCode,
+            trackingUrl: realTrackingUrl,
+            courierStatus,
             weightKg,
             codAmount,
             shippingCharge,
@@ -1982,8 +2213,23 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           },
           timeline: [...ord.timeline.filter(t => t.status !== 'Shipped'), shippedStep],
         };
+        updatedOrderObj = updated;
+        return updated;
       })
     );
+
+    if (updatedOrderObj) {
+      saveSingleOrderToFirestore(updatedOrderObj).catch(err => {
+        console.warn('Failed to save updated courier order to Firestore:', err);
+      });
+    }
+
+    return {
+      success: true,
+      consignmentId: realConsignmentId,
+      trackingCode: realTrackingCode,
+      trackingUrl: realTrackingUrl,
+    };
   };
 
   const updateCourierStatus = (orderId: string, courierStatus: any) => {
