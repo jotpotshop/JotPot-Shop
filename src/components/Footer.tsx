@@ -3,7 +3,7 @@ import { Phone, Mail, MapPin, Heart, Zap } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 
 export const Footer: React.FC = () => {
-  const { language, t, setSelectedCategory, setActiveModal, setIsAdminView, websiteSettings, categories } = useShop();
+  const { language, t, setSelectedCategory, setActiveModal, websiteSettings, categories } = useShop();
   const [logoErr, setLogoErr] = React.useState(false);
 
   React.useEffect(() => {

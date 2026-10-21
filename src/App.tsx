@@ -26,7 +26,6 @@ import { CustomerSupportModal } from './components/CustomerSupportModal';
 import { InvoiceModal } from './components/InvoiceModal';
 import { AdminPanel } from './components/AdminPanel';
 import { FloatingContactWidget } from './components/FloatingContactWidget';
-import { AdminLoginModal } from './components/admin/AdminLoginModal';
 import { BondhameLoginPortal } from './components/admin/BondhameLoginPortal';
 
 import {
@@ -107,8 +106,9 @@ const MainContent: React.FC = () => {
         hash === '#admin' ||
         hash.startsWith('#admin')
       ) {
+        // Obsolete /admin: strictly forbidden as admin entry. Do not set admin view.
         setCurrentRoute('/admin');
-        setIsAdminView(true);
+        setIsAdminView(false);
       } else {
         setCurrentRoute('/');
         setIsAdminView(false);
@@ -144,8 +144,36 @@ const MainContent: React.FC = () => {
     }
   }, [websiteSettings.storeName, websiteSettings.taglineBn, websiteSettings.tagline, websiteSettings.faviconUrl, language]);
 
-  // Handle /bondhame and /admin routes
-  if (currentRoute === '/bondhame' || currentRoute === '/admin' || isAdminView) {
+  // Obsolete /admin entry route: Render standard 404 directly at /admin without redirecting or exposing admin panel
+  if (currentRoute === '/admin') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 text-center">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-gray-200 shadow-xl">
+          <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-4 font-black text-2xl border border-rose-100">
+            404
+          </div>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">পৃষ্ঠাটি পাওয়া যায়নি</h1>
+          <p className="text-xs text-gray-500 mb-6 leading-relaxed">
+            আপনি যে ঠিকানায় প্রবেশ করতে চেয়েছেন তা কার্যকর নয়।
+          </p>
+          <button
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.history.pushState(null, '', '/');
+                window.dispatchEvent(new PopStateEvent('popstate'));
+              }
+            }}
+            className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer shadow-md"
+          >
+            হোমপেজে ফিরে যান
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle /bondhame as the ONLY valid admin entry route
+  if (currentRoute === '/bondhame' || (isAdminView && adminUser)) {
     if (adminUser) {
       return <AdminPanel />;
     }
@@ -522,7 +550,6 @@ const MainContent: React.FC = () => {
       <CustomerDashboardModal />
       <CustomerSupportModal />
       <InvoiceModal />
-      <AdminLoginModal />
 
       {/* Floating Contact Widget (Live Chat, Messenger, WhatsApp, Call) */}
       <FloatingContactWidget />
