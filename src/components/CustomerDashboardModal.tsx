@@ -35,8 +35,6 @@ import { ProductCard } from './ProductCard';
 import { BD_DISTRICTS } from '../data/mockData';
 import {
   signInWithGooglePopup,
-  generateCustomerOtp,
-  verifyCustomerOtp,
   formatBDPhoneNumber,
 } from '../lib/firebase';
 
@@ -48,7 +46,6 @@ export const CustomerDashboardModal: React.FC = () => {
     logoutUser,
     registerCustomer,
     loginCustomerWithPassword,
-    loginCustomerWithOtp,
     resetCustomerPassword,
     updateCustomerProfile,
     loginWithGoogle,
@@ -74,21 +71,14 @@ export const CustomerDashboardModal: React.FC = () => {
     'orders' | 'profile' | 'wishlist' | 'addresses' | 'recent' | 'coupons' | 'notifications'
   >('orders');
 
-  const [authMode, setAuthMode] = useState<'otp' | 'password' | 'register' | 'forgot'>('otp');
+  const [authMode, setAuthMode] = useState<'password' | 'register' | 'forgot'>('password');
 
-  // 1. Phone OTP State
-  const [otpPhone, setOtpPhone] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [generatedOtp, setGeneratedOtp] = useState('');
-  const [inputOtp, setInputOtp] = useState('');
-  const [otpTimer, setOtpTimer] = useState(0);
-
-  // 2. Password Login State
+  // 1. Password Login State
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
-  // 3. Register State
+  // 2. Register State
   const [regName, setRegName] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regEmail, setRegEmail] = useState('');
@@ -96,14 +86,13 @@ export const CustomerDashboardModal: React.FC = () => {
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
 
-  // 4. Forgot Password State
+  // 3. Forgot Password State
   const [forgotPhone, setForgotPhone] = useState('');
   const [forgotNewPass, setForgotNewPass] = useState('');
-  const [forgotOtp, setForgotOtp] = useState('');
-  const [forgotStep, setForgotStep] = useState<'request' | 'verify'>('request');
-  const [generatedForgotOtp, setGeneratedForgotOtp] = useState('');
+  const [forgotConfirmPass, setForgotConfirmPass] = useState('');
+  const [showForgotPass, setShowForgotPass] = useState(false);
 
-  // 5. Edit Profile State
+  // 4. Edit Profile State
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileName, setProfileName] = useState('');
   const [profilePhone, setProfilePhone] = useState('');
@@ -127,7 +116,7 @@ export const CustomerDashboardModal: React.FC = () => {
     if (activeModal === 'register') {
       setAuthMode('register');
     } else if (activeModal === 'login') {
-      setAuthMode('otp');
+      setAuthMode('password');
     }
     setAuthError('');
     setAuthSuccess('');
@@ -142,17 +131,6 @@ export const CustomerDashboardModal: React.FC = () => {
       setProfileEmail(user.email);
     }
   }, [user.isLoggedIn, user.name, user.phone, user.email]);
-
-  // OTP Timer countdown
-  useEffect(() => {
-    let interval: any;
-    if (otpTimer > 0) {
-      interval = setInterval(() => {
-        setOtpTimer(prev => prev - 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [otpTimer]);
 
   if (activeModal !== 'account' && activeModal !== 'login' && activeModal !== 'register') return null;
 
@@ -191,69 +169,6 @@ export const CustomerDashboardModal: React.FC = () => {
       : 'নতুন শপার (New Member)';
 
   // --- Handlers ---
-
-  // Handle Send OTP (Direct, Instant, No Recaptcha, No Billing Error)
-  const handleSendOtp = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setAuthError('');
-    setAuthSuccess('');
-
-    const clean = otpPhone.trim().replace(/\D/g, '');
-    if (clean.length < 11) {
-      setAuthError('অনুগ্রহ করে সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (যেমন: 017XXXXXXXX)।');
-      return;
-    }
-
-    setIsLoading(true);
-    setTimeout(() => {
-      const session = generateCustomerOtp(clean);
-      setGeneratedOtp(session.code);
-      setOtpSent(true);
-      setOtpTimer(60);
-      setIsLoading(false);
-      setAuthSuccess(`আপনার ${clean} নম্বরে ৬ ডিজিটের ওটিপি কোড পাঠানো হয়েছে!`);
-    }, 250);
-  };
-
-  // Handle Verify OTP
-  const handleVerifyOtp = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError('');
-    setAuthSuccess('');
-
-    if (!inputOtp.trim()) {
-      setAuthError('অনুগ্রহ করে ৬ ডিজিটের ওটিপি কোডটি লিখুন।');
-      return;
-    }
-
-    const verification = verifyCustomerOtp(otpPhone, inputOtp.trim());
-    if (!verification.valid) {
-      setAuthError(verification.message);
-      return;
-    }
-
-    setIsLoading(true);
-    setTimeout(() => {
-      const res = loginCustomerWithOtp(otpPhone);
-      setIsLoading(false);
-      if (res.success) {
-        setAuthSuccess(res.message);
-        setOtpSent(false);
-        setInputOtp('');
-      } else {
-        setAuthError(res.message);
-      }
-    }, 250);
-  };
-
-  // Quick auto fill OTP
-  const handleAutoFillOtp = () => {
-    if (generatedOtp) {
-      setInputOtp(generatedOtp);
-    } else {
-      setInputOtp('123456');
-    }
-  };
 
   // Handle Password Login
   const handleLoginSubmit = (e: React.FormEvent) => {
