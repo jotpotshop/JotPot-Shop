@@ -1306,7 +1306,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     localStorage.setItem('jps_unified_conversations', JSON.stringify(conversations));
-    saveConversationsToFirestore(conversations).catch(() => {});
   }, [conversations]);
 
   useEffect(() => {
@@ -1718,39 +1717,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     let courierConsignment: CourierConsignmentInfo | undefined = undefined;
     let trackingNumber = 'PENDING';
-    let courierDisplayName = 'Not Assigned';
-
-    if (assignedCourier) {
-      courierDisplayName = assignedCourier.name;
-      const providerPrefixes: Record<CourierPartner, string> = {
-        Steadfast: 'STF',
-        Pathao: 'PTH',
-        RedX: 'RDX',
-        Paperfly: 'PPF',
-        Sundarban: 'SND',
-        eCourier: 'ECO',
-      };
-      const prefix = providerPrefixes[assignedCourier.id] || 'TRK';
-      const trackingCode = `${prefix}-${Math.floor(100000 + Math.random() * 900000)}BD`;
-      const trackingUrl = assignedCourier.trackingUrlTemplate
-        ? assignedCourier.trackingUrlTemplate.replace('{TRACKING_ID}', trackingCode)
-        : `https://steadfast.com.bd/t/${trackingCode}`;
-
-      trackingNumber = trackingCode;
-      courierConsignment = {
-        courierName: assignedCourier.id,
-        courierNameBn: assignedCourier.nameBn,
-        consignmentId: `CONS-${Date.now()}`,
-        trackingCode: trackingCode,
-        trackingUrl: trackingUrl,
-        courierStatus: 'Pending Pickup',
-        weightKg: 0.5,
-        codAmount: orderData.paymentMethod === 'cod' ? total : 0,
-        shippingCharge: deliveryCharge,
-        dispatchedDate: dateStr,
-        specialInstructions: orderData.courierInstructions || orderData.customerNote,
-      };
-    }
+    let courierDisplayName = assignedCourier ? assignedCourier.name : 'Not Assigned';
 
     const initialTimeline: OrderTimelineStep[] = [
       {
@@ -2157,13 +2124,11 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       realTrackingUrl = bookingRes.tracking_url || `https://steadfast.com.bd/t/${realTrackingCode}`;
       courierStatus = mapSteadfastStatus(bookingRes.status || 'in_review');
     } else {
-      // Manual fallback for other couriers without API integration
-      realTrackingCode = `${courierName.substring(0, 3).toUpperCase()}-${Date.now().toString().slice(-7)}BD`;
-      realConsignmentId = realTrackingCode;
-      realTrackingUrl = courierCfg
-        ? courierCfg.trackingUrlTemplate.replace('{TRACKING_ID}', realTrackingCode)
-        : `https://jotpotshop.com/track/${realTrackingCode}`;
-      courierStatus = 'Handed to Courier';
+      return {
+        success: false,
+        error: `${courierName} API integration is not configured. Live booking is currently available via Steadfast Courier.`,
+        errorBn: `${courierCfg?.nameBn || courierName}-এর লাইভ API এখনো কনফিগার করা হয়নি। বর্তমানে সরাসরি Steadfast Courier API দিয়ে বুকিং সক্রিয় রয়েছে।`,
+      };
     }
 
     const shippingCharge =
@@ -2854,8 +2819,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             productImage: matchedProduct?.images?.[0],
           };
 
-          setConversations(current =>
-            current.map(c =>
+          setConversations(current => {
+            const next = current.map(c =>
               c.id === targetConvId
                 ? {
                     ...c,
@@ -2864,11 +2829,14 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     messages: [...c.messages, aiMsg],
                   }
                 : c
-            )
-          );
+            );
+            saveConversationsToFirestore(next).catch(() => {});
+            return next;
+          });
         }, 600);
       }
 
+      saveConversationsToFirestore(updatedList).catch(() => {});
       return updatedList;
     });
   };
@@ -2899,21 +2867,23 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       productImage: attachedProd?.images?.[0],
     };
 
-    setConversations(prev =>
-      prev.map(c => {
+    setConversations(prev => {
+      const next: UnifiedConversation[] = prev.map(c => {
         if (c.id === conversationId) {
           return {
             ...c,
             unreadCount: 0,
             lastMessage: replyText.trim(),
             lastMessageTime: 'এইমাত্র',
-            status: 'waiting',
+            status: 'waiting' as const,
             messages: [...c.messages, newReply],
           };
         }
         return c;
-      })
-    );
+      });
+      saveConversationsToFirestore(next).catch(() => {});
+      return next;
+    });
   };
 
   const handleSetCurrentRole = (role: UserRole) => {

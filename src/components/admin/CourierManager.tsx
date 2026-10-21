@@ -115,17 +115,21 @@ export const CourierManager: React.FC = () => {
 
         if (res.connected) {
           const nowTime = new Date().toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' });
-          updateCourierConfig('Steadfast', {
-            connectionStatus: 'connected',
-            accountBalance: typeof res.balance === 'number' ? res.balance : sf.accountBalance,
-            lastConnectedAt: nowTime,
-          });
+          if (sf.connectionStatus !== 'connected' || sf.accountBalance !== res.balance) {
+            updateCourierConfig('Steadfast', {
+              connectionStatus: 'connected',
+              accountBalance: typeof res.balance === 'number' ? res.balance : sf.accountBalance,
+              lastConnectedAt: nowTime,
+            });
+          }
           setLastUpdateFailed(null);
         } else {
           // If credentials missing or connection dropped, do not show connected
-          updateCourierConfig('Steadfast', {
-            connectionStatus: 'disconnected',
-          });
+          if (sf.connectionStatus !== 'disconnected') {
+            updateCourierConfig('Steadfast', {
+              connectionStatus: 'disconnected',
+            });
+          }
           if (res.messageBn) {
             setLastUpdateFailed(res.messageBn);
           }

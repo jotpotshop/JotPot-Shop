@@ -1,3 +1,3 @@
-# Cloudflare Static Assets Redirects
-# SPA routing is natively handled by not_found_handling = "single-page-application" in wrangler.jsonc
-/admin    /    302
+# Cloudflare Static Assets
+# SPA client-side routing is handled natively by not_found_handling = "single-page-application" in wrangler.jsonc
+# No looping redirect rules (e.g. /* /index.html 200) to prevent Cloudflare Error 100324

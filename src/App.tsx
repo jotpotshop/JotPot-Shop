@@ -66,7 +66,7 @@ const MainContent: React.FC = () => {
   // Track route to handle /bondhame vs / (and block /admin)
   const [currentRoute, setCurrentRoute] = useState<string>(() => {
     if (typeof window === 'undefined') return '/';
-    const path = (window.location.pathname || '/').toLowerCase().replace(/\/+$/, '');
+    const path = (window.location.pathname || '').toLowerCase().replace(/\/+$/, '');
     const hash = (window.location.hash || '').toLowerCase();
     if (
       path === '/bondhame' ||
@@ -75,6 +75,14 @@ const MainContent: React.FC = () => {
       hash.startsWith('#bondhame')
     ) {
       return '/bondhame';
+    }
+    if (
+      path === '/admin' ||
+      path.startsWith('/admin/') ||
+      hash === '#admin' ||
+      hash.startsWith('#admin')
+    ) {
+      return '/admin';
     }
     return path || '/';
   });
@@ -85,14 +93,6 @@ const MainContent: React.FC = () => {
       const path = (window.location.pathname || '/').toLowerCase().replace(/\/+$/, '');
       const hash = (window.location.hash || '').toLowerCase();
 
-      // Explicitly block /admin access! Redirect to /
-      if (path === '/admin' || hash === '#admin') {
-        window.history.replaceState(null, '', '/');
-        setCurrentRoute('/');
-        setIsAdminView(false);
-        return;
-      }
-
       if (
         path === '/bondhame' ||
         path.startsWith('/bondhame/') ||
@@ -100,6 +100,14 @@ const MainContent: React.FC = () => {
         hash.startsWith('#bondhame')
       ) {
         setCurrentRoute('/bondhame');
+        setIsAdminView(true);
+      } else if (
+        path === '/admin' ||
+        path.startsWith('/admin/') ||
+        hash === '#admin' ||
+        hash.startsWith('#admin')
+      ) {
+        setCurrentRoute('/admin');
         setIsAdminView(true);
       } else {
         setCurrentRoute('/');
@@ -134,10 +142,10 @@ const MainContent: React.FC = () => {
       }
       link.href = websiteSettings.faviconUrl;
     }
-  }, [websiteSettings, language]);
+  }, [websiteSettings.storeName, websiteSettings.taglineBn, websiteSettings.tagline, websiteSettings.faviconUrl, language]);
 
-  // Handle /bondhame route
-  if (currentRoute === '/bondhame') {
+  // Handle /bondhame and /admin routes
+  if (currentRoute === '/bondhame' || currentRoute === '/admin' || isAdminView) {
     if (adminUser) {
       return <AdminPanel />;
     }

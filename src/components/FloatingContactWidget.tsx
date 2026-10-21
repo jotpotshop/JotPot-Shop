@@ -72,7 +72,7 @@ export const FloatingContactWidget: React.FC = () => {
       }));
       setLocalMessages(mapped);
     }
-  }, [activeLiveChatConv]);
+  }, [activeLiveChatConv?.id, activeLiveChatConv?.messages?.length, activeLiveChatConv?.lastMessage]);
 
   // Auto scroll to bottom
   useEffect(() => {

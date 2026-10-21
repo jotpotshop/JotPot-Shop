@@ -25,7 +25,13 @@ interface CourierDispatchModalContentProps {
     orderId: string,
     courierName: CourierPartner,
     weightKg: number,
-    specialInstructions?: string
+    specialInstructions?: string,
+    overrides?: {
+      recipient_name?: string;
+      recipient_phone?: string;
+      recipient_address?: string;
+      cod_amount?: number;
+    }
   ) => Promise<{
     success: boolean;
     consignmentId?: string;
@@ -55,6 +61,19 @@ const CourierDispatchModalContent: React.FC<CourierDispatchModalContentProps> = 
   const [apiError, setApiError] = useState<string | null>(null);
   const [bookingSuccess, setBookingSuccess] = useState<{ consignmentId: string; trackingCode: string } | null>(null);
 
+  // Recipient details & validation
+  const [recipientName, setRecipientName] = useState(order.customerName || '');
+  const [recipientPhone, setRecipientPhone] = useState(order.phone || '');
+  const defaultFullAddr = `${order.address.fullAddress}${order.address.area ? ', ' + order.address.area : ''}, ${order.address.district}`;
+  const [recipientAddress, setRecipientAddress] = useState(defaultFullAddr);
+  const [showEditRecipient, setShowEditRecipient] = useState(false);
+
+  const cleanPhone = recipientPhone.replace(/[^0-9]/g, '');
+  const isPhoneValid = cleanPhone.length === 11;
+  const isAddressValid = recipientAddress.trim().length >= 5;
+  const isNameValid = recipientName.trim().length >= 2;
+  const hasValidationWarning = !isPhoneValid || !isAddressValid || !isNameValid;
+
   const isAlreadyBooked = Boolean(
     order.courierInfo?.consignmentId ||
       (order.trackingNumber && order.trackingNumber !== 'PENDING' && order.status === 'Shipped')
@@ -73,11 +92,27 @@ const CourierDispatchModalContent: React.FC<CourierDispatchModalContentProps> = 
     e.preventDefault();
     if (isSubmitting || isAlreadyBooked) return;
 
+    if (!isPhoneValid) {
+      setApiError('গ্রাহকের ফোন নম্বর সঠিক নয় (১১ ডিজিটের মোবাইল নম্বর আবশ্যক)।');
+      setShowEditRecipient(true);
+      return;
+    }
+    if (!isAddressValid) {
+      setApiError('গ্রাহকের পূর্ণ ডেলিভারি ঠিকানা অসম্পূর্ণ (কমপক্ষে ৫ অক্ষর আবশ্যক)।');
+      setShowEditRecipient(true);
+      return;
+    }
+
     setApiError(null);
     setIsSubmitting(true);
 
     try {
-      const res = await sendToCourier(order.id, selectedCourier, weightKg, specialInstructions);
+      const res = await sendToCourier(order.id, selectedCourier, weightKg, specialInstructions, {
+        recipient_name: recipientName.trim(),
+        recipient_phone: cleanPhone,
+        recipient_address: recipientAddress.trim(),
+        cod_amount: codToCollect,
+      });
 
       if (!res.success) {
         setApiError(res.errorBn || res.error || 'Steadfast বুকিং ব্যর্থ হয়েছে।');
@@ -198,14 +233,14 @@ const CourierDispatchModalContent: React.FC<CourierDispatchModalContentProps> = 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
             <div>
               <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">গ্রাহকের নাম ও ফোন:</span>
-              <p className="font-bold text-gray-900 mt-0.5">{order.customerName}</p>
-              <p className="font-mono text-gray-600">{order.phone}</p>
+              <p className="font-bold text-gray-900 mt-0.5">{recipientName}</p>
+              <p className="font-mono text-gray-600">{recipientPhone}</p>
             </div>
 
             <div>
               <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">গন্তব্য জেলা ও এলাকা:</span>
               <p className="font-bold text-gray-900 mt-0.5">{order.address.district}</p>
-              <p className="text-gray-600 truncate">{order.address.fullAddress}</p>
+              <p className="text-gray-600 truncate">{recipientAddress}</p>
             </div>
 
             <div>
@@ -215,6 +250,84 @@ const CourierDispatchModalContent: React.FC<CourierDispatchModalContentProps> = 
               </p>
               <span className="text-[10px] text-gray-500">পণ্য সংখ্যা: {order.items.length}টি</span>
             </div>
+          </div>
+
+          {/* Validation Warning if phone or address incomplete */}
+          {hasValidationWarning && (
+            <div className="bg-amber-50 p-3 rounded-xl border border-amber-300 flex items-start space-x-2.5 text-amber-900 text-xs">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <span className="font-bold block">সতর্কতা: গ্রাহকের তথ্য অসম্পূর্ণ বা ত্রুটিপূর্ণ!</span>
+                <span className="text-[11px] text-amber-800">
+                  {!isPhoneValid && '• মোবাইল নম্বর ১১ ডিজিট হতে হবে। '}
+                  {!isAddressValid && '• সম্পূর্ণ ডেলিভারি ঠিকানা কমপক্ষে ৫ অক্ষর হতে হবে। '}
+                  {!isNameValid && '• গ্রাহকের নাম কমপক্ষে ২ অক্ষর হতে হবে। '}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowEditRecipient(true)}
+                  className="mt-1 text-emerald-700 font-bold underline hover:text-emerald-900 cursor-pointer block text-xs"
+                >
+                  ক্লিক করে এখনই তথ্য সংশোধন করুন
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Collapsible / Toggleable Customer Information Editor */}
+          <div className="border border-gray-200 rounded-2xl p-3.5 bg-white">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-gray-900 text-xs">
+                ডেলিভারি তথ্য যাচাই ও সংশোধন (Recipient Details)
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowEditRecipient(!showEditRecipient)}
+                className="text-xs font-bold text-emerald-600 hover:text-emerald-800 cursor-pointer"
+              >
+                {showEditRecipient ? 'সংক্ষিপ্ত করুন ▲' : 'তথ্য পরিবর্তন / এডিট ▼'}
+              </button>
+            </div>
+
+            {showEditRecipient && (
+              <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in fade-in">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                    গ্রাহকের নাম (Recipient Name):
+                  </label>
+                  <input
+                    type="text"
+                    value={recipientName}
+                    onChange={e => setRecipientName(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 text-xs font-medium focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                    মোবাইল নম্বর (১১ ডিজিট):
+                  </label>
+                  <input
+                    type="text"
+                    value={recipientPhone}
+                    onChange={e => setRecipientPhone(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 text-xs font-mono font-medium focus:border-emerald-500"
+                    placeholder="01XXXXXXXXX"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                    সম্পূর্ণ ডেলিভারি ঠিকানা (Detailed Address):
+                  </label>
+                  <input
+                    type="text"
+                    value={recipientAddress}
+                    onChange={e => setRecipientAddress(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 text-xs font-medium focus:border-emerald-500"
+                    placeholder="বাড়ি/রোড, এলাকা, থানা, জেলা"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Select Courier Partner */}

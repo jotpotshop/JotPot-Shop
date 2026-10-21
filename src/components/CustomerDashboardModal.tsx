@@ -141,7 +141,7 @@ export const CustomerDashboardModal: React.FC = () => {
       setProfilePhone(user.phone);
       setProfileEmail(user.email);
     }
-  }, [user]);
+  }, [user.isLoggedIn, user.name, user.phone, user.email]);
 
   // OTP Timer countdown
   useEffect(() => {
