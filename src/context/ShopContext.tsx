@@ -240,7 +240,6 @@ interface ShopContextType {
   registeredCustomers: RegisteredCustomer[];
   registerCustomer: (info: { name: string; phone: string; email?: string; password: string }) => { success: boolean; message: string };
   loginCustomerWithPassword: (identifier: string, password: string) => { success: boolean; message: string };
-  loginCustomerWithOtp: (phone: string) => { success: boolean; message: string };
   resetCustomerPassword: (phone: string, newPass: string) => { success: boolean; message: string };
   updateCustomerProfile: (updates: { name: string; phone: string; email?: string }) => void;
   loginWithGoogle: (googleUser?: { name: string; email: string; avatarUrl?: string }) => void;
@@ -2631,38 +2630,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     switchCustomerCart(existing.email, existing);
   };
 
-  // Instant Phone OTP Login
-  const loginCustomerWithOtp = (phone: string) => {
-    const cleanPhone = phone.trim().replace(/\D/g, '');
-    if (cleanPhone.length < 11) {
-      return { success: false, message: 'অনুগ্রহ করে সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন।' };
-    }
-
-    let existing = registeredCustomers.find(c => c.phone.replace(/\D/g, '') === cleanPhone);
-    if (!existing) {
-      const newCust: RegisteredCustomer = {
-        id: `cust-${Date.now()}`,
-        name: `গ্রাহক-${cleanPhone.slice(-4)}`,
-        phone: cleanPhone,
-        email: `${cleanPhone}@customer.jotpotshop.com`,
-        isGoogleUser: false,
-        createdAt: new Date().toISOString(),
-        cart: [...cart],
-      };
-      syncCustomers(prev => [newCust, ...prev]);
-      existing = newCust;
-    }
-
-    setUser({
-      isLoggedIn: true,
-      name: existing.name,
-      phone: existing.phone,
-      email: existing.email,
-    });
-    switchCustomerCart(existing.phone || existing.email, existing);
-
-    return { success: true, message: `স্বাগতম ${existing.name}! ওটিপি যাচাই সফল হয়েছে।` };
-  };
 
   // Reset Customer Password
   const resetCustomerPassword = (phone: string, newPass: string) => {
@@ -3395,7 +3362,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         registeredCustomers,
         registerCustomer,
         loginCustomerWithPassword,
-        loginCustomerWithOtp,
         resetCustomerPassword,
         updateCustomerProfile,
         loginWithGoogle,

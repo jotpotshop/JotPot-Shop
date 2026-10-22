@@ -238,40 +238,23 @@ export const CustomerDashboardModal: React.FC = () => {
     }, 300);
   };
 
-  // Handle Forgot Password Step 1 (Request OTP)
-  const handleForgotRequestOtp = (e: React.FormEvent) => {
+  // Handle Forgot Password (Direct Password Reset)
+  const handleForgotSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
     setAuthSuccess('');
 
     const clean = forgotPhone.trim().replace(/\D/g, '');
     if (clean.length < 11) {
-      setAuthError('অনুগ্রহ করে সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন।');
-      return;
-    }
-
-    setIsLoading(true);
-    setTimeout(() => {
-      const code = String(Math.floor(100000 + Math.random() * 900000));
-      setGeneratedForgotOtp(code);
-      setForgotStep('verify');
-      setIsLoading(false);
-      setAuthSuccess('পাসওয়ার্ড রিসেট ওটিপি কোড তৈরি হয়েছে!');
-    }, 300);
-  };
-
-  // Handle Forgot Password Step 2 (Reset Password)
-  const handleForgotResetPass = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError('');
-    setAuthSuccess('');
-
-    if (forgotOtp.trim() !== generatedForgotOtp.trim() && forgotOtp.trim() !== '123456') {
-      setAuthError('ভুল ওটিপি কোড! অনুগ্রহ করে পুনরায় চেষ্টা করুন।');
+      setAuthError('অনুগ্রহ করে সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (যেমন: 017XXXXXXXX)।');
       return;
     }
     if (!forgotNewPass || forgotNewPass.length < 6) {
       setAuthError('নতুন পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।');
+      return;
+    }
+    if (forgotNewPass !== forgotConfirmPass) {
+      setAuthError('উভয় পাসওয়ার্ড এক হতে হবে!');
       return;
     }
 
@@ -281,8 +264,10 @@ export const CustomerDashboardModal: React.FC = () => {
       setIsLoading(false);
       if (res.success) {
         setAuthSuccess(res.message);
-        setAuthMode('otp');
-        setForgotStep('request');
+        setAuthMode('password');
+        setForgotPhone('');
+        setForgotNewPass('');
+        setForgotConfirmPass('');
       } else {
         setAuthError(res.message);
       }
@@ -375,7 +360,7 @@ export const CustomerDashboardModal: React.FC = () => {
               <p className="text-xs text-gray-500">
                 {user.isLoggedIn
                   ? `${user.phone || user.email} • ${myOrders.length} টি সফল অর্ডার`
-                  : t('সহজ মোবাইল ওটিপি বা পাসওয়ার্ড দিয়ে লগইন করুন', 'Login with Mobile OTP or password')}
+                  : t('মোবাইল নম্বর/ইমেইল ও পাসওয়ার্ড দিয়ে লগইন করুন', 'Login with Mobile/Email & password')}
               </p>
             </div>
           </div>
@@ -405,22 +390,6 @@ export const CustomerDashboardModal: React.FC = () => {
             <div className="max-w-md mx-auto space-y-5">
               {/* Login vs Register Mode Tabs */}
               <div className="flex bg-gray-100/80 p-1.5 rounded-2xl gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMode('otp');
-                    setAuthError('');
-                  }}
-                  className={`flex-1 py-2 text-xs font-black rounded-xl transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
-                    authMode === 'otp'
-                      ? 'bg-white text-rose-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <Phone className="w-3.5 h-3.5" />
-                  <span>{t('মোবাইল ওটিপি', 'Phone OTP')}</span>
-                </button>
-
                 <button
                   type="button"
                   onClick={() => {
@@ -457,17 +426,15 @@ export const CustomerDashboardModal: React.FC = () => {
               {/* Title & subtitle */}
               <div className="text-center space-y-1">
                 <h4 className="text-lg font-black text-gray-900">
-                  {authMode === 'otp'
-                    ? t('মোবাইল ওটিপি দিয়ে দ্রুত প্রবেশ করুন', 'Fast Login with Mobile OTP')
-                    : authMode === 'password'
+                  {authMode === 'password'
                     ? t('পাসওয়ার্ড দিয়ে অ্যাকাউন্টে লগইন করুন', 'Login with Password')
                     : authMode === 'register'
                     ? t('নতুন কাস্টমার অ্যাকাউন্ট তৈরি করুন', 'Create New Account')
                     : t('পাসওয়ার্ড রিসেট করুন', 'Reset Your Password')}
                 </h4>
                 <p className="text-xs text-gray-500">
-                  {authMode === 'otp'
-                    ? t('কোনো পাসওয়ার্ড মনে রাখার ঝামেলা ছাড়াই নিরাপদ ওটিপিতে লগইন করুন।', 'Instant SMS code login without remembering password.')
+                  {authMode === 'forgot'
+                    ? t('আপনার অ্যাকাউন্টের মোবাইল নম্বর দিয়ে নতুন পাসওয়ার্ড সেট করুন।', 'Enter your registered mobile number to set a new password.')
                     : t('আপনার অর্ডার হিস্টোরি, ট্র্যাকিং ও সংরক্ষিত ঠিকানার পূর্ণ সুবিধা পান।', 'Track orders, manage addresses & get discount alerts.')}
                 </p>
               </div>
@@ -483,146 +450,6 @@ export const CustomerDashboardModal: React.FC = () => {
                 <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start space-x-2 text-xs text-emerald-800 animate-in fade-in duration-200">
                   <CheckCircle className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
                   <span>{authSuccess}</span>
-                </div>
-              )}
-
-              {/* 1. Fast Mobile OTP Login Flow */}
-              {authMode === 'otp' && (
-                <div className="space-y-4">
-                  {!otpSent ? (
-                    <form onSubmit={handleSendOtp} className="space-y-3">
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="block text-xs font-bold text-gray-700">
-                            {t('আপনার মোবাইল নম্বর লিখুন (১১ ডিজিট):', 'Enter Mobile Number (11 Digits):')}
-                          </label>
-                          <span className="text-[10px] font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100 flex items-center space-x-1">
-                            <ShieldCheck className="w-3 h-3 text-rose-600" />
-                            <span>Instant OTP</span>
-                          </span>
-                        </div>
-                        <div className="relative">
-                          <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
-                          <input
-                            type="tel"
-                            required
-                            value={otpPhone}
-                            onChange={e => setOtpPhone(e.target.value)}
-                            placeholder="017XXXXXXXX"
-                            className="w-full bg-gray-50 border border-gray-200 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-gray-900 focus:bg-white focus:border-rose-500 focus:outline-hidden font-mono font-bold"
-                          />
-                        </div>
-                        <p className="text-[11px] text-gray-400 mt-1">
-                          {t('এই নম্বরে একটি ৬ ডিজিটের সিকিউর ওটিপি কোড পাঠানো হবে।', 'A 6-digit secure SMS OTP will be sent to this number.')}
-                        </p>
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={isLoading}
-                        className="w-full bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs py-3 rounded-2xl flex items-center justify-center space-x-2 cursor-pointer shadow-md shadow-rose-600/20 transition-all disabled:opacity-70"
-                      >
-                        {isLoading ? (
-                          <span>{t('কোড পাঠানো হচ্ছে...', 'Sending Code...')}</span>
-                        ) : (
-                          <>
-                            <Sparkles className="w-4 h-4" />
-                            <span>{t('ওটিপি কোড পাঠান (Send OTP)', 'Send OTP Code')}</span>
-                          </>
-                        )}
-                      </button>
-                    </form>
-                  ) : (
-                    <form onSubmit={handleVerifyOtp} className="space-y-3">
-                      {/* Real SMS Delivery Notification with 1-Click Auto Fill */}
-                      <div className="bg-gradient-to-r from-rose-50 via-amber-50 to-orange-50 border border-rose-200/80 rounded-2xl p-3.5 space-y-2">
-                        <div className="flex items-center justify-between text-xs text-rose-950 font-bold">
-                          <span className="flex items-center space-x-1.5">
-                            <span>📩</span>
-                            <span>{t('সরাসরি মোবাইলে প্রেরিত SMS (প্রেরক: JotPotShop):', 'Mobile SMS (Sender: JotPotShop):')}</span>
-                          </span>
-                          <span className="font-mono bg-rose-600 text-white px-2.5 py-0.5 rounded-full font-black text-xs shadow-xs tracking-wider">
-                            {generatedOtp}
-                          </span>
-                        </div>
-                        <div className="bg-white/90 border border-rose-100 rounded-xl p-2.5 text-xs text-gray-700 font-sans space-y-1">
-                          <div className="flex items-center justify-between font-mono text-[11px] text-gray-500">
-                            <span>প্রেরক: <strong className="text-gray-900 font-bold">JotPotShop</strong></span>
-                            <span>এখনই প্রেরিত</span>
-                          </div>
-                          <p className="font-mono text-xs text-gray-900">
-                            "JotPotShop: আপনার ওটিপি কোড হলো <span className="font-bold text-rose-600 text-sm tracking-widest">{generatedOtp}</span>। এটি ৫ মিনিটের জন্য প্রযোজ্য।"
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleAutoFillOtp}
-                          className="w-full bg-rose-600 hover:bg-rose-700 text-white py-2 rounded-xl font-bold text-xs flex items-center justify-center space-x-1.5 cursor-pointer transition-all shadow-xs"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>{t('১-ক্লিকে ওটিপি বসান (Auto-Fill OTP)', 'Auto-Fill OTP Code')}</span>
-                        </button>
-                      </div>
-
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="text-xs font-bold text-gray-700">
-                            {t('৬ ডিজিটের ওটিপি লিখুন:', 'Enter 6-digit OTP:')}
-                          </label>
-                          <span className="text-[11px] text-gray-500 font-mono">
-                            {otpTimer > 0 ? `পুনরায় পাঠান: ${otpTimer}s` : ''}
-                          </span>
-                        </div>
-                        <input
-                          type="text"
-                          required
-                          maxLength={6}
-                          value={inputOtp}
-                          onChange={e => setInputOtp(e.target.value)}
-                          placeholder="••••••"
-                          className="w-full text-center tracking-[0.5em] text-lg font-black font-mono bg-gray-50 border border-gray-200 rounded-2xl py-2.5 text-gray-900 focus:bg-white focus:border-rose-500 focus:outline-hidden"
-                        />
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={isLoading}
-                        className="w-full bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs py-3 rounded-2xl flex items-center justify-center space-x-2 cursor-pointer shadow-md shadow-rose-600/20 transition-all disabled:opacity-70"
-                      >
-                        {isLoading ? (
-                          <span>{t('যাচাই করা হচ্ছে...', 'Verifying...')}</span>
-                        ) : (
-                          <>
-                            <CheckCircle className="w-4 h-4" />
-                            <span>{t('যাচাই করুন ও প্রবেশ করুন (Verify & Login)', 'Verify & Login')}</span>
-                          </>
-                        )}
-                      </button>
-
-                      <div className="flex items-center justify-between pt-1 text-xs">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setOtpSent(false);
-                            setInputOtp('');
-                          }}
-                          className="text-gray-500 hover:text-gray-800 underline cursor-pointer"
-                        >
-                          {t('নম্বর পরিবর্তন করুন', 'Change Number')}
-                        </button>
-
-                        {otpTimer === 0 && (
-                          <button
-                            type="button"
-                            onClick={handleSendOtp}
-                            className="text-rose-600 font-bold hover:underline cursor-pointer"
-                          >
-                            {t('আবার ওটিপি পাঠান', 'Resend OTP')}
-                          </button>
-                        )}
-                      </div>
-                    </form>
-                  )}
                 </div>
               )}
 
@@ -786,90 +613,83 @@ export const CustomerDashboardModal: React.FC = () => {
                 </form>
               )}
 
-              {/* 4. Forgot Password Flow */}
+              {/* 3. Forgot Password Flow */}
               {authMode === 'forgot' && (
-                <div className="space-y-3">
-                  {forgotStep === 'request' ? (
-                    <form onSubmit={handleForgotRequestOtp} className="space-y-3">
-                      <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1">
-                          {t('আপনার নিবন্ধিত মোবাইল নম্বর দিন:', 'Enter Registered Mobile Number:')}
-                        </label>
-                        <input
-                          type="tel"
-                          required
-                          value={forgotPhone}
-                          onChange={e => setForgotPhone(e.target.value)}
-                          placeholder="017XXXXXXXX"
-                          className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 text-xs text-gray-900 focus:bg-white focus:border-rose-500 focus:outline-hidden font-mono"
-                        />
-                      </div>
+                <form onSubmit={handleForgotSubmit} className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                      {t('আপনার নিবন্ধিত মোবাইল নম্বর দিন *', 'Registered Mobile Number *')}
+                    </label>
+                    <div className="relative">
+                      <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
+                      <input
+                        type="tel"
+                        required
+                        value={forgotPhone}
+                        onChange={e => setForgotPhone(e.target.value)}
+                        placeholder="017XXXXXXXX"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-gray-900 focus:bg-white focus:border-rose-500 focus:outline-hidden font-mono"
+                      />
+                    </div>
+                  </div>
 
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                      {t('নতুন পাসওয়ার্ড সেট করুন * (কমপক্ষে ৬ অক্ষর/ডিজিট)', 'New Password * (Min 6 chars)')}
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
+                      <input
+                        type={showForgotPass ? 'text' : 'password'}
+                        required
+                        value={forgotNewPass}
+                        onChange={e => setForgotNewPass(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-2xl pl-10 pr-10 py-2.5 text-xs text-gray-900 focus:bg-white focus:border-rose-500 focus:outline-hidden font-mono"
+                      />
                       <button
-                        type="submit"
-                        disabled={isLoading}
-                        className="w-full bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs py-3 rounded-2xl flex items-center justify-center space-x-2 cursor-pointer shadow-md transition-all disabled:opacity-70"
+                        type="button"
+                        onClick={() => setShowForgotPass(!showForgotPass)}
+                        className="absolute right-3.5 top-3 text-gray-400 hover:text-gray-600 cursor-pointer"
                       >
-                        <KeyRound className="w-4 h-4" />
-                        <span>{t('রিসেট ওটিপি পাঠান', 'Send Reset OTP')}</span>
+                        {showForgotPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
+                    </div>
+                  </div>
 
-                      <div className="text-center pt-2">
-                        <button
-                          type="button"
-                          onClick={() => setAuthMode('password')}
-                          className="text-xs text-gray-500 hover:text-gray-800 underline cursor-pointer"
-                        >
-                          ← লগইন পেজে ফিরে যান
-                        </button>
-                      </div>
-                    </form>
-                  ) : (
-                    <form onSubmit={handleForgotResetPass} className="space-y-3">
-                      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-900">
-                        <span>এসএমএস কোড: </span>
-                        <strong className="font-mono text-sm">{generatedForgotOtp}</strong>
-                      </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                      {t('নতুন পাসওয়ার্ড নিশ্চিত করুন *', 'Confirm New Password *')}
+                    </label>
+                    <input
+                      type={showForgotPass ? 'text' : 'password'}
+                      required
+                      value={forgotConfirmPass}
+                      onChange={e => setForgotConfirmPass(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 text-xs text-gray-900 focus:bg-white focus:border-rose-500 focus:outline-hidden font-mono"
+                    />
+                  </div>
 
-                      <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1">
-                          {t('প্রাপ্ত ওটিপি কোড দিন:', 'Enter Received OTP:')}
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={forgotOtp}
-                          onChange={e => setForgotOtp(e.target.value)}
-                          placeholder="••••••"
-                          className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 text-xs font-mono"
-                        />
-                      </div>
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs py-3 rounded-2xl flex items-center justify-center space-x-2 cursor-pointer shadow-md transition-all disabled:opacity-70 mt-2"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    <span>{isLoading ? t('প্রসেসিং...', 'Processing...') : t('পাসওয়ার্ড পরিবর্তন ও লগইন', 'Reset & Login')}</span>
+                  </button>
 
-                      <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1">
-                          {t('নতুন পাসওয়ার্ড সেট করুন:', 'Enter New Password:')}
-                        </label>
-                        <input
-                          type="password"
-                          required
-                          value={forgotNewPass}
-                          onChange={e => setForgotNewPass(e.target.value)}
-                          placeholder="কমপক্ষে ৬ ডিজিট"
-                          className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 text-xs font-mono"
-                        />
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={isLoading}
-                        className="w-full bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs py-3 rounded-2xl flex items-center justify-center space-x-2 cursor-pointer shadow-md transition-all disabled:opacity-70"
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                        <span>{t('পাসওয়ার্ড পরিবর্তন ও লগইন', 'Reset & Login')}</span>
-                      </button>
-                    </form>
-                  )}
-                </div>
+                  <div className="text-center pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setAuthMode('password')}
+                      className="text-xs text-gray-500 hover:text-gray-800 underline cursor-pointer"
+                    >
+                      ← লগইন পেজে ফিরে যান
+                    </button>
+                  </div>
+                </form>
               )}
 
               {/* Google 1-Tap Login Option */}

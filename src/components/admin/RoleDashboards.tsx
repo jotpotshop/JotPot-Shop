@@ -1466,8 +1466,8 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
                 </span>
               </div>
               <div className="bg-white/80 p-3 rounded-2xl border border-amber-200/60">
-                <span className="text-gray-400 block text-[10px] uppercase font-bold">মোবাইল OTP গেটওয়ে</span>
-                <span className="font-bold text-emerald-700 text-[11px]">JotPotShop Direct</span>
+                <span className="text-gray-400 block text-[10px] uppercase font-bold">কাস্টমার অথেন্টিকেশন</span>
+                <span className="font-bold text-emerald-700 text-[11px]">ইমেইল/ফোন ও পাসওয়ার্ড</span>
               </div>
             </div>
           </div>
