@@ -35,6 +35,9 @@ import {
   MessageChannel,
   BundleOffer,
   NeedTag,
+  HelpCenterSettings,
+  HelpCenterFaqItem,
+  HelpCenterArticle,
 } from '../types';
 import {
   INITIAL_PRODUCTS,
@@ -62,6 +65,7 @@ import {
   DEFAULT_HERO_BANNERS,
   INITIAL_REGISTERED_CUSTOMERS,
   INITIAL_CONVERSATIONS,
+  DEFAULT_HELP_CENTER_SETTINGS,
 } from '../data/adminSettings';
 import {
   testFirebaseConnection,
@@ -113,6 +117,9 @@ import {
   saveConversationsToFirestore,
   fetchConversationsFromFirestore,
   subscribeToConversations,
+  saveHelpCenterSettingsToFirestore,
+  fetchHelpCenterSettingsFromFirestore,
+  subscribeToHelpCenterSettings,
   signInWithGooglePopup,
   resizeDataUrl,
   FirebaseConnectionDiagnostic,
@@ -250,6 +257,8 @@ interface ShopContextType {
   setActiveChatConversationId: (id: string | null) => void;
   sendCustomerChatMessage: (text: string, channel?: MessageChannel, customerDetails?: { name?: string; phone?: string; email?: string }) => void;
   replyToConversation: (conversationId: string, replyText: string, staffName?: string, attachedProductId?: string) => void;
+  markConversationAsRead: (conversationId: string) => void;
+  updateConversationStatus: (conversationId: string, status: 'open' | 'resolved' | 'waiting') => void;
   toggleAiSalesAgent: (enabled?: boolean) => void;
 
   // Notifications & Toast
@@ -348,6 +357,8 @@ interface ShopContextType {
   updateOrderSettings: (settings: Partial<OrderSettings>) => void;
   reviewSettings: ReviewSettings;
   updateReviewSettings: (settings: Partial<ReviewSettings>) => void;
+  helpCenterSettings: HelpCenterSettings;
+  updateHelpCenterSettings: (settings: Partial<HelpCenterSettings>) => Promise<{ success: boolean; message: string }>;
 
   // Categories Management (Add, Edit, Delete, Custom Icon)
   categories: Category[];
@@ -741,6 +752,14 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return saved ? { ...DEFAULT_REVIEW_SETTINGS, ...JSON.parse(saved) } : DEFAULT_REVIEW_SETTINGS;
     } catch {
       return DEFAULT_REVIEW_SETTINGS;
+    }
+  });
+  const [helpCenterSettings, setHelpCenterSettings] = useState<HelpCenterSettings>(() => {
+    try {
+      const saved = localStorage.getItem('jps_help_center_settings');
+      return saved ? { ...DEFAULT_HELP_CENTER_SETTINGS, ...JSON.parse(saved) } : DEFAULT_HELP_CENTER_SETTINGS;
+    } catch {
+      return DEFAULT_HELP_CENTER_SETTINGS;
     }
   });
 
@@ -1198,6 +1217,26 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
+    // Fetch and subscribe Help Center Settings from Firestore
+    fetchHelpCenterSettingsFromFirestore()
+      .then(remoteHelpCenter => {
+        if (remoteHelpCenter) {
+          setHelpCenterSettings(remoteHelpCenter);
+          localStorage.setItem('jps_help_center_settings', JSON.stringify(remoteHelpCenter));
+        } else {
+          saveHelpCenterSettingsToFirestore(helpCenterSettings).catch(() => {});
+        }
+      })
+      .catch(err => {
+        console.warn('Initial Help Center fetch from Firestore:', err);
+      });
+
+    const unsubHelpCenter = subscribeToHelpCenterSettings(remoteHelpCenter => {
+      if (remoteHelpCenter) {
+        setHelpCenterSettings(remoteHelpCenter);
+      }
+    });
+
     return () => {
       unsubscribe();
       unsubPayment();
@@ -1208,6 +1247,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubCustomers();
       unsubCouriers();
       unsubConversations();
+      unsubHelpCenter();
     };
   }, []);
 
@@ -2853,6 +2893,22 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
+  const markConversationAsRead = (conversationId: string) => {
+    setConversations(prev => {
+      const next = prev.map(c => (c.id === conversationId ? { ...c, unreadCount: 0 } : c));
+      saveConversationsToFirestore(next).catch(() => {});
+      return next;
+    });
+  };
+
+  const updateConversationStatus = (conversationId: string, status: 'open' | 'resolved' | 'waiting') => {
+    setConversations(prev => {
+      const next = prev.map(c => (c.id === conversationId ? { ...c, status } : c));
+      saveConversationsToFirestore(next).catch(() => {});
+      return next;
+    });
+  };
+
   const handleSetCurrentRole = (role: UserRole) => {
     setCurrentRole(role);
     const match = staffAccounts.find(s => s.role === role) || INITIAL_STAFF_ACCOUNTS.find(s => s.role === role);
@@ -3032,6 +3088,50 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('jps_review_settings', JSON.stringify(merged));
       return merged;
     });
+  };
+
+  const updateHelpCenterSettings = async (
+    settings: Partial<HelpCenterSettings>
+  ): Promise<{ success: boolean; message: string }> => {
+    if (currentRole !== 'SUPER_ADMIN') {
+      showToast(
+        language === 'bn'
+          ? 'শুধুমাত্র সুপার এডমিন হেল্প সেন্টার সেটিংস ও প্রশ্নোত্তর পরিবর্তন করতে পারেন।'
+          : 'Only Super Admin can update Help Center settings and FAQs.',
+        'error'
+      );
+      return { success: false, message: 'Unauthorized: Only SUPER_ADMIN can modify Help Center settings.' };
+    }
+
+    const merged: HelpCenterSettings = {
+      ...helpCenterSettings,
+      ...settings,
+      updatedAt: new Date().toISOString(),
+      updatedBy: adminUser?.email || 'admin@jotpotshop.com',
+    };
+
+    setHelpCenterSettings(merged);
+    localStorage.setItem('jps_help_center_settings', JSON.stringify(merged));
+
+    try {
+      await saveHelpCenterSettingsToFirestore(merged, adminUser?.email || 'admin@jotpotshop.com');
+      showToast(
+        language === 'bn'
+          ? '✓ হেল্প সেন্টার ও কাস্টমার সাপোর্ট কনফিগারেশন সফলভাবে সেভ হয়েছে!'
+          : '✓ Help Center & Customer Support settings saved successfully!',
+        'success'
+      );
+      return { success: true, message: 'Settings saved to Firestore.' };
+    } catch (err) {
+      console.warn('Failed to save Help Center settings to Firestore:', err);
+      showToast(
+        language === 'bn'
+          ? 'ক্লাউডে সেভ করতে সমস্যা হয়েছে, তবে লোকালি আপডেট হয়েছে।'
+          : 'Could not sync to cloud, but saved locally.',
+        'warning'
+      );
+      return { success: false, message: 'Failed to sync to Firestore.' };
+    }
   };
 
   // Categories CRUD
@@ -3370,6 +3470,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setActiveChatConversationId,
         sendCustomerChatMessage,
         replyToConversation,
+        markConversationAsRead,
+        updateConversationStatus,
         toggleAiSalesAgent,
         notifications,
         markNotificationRead,
@@ -3444,6 +3546,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateOrderSettings,
         reviewSettings,
         updateReviewSettings,
+        helpCenterSettings,
+        updateHelpCenterSettings,
         categories,
         addCategory,
         updateCategory,

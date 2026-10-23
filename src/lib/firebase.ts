@@ -44,6 +44,7 @@ import {
   StaffAccount,
   RegisteredCustomer,
   UnifiedConversation,
+  HelpCenterSettings,
 } from '../types';
 import { getAvailableStock } from '../utils/inventory';
 import { INITIAL_PRODUCTS } from '../data/mockData';
@@ -1759,6 +1760,68 @@ export function subscribeToConversations(
     },
     error => {
       console.warn('Conversations live subscription error:', error);
+    }
+  );
+}
+
+/**
+ * Saves Customer Support & Help Center Settings to Cloud Firestore
+ */
+export async function saveHelpCenterSettingsToFirestore(
+  settings: HelpCenterSettings,
+  adminUserEmail = 'jotpotshop.official@gmail.com'
+): Promise<void> {
+  try {
+    const docRef = doc(db, 'settings', 'help_center');
+    await setDoc(
+      docRef,
+      cleanFirestorePayload({
+        ...settings,
+        updatedAt: new Date().toISOString(),
+        updatedBy: adminUserEmail,
+        projectId: FIREBASE_PROJECT_INFO.projectId,
+      }),
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn('Failed to save Help Center settings to Firestore:', err);
+    throw err;
+  }
+}
+
+/**
+ * Fetches Customer Support & Help Center Settings from Cloud Firestore
+ */
+export async function fetchHelpCenterSettingsFromFirestore(): Promise<HelpCenterSettings | null> {
+  try {
+    const docRef = doc(db, 'settings', 'help_center');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return docSnap.data() as HelpCenterSettings;
+    }
+    return null;
+  } catch (err) {
+    console.warn('Could not fetch Help Center settings from Firestore:', err);
+    return null;
+  }
+}
+
+/**
+ * Subscribes to live Help Center Settings updates from Cloud Firestore
+ */
+export function subscribeToHelpCenterSettings(
+  onUpdate: (settings: HelpCenterSettings) => void
+): Unsubscribe {
+  const docRef = doc(db, 'settings', 'help_center');
+  return onSnapshot(
+    docRef,
+    snapshot => {
+      if (snapshot.exists()) {
+        onUpdate(snapshot.data() as HelpCenterSettings);
+      }
+    },
+    error => {
+      console.warn('Help Center live subscription error:', error);
     }
   );
 }

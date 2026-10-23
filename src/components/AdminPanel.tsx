@@ -44,6 +44,7 @@ import {
   Bot,
   Target,
   Sliders,
+  HelpCircle,
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { Product, Order, OrderStatus, CourierPartner, UserRole, NeedTag } from '../types';
@@ -60,6 +61,7 @@ import { CourierDispatchModal } from './admin/CourierDispatchModal';
 import { CourierManager } from './admin/CourierManager';
 import { ShippingLabelModal } from './admin/ShippingLabelModal';
 import { OmnichannelChatManager } from './admin/OmnichannelChatManager';
+import { HelpCenterManager } from './admin/HelpCenterManager';
 import { RoleDashboards } from './admin/RoleDashboards';
 import {
   ProductEditModal,
@@ -111,6 +113,7 @@ export const ROLE_PERMITTED_TABS: Record<UserRole, string[]> = {
     'coupons',
     'delivery',
     'reports',
+    'helpcenter',
     'roles',
     'settings',
   ],
@@ -128,6 +131,7 @@ export const ROLE_PERMITTED_TABS: Record<UserRole, string[]> = {
     'coupons',
     'delivery',
     'reports',
+    'helpcenter',
     'settings',
   ],
   MANAGER: [
@@ -206,6 +210,7 @@ export const AdminPanel: React.FC = () => {
     | 'roles'
     | 'settings'
     | 'reports'
+    | 'helpcenter'
   >('dashboard'); // Defaults to role-specific dashboard
 
   // Strict RBAC Tab Access Enforcement: Prevent unauthorized role from accessing hidden tabs
@@ -884,6 +889,19 @@ export const AdminPanel: React.FC = () => {
             >
               <FileText className="w-4 h-4" />
               <span>{t('বিক্রয় ও একাউন্টিং রিপোর্ট', 'Sales & Reports')}</span>
+            </button>
+          )}
+
+          {/* 11b. Customer Support & Help Center (Super Admin & Admin) */}
+          {ROLE_PERMITTED_TABS[currentRole].includes('helpcenter') && (
+            <button
+              onClick={() => setAdminTab('helpcenter')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center space-x-2.5 transition-colors cursor-pointer ${
+                adminTab === 'helpcenter' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+              }`}
+            >
+              <HelpCircle className="w-4 h-4 text-rose-500" />
+              <span>{t('হেল্প সেন্টার ও FAQ কন্ট্রোল', 'Help Center & Support')}</span>
             </button>
           )}
 
@@ -1749,59 +1767,86 @@ export const AdminPanel: React.FC = () => {
           {/* TAB: SUPER ADMIN BUSINESS SETTINGS (Component) */}
           {adminTab === 'settings' && <BusinessSettingsManager initialSection="general" />}
 
+          {/* TAB: CUSTOMER SUPPORT & HELP CENTER (Super Admin) */}
+          {adminTab === 'helpcenter' && <HelpCenterManager />}
+
           {/* TAB: REPORTS & ANALYTICS */}
-          {adminTab === 'reports' && (
-            <div className="bg-white rounded-3xl p-6 border border-gray-200 shadow-xs space-y-5 text-xs">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-extrabold text-base text-gray-900">বিক্রয় পারফরম্যান্স ও রিপোর্ট</h3>
-                  <p className="text-gray-500 text-xs">ক্যাটাগরি ভিত্তিক বিক্রয় ও রাজস্ব বিশ্লেষণ</p>
-                </div>
-                <button
-                  onClick={handleExportCSV}
-                  className="bg-gray-900 hover:bg-black text-white font-bold px-3.5 py-2 rounded-xl flex items-center space-x-1.5 cursor-pointer"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Download Full CSV</span>
-                </button>
-              </div>
+          {adminTab === 'reports' && (() => {
+            const validOrders = orders.filter(o => o.status !== 'Cancelled');
+            const catSalesMap: Record<string, { name: string; amount: number }> = {};
+            let totalRevenueFromCategories = 0;
 
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">ক্যাটাগরি ভিত্তিক বিক্রয়:</h4>
+            validOrders.forEach(ord => {
+              ord.items.forEach(item => {
+                const cat = item.product.category || 'other';
+                const catName = item.product.categoryBn || item.product.category || 'অন্যান্য';
+                const itemTotal = (item.product.price || 0) * (item.quantity || 1);
+                totalRevenueFromCategories += itemTotal;
+                if (!catSalesMap[cat]) {
+                  catSalesMap[cat] = { name: catName, amount: 0 };
+                }
+                catSalesMap[cat].amount += itemTotal;
+              });
+            });
+
+            const categoryStats = Object.entries(catSalesMap)
+              .map(([catKey, data]) => {
+                const percent =
+                  totalRevenueFromCategories > 0
+                    ? Math.round((data.amount / totalRevenueFromCategories) * 100)
+                    : 0;
+                return { catKey, name: data.name, amount: data.amount, percent };
+              })
+              .sort((a, b) => b.amount - a.amount);
+
+            return (
+              <div className="bg-white rounded-3xl p-6 border border-gray-200 shadow-xs space-y-5 text-xs">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-extrabold text-base text-gray-900">বিক্রয় পারফরম্যান্স ও রিপোর্ট</h3>
+                    <p className="text-gray-500 text-xs">বাস্তব অর্ডার অনুযায়ী ক্যাটাগরি ভিত্তিক বিক্রয় ও রাজস্ব বিশ্লেষণ</p>
+                  </div>
+                  <button
+                    onClick={handleExportCSV}
+                    className="bg-gray-900 hover:bg-black text-white font-bold px-3.5 py-2 rounded-xl flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Download Full CSV</span>
+                  </button>
+                </div>
+
                 <div className="space-y-3">
-                  <div>
-                    <div className="flex justify-between font-bold mb-1">
-                      <span>Men Fashion (ছেলেদের ফ্যাশন)</span>
-                      <span>42% (৳14,250)</span>
+                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    ক্যাটাগরি ভিত্তিক প্রকৃত বিক্রয়:
+                  </h4>
+                  {categoryStats.length === 0 ? (
+                    <div className="py-8 text-center border-2 border-dashed border-gray-200 rounded-2xl">
+                      <p className="text-sm font-bold text-gray-600">কোনো সম্পন্ন বা সক্রিয় অর্ডারের ডেটা নেই</p>
+                      <p className="text-xs text-gray-400 mt-1">কাস্টমার অর্ডার প্লেস করলে স্বয়ংক্রিয়ভাবে পরিসংখ্যান আপডেট হবে।</p>
                     </div>
-                    <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
-                      <div className="bg-rose-600 h-full w-[42%]" />
+                  ) : (
+                    <div className="space-y-3">
+                      {categoryStats.map((stat, idx) => {
+                        const colors = ['bg-rose-600', 'bg-blue-600', 'bg-amber-500', 'bg-emerald-600', 'bg-purple-600'];
+                        const barColor = colors[idx % colors.length];
+                        return (
+                          <div key={stat.catKey}>
+                            <div className="flex justify-between font-bold mb-1">
+                              <span>{stat.name}</span>
+                              <span>{stat.percent}% ({formatPrice(stat.amount)})</span>
+                            </div>
+                            <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+                              <div className={`${barColor} h-full`} style={{ width: `${stat.percent}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between font-bold mb-1">
-                      <span>Gadgets & Devices (গ্যাজেট)</span>
-                      <span>35% (৳11,800)</span>
-                    </div>
-                    <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
-                      <div className="bg-blue-600 h-full w-[35%]" />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between font-bold mb-1">
-                      <span>Women Fashion & Saree (শাড়ি ও ফ্যাশন)</span>
-                      <span>23% (৳7,800)</span>
-                    </div>
-                    <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
-                      <div className="bg-amber-500 h-full w-[23%]" />
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
             </>
           )}
         </div>

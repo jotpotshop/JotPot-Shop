@@ -13,10 +13,18 @@ service cloud.firestore {
       allow read, write: if isValidId(docId);
     }
 
-    // Global settings and branding (Logo, Store Name, Taglines, Policies)
+    // Global settings, branding, help center, and chat persistence
     match /settings/{settingId} {
       allow read: if isValidId(settingId);
       allow write: if isValidId(settingId);
+    }
+
+    // Customer Live Chat & Omnichannel conversations
+    match /conversations/{convId} {
+      allow read, write: if isValidId(convId);
+      match /messages/{messageId} {
+        allow read, write: if isValidId(messageId);
+      }
     }
 
     // Products catalog

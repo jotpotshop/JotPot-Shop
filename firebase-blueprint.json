@@ -18,6 +18,35 @@
       },
       "required": ["storeName", "logoUrl"]
     },
+    "HelpCenterSettings": {
+      "title": "HelpCenterSettings",
+      "description": "Super Admin managed Customer Support, FAQs, and Contact Channels",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "titleBn": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "subtitleBn": { "type": "string" },
+        "supportEmail": { "type": "string" },
+        "supportPhone": { "type": "string" },
+        "businessHoursBn": { "type": "string" }
+      },
+      "required": ["title", "titleBn", "supportPhone"]
+    },
+    "UnifiedConversation": {
+      "title": "UnifiedConversation",
+      "description": "Customer live chat and omnichannel support conversation thread",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "channel": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "lastMessage": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "channel", "customerName", "lastMessage", "status"]
+    },
     "Order": {
       "title": "Order",
       "description": "Customer order details and timeline tracking",
@@ -58,7 +87,11 @@
   "firestore": {
     "/settings/{settingId}": {
       "schema": "BrandingSettings",
-      "description": "Global website configuration, logos, and branding"
+      "description": "Global website configuration, logos, help center, and branding"
+    },
+    "/conversations/{convId}": {
+      "schema": "UnifiedConversation",
+      "description": "Customer live chat and omnichannel messages"
     },
     "/orders/{orderId}": {
       "schema": "Order",

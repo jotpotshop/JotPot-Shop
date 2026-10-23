@@ -486,3 +486,64 @@ export interface ReviewSettings {
   allowImageUploadInReviews: boolean;
   minimumRatingToFeature: number;
 }
+
+// -------------------------------------------------------------
+// SUPER ADMIN HELP CENTER & SUPPORT TYPES
+// -------------------------------------------------------------
+export type HelpCenterFaqCategory = 'delivery' | 'order' | 'payment' | 'return' | 'general';
+
+export interface HelpCenterFaqItem {
+  id: string;
+  category: HelpCenterFaqCategory;
+  categoryBn: string;
+  question: string;
+  questionBn: string;
+  answer: string;
+  answerBn: string;
+  isPublished: boolean;
+  order: number;
+}
+
+export interface HelpCenterArticle {
+  id: string;
+  title: string;
+  titleBn: string;
+  content: string;
+  contentBn: string;
+  category: 'delivery' | 'order' | 'return' | 'general';
+  isPublished: boolean;
+  order: number;
+}
+
+export interface ContactButtonChannelConfig {
+  enabled: boolean;
+  label: string;
+  labelBn: string;
+  order: number;
+  value?: string; // Phone number or messenger URL
+}
+
+export interface HelpCenterContactButtonsConfig {
+  whatsapp: ContactButtonChannelConfig & { number: string };
+  messenger: ContactButtonChannelConfig & { urlOrId: string };
+  liveChat: ContactButtonChannelConfig;
+  directCall: ContactButtonChannelConfig & { phone: string };
+}
+
+export interface HelpCenterSettings {
+  title: string;
+  titleBn: string;
+  subtitle: string;
+  subtitleBn: string;
+  welcomeMessage: string;
+  welcomeMessageBn: string;
+  supportEmail: string;
+  supportPhone: string;
+  businessHours: string;
+  businessHoursBn: string;
+  contactButtons: HelpCenterContactButtonsConfig;
+  faqs: HelpCenterFaqItem[];
+  supportArticles: HelpCenterArticle[];
+  updatedAt?: string;
+  updatedBy?: string;
+}

@@ -1,19 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  MessageCircle,
   MessageSquare,
   X,
   Send,
   Sparkles,
   Bot,
-  ExternalLink,
   ChevronDown,
+  Phone,
+  CheckCheck,
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 
 export const FloatingContactWidget: React.FC = () => {
   const {
     liveChatSettings,
+    helpCenterSettings,
     deliverySettings,
     websiteSettings,
     formatPrice,
@@ -26,15 +27,22 @@ export const FloatingContactWidget: React.FC = () => {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [messageLimit, setMessageLimit] = useState(25);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // If floating button is disabled in admin settings, do not render
+  // If floating button is explicitly disabled, do not render
   if (liveChatSettings.enableFloatingButton === false) {
     return null;
   }
 
-  // Format WhatsApp Link
-  const rawWhatsapp = (liveChatSettings.whatsappNumber || websiteSettings.whatsappNumber || '01700000000').replace(/\D/g, '');
+  // Format WhatsApp Link from Help Center settings or Live Chat settings
+  const rawWhatsapp = (
+    helpCenterSettings?.contactButtons?.whatsapp?.number ||
+    liveChatSettings.whatsappNumber ||
+    websiteSettings.whatsappNumber ||
+    '01700000000'
+  ).replace(/\D/g, '');
   const cleanWhatsapp = rawWhatsapp.startsWith('880')
     ? rawWhatsapp
     : rawWhatsapp.startsWith('0')
@@ -46,25 +54,50 @@ export const FloatingContactWidget: React.FC = () => {
   )}`;
 
   // Format Messenger Link
-  const rawMessenger = (liveChatSettings.messengerPageUrlOrId || 'jotpotshop.bd')
+  const rawMessenger = (
+    helpCenterSettings?.contactButtons?.messenger?.urlOrId ||
+    liveChatSettings.messengerPageUrlOrId ||
+    'jotpotshop.bd'
+  )
     .replace(/^https?:\/\/(www\.)?(facebook\.com|m\.me)\//i, '')
     .trim();
   const messengerUrl = `https://m.me/${rawMessenger || 'jotpotshop.bd'}`;
 
+  // Direct Call Phone Number
+  const directPhone = (
+    helpCenterSettings?.contactButtons?.directCall?.phone ||
+    liveChatSettings.callHotlineNumber ||
+    websiteSettings.hotline ||
+    '01800568768'
+  ).replace(/\D/g, '');
+
   // Find customer's active livechat thread
   const activeLiveChatConv = conversations.find(
-    c => c.channel === 'livechat' && (c.customerPhone === user.phone || c.customerName === user.name)
+    c =>
+      c.channel === 'livechat' &&
+      ((user.phone && c.customerPhone === user.phone) ||
+        (user.email && c.customerEmail === user.email) ||
+        (user.name && c.customerName === user.name))
   ) || conversations.find(c => c.channel === 'livechat');
 
   const [localMessages, setLocalMessages] = useState<
-    Array<{ sender: 'agent' | 'user' | 'ai'; text: string; time: string; productName?: string; productPrice?: number }>
+    Array<{
+      sender: 'agent' | 'user' | 'ai';
+      text: string;
+      time: string;
+      productName?: string;
+      productPrice?: number;
+    }>
   >([]);
 
   // Sync with shop context conversation messages when updated
   useEffect(() => {
     if (activeLiveChatConv && activeLiveChatConv.messages && activeLiveChatConv.messages.length > 0) {
       const mapped = activeLiveChatConv.messages.map(m => ({
-        sender: (m.sender === 'customer' ? 'user' : m.sender === 'ai' ? 'ai' : 'agent') as 'agent' | 'user' | 'ai',
+        sender: (m.sender === 'customer' ? 'user' : m.sender === 'ai' ? 'ai' : 'agent') as
+          | 'agent'
+          | 'user'
+          | 'ai',
         text: m.text,
         time: m.timestamp,
         productName: m.productName,
@@ -83,11 +116,12 @@ export const FloatingContactWidget: React.FC = () => {
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || isSending) return;
 
     const userText = inputText.trim();
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+    setIsSending(true);
     setLocalMessages(prev => [...prev, { sender: 'user', text: userText, time }]);
     setInputText('');
     setIsTyping(true);
@@ -95,30 +129,53 @@ export const FloatingContactWidget: React.FC = () => {
     sendCustomerChatMessage(userText, 'livechat', {
       name: user.name || 'ওয়েব গ্রাহক',
       phone: user.phone || '017XXXXXXXX',
+      email: user.email || '',
     });
 
     setTimeout(() => {
       setIsTyping(false);
-    }, 800);
+      setIsSending(false);
+    }, 700);
   };
 
   const handleQuickQuestion = (question: string) => {
+    if (isSending) return;
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    setIsSending(true);
     setLocalMessages(prev => [...prev, { sender: 'user', text: question, time }]);
     setIsTyping(true);
 
     sendCustomerChatMessage(question, 'livechat', {
       name: user.name || 'ওয়েব গ্রাহক',
       phone: user.phone || '017XXXXXXXX',
+      email: user.email || '',
     });
 
     setTimeout(() => {
       setIsTyping(false);
-    }, 700);
+      setIsSending(false);
+    }, 600);
   };
 
+  // Determine channel visibility from helpCenterSettings or liveChatSettings
+  const showWhatsApp =
+    helpCenterSettings?.contactButtons?.whatsapp?.enabled ??
+    liveChatSettings.enableDirectWhatsApp !== false;
+  const showMessenger =
+    helpCenterSettings?.contactButtons?.messenger?.enabled ??
+    liveChatSettings.enableMessenger !== false;
+  const showLiveChat =
+    helpCenterSettings?.contactButtons?.liveChat?.enabled ??
+    liveChatSettings.enableLiveChat !== false;
+  const showDirectCall =
+    helpCenterSettings?.contactButtons?.directCall?.enabled ??
+    liveChatSettings.enableDirectCall !== false;
+
+  const visibleMessages = localMessages.slice(-messageLimit);
+  const hasOlderMessages = localMessages.length > messageLimit;
+
   return (
-    <div className="fixed bottom-20 md:bottom-6 right-3 sm:right-6 z-40 flex flex-col items-end space-y-2.5 pointer-events-none select-none">
+    <div className="fixed bottom-20 md:bottom-6 right-3 sm:right-6 z-40 flex flex-col items-end space-y-2 pointer-events-none select-none">
       {/* 1. Live Chat Modal Window */}
       {isChatOpen && (
         <div className="pointer-events-auto mb-2 w-[340px] sm:w-[380px] max-w-[94vw] bg-white rounded-3xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-5 duration-200 z-50">
@@ -172,6 +229,19 @@ export const FloatingContactWidget: React.FC = () => {
 
           {/* Messages viewport */}
           <div className="h-[320px] p-3.5 overflow-y-auto space-y-3 text-xs bg-slate-50/70">
+            {/* Older messages pagination button */}
+            {hasOlderMessages && (
+              <div className="text-center pt-1 pb-2">
+                <button
+                  type="button"
+                  onClick={() => setMessageLimit(prev => prev + 25)}
+                  className="bg-white border border-gray-200 text-gray-600 hover:text-rose-600 px-3 py-1 rounded-full text-[10px] font-bold cursor-pointer shadow-2xs"
+                >
+                  ↑ পূর্বের মেসেজ দেখুন ({localMessages.length - messageLimit}টি বাকি)
+                </button>
+              </div>
+            )}
+
             {/* Real Store Greeting */}
             <div className="flex flex-col items-start">
               <div className="max-w-[88%] rounded-2xl px-3.5 py-2.5 text-xs bg-white text-gray-800 border border-gray-200/90 rounded-bl-xs shadow-2xs leading-relaxed">
@@ -182,7 +252,7 @@ export const FloatingContactWidget: React.FC = () => {
             </div>
 
             {/* Conversation Messages */}
-            {localMessages.map((msg, idx) => {
+            {visibleMessages.map((msg, idx) => {
               const isUser = msg.sender === 'user';
               const isAi = msg.sender === 'ai';
               return (
@@ -221,7 +291,10 @@ export const FloatingContactWidget: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  <span className="text-[9px] text-gray-400 px-1 mt-0.5">{msg.time}</span>
+                  <div className="flex items-center space-x-1 px-1 mt-0.5 text-[9px] text-gray-400">
+                    <span>{msg.time}</span>
+                    {isUser && <CheckCheck className="w-3 h-3 text-rose-500" />}
+                  </div>
                 </div>
               );
             })}
@@ -276,7 +349,7 @@ export const FloatingContactWidget: React.FC = () => {
             />
             <button
               type="submit"
-              disabled={!inputText.trim()}
+              disabled={!inputText.trim() || isSending}
               className="bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white p-2 rounded-xl cursor-pointer transition-colors shrink-0"
               title="পাঠান"
             >
@@ -286,10 +359,27 @@ export const FloatingContactWidget: React.FC = () => {
         </div>
       )}
 
-      {/* 2. Floating Contact Stack: WhatsApp + Facebook Messenger + Live Chat ALL THREE SIMULTANEOUSLY VISIBLE */}
+      {/* 2. Floating Contact Stack: WhatsApp + Messenger + Direct Call + Live Chat ALL FOUR VISIBLE */}
       <div className="pointer-events-auto flex flex-col items-end space-y-2">
-        {/* BUTTON 1: WhatsApp (Direct) */}
-        {liveChatSettings.enableDirectWhatsApp !== false && (
+        {/* BUTTON 1: Direct Call (Hotline) */}
+        {showDirectCall && (
+          <a
+            href={`tel:${directPhone}`}
+            title="সরাসরি ফোন কল করুন"
+            aria-label="Direct Phone Call"
+            className="group flex items-center space-x-2 cursor-pointer transition-transform hover:scale-105 active:scale-95"
+          >
+            <span className="hidden sm:inline-block bg-white text-gray-800 text-[11px] font-bold px-2.5 py-1 rounded-full shadow-md border border-gray-100 opacity-90 group-hover:opacity-100 transition-opacity">
+              সরাসরি কল
+            </span>
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-amber-500 hover:bg-amber-600 text-white flex items-center justify-center shadow-lg hover:shadow-xl transition-all">
+              <Phone className="w-5 h-5 text-white" />
+            </div>
+          </a>
+        )}
+
+        {/* BUTTON 2: WhatsApp (Direct) */}
+        {showWhatsApp && (
           <a
             href={whatsappUrl}
             target="_blank"
@@ -301,17 +391,17 @@ export const FloatingContactWidget: React.FC = () => {
             <span className="hidden sm:inline-block bg-white text-gray-800 text-[11px] font-bold px-2.5 py-1 rounded-full shadow-md border border-gray-100 opacity-90 group-hover:opacity-100 transition-opacity">
               হোয়াটসঅ্যাপ
             </span>
-            <div className="w-12 h-12 rounded-full bg-[#25D366] hover:bg-[#20ba59] text-white flex items-center justify-center shadow-lg hover:shadow-xl transition-all">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-[#25D366] hover:bg-[#20ba59] text-white flex items-center justify-center shadow-lg hover:shadow-xl transition-all">
               {/* WhatsApp Official Style Icon */}
-              <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 fill-current" viewBox="0 0 24 24">
                 <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.669-.699c.969.54 1.772.825 2.788.825 3.181 0 5.767-2.586 5.768-5.766 0-3.18-2.586-5.767-5.767-5.767zm0 10.428c-.896 0-1.688-.261-2.438-.707l-.174-.103-1.808.474.482-1.764-.113-.181c-.503-.801-.769-1.571-.769-2.381 0-2.656 2.161-4.817 4.82-4.817 2.657 0 4.818 2.161 4.818 4.817 0 2.656-2.161 4.818-4.817 4.818zm3.033-3.607c-.166-.083-.982-.484-1.134-.54-.152-.055-.263-.083-.374.083-.111.167-.429.54-.526.651-.097.111-.194.125-.36.042-.166-.083-.701-.258-1.335-.824-.493-.44-.826-.983-.923-1.149-.097-.166-.01-.256.073-.338.075-.074.166-.194.249-.291.083-.097.111-.166.166-.277.055-.111.028-.208-.014-.291-.042-.083-.374-.9-.512-1.233-.135-.324-.272-.28-.374-.285-.097-.005-.208-.006-.319-.006-.111 0-.291.042-.443.208-.152.166-.582.569-.582 1.388 0 .819.596 1.611.679 1.722.083.111 1.173 1.792 2.842 2.513.397.172.707.274.949.351.399.127.762.109 1.049.066.32-.048.982-.401 1.121-.789.138-.387.138-.72.097-.789-.041-.069-.152-.111-.318-.194z" />
               </svg>
             </div>
           </a>
         )}
 
-        {/* BUTTON 2: Facebook Messenger (Direct) */}
-        {liveChatSettings.enableMessenger !== false && (
+        {/* BUTTON 3: Facebook Messenger (Direct) */}
+        {showMessenger && (
           <a
             href={messengerUrl}
             target="_blank"
@@ -323,17 +413,17 @@ export const FloatingContactWidget: React.FC = () => {
             <span className="hidden sm:inline-block bg-white text-gray-800 text-[11px] font-bold px-2.5 py-1 rounded-full shadow-md border border-gray-100 opacity-90 group-hover:opacity-100 transition-opacity">
               মেসেঞ্জার
             </span>
-            <div className="w-12 h-12 rounded-full bg-[#0084FF] hover:bg-[#0074e0] text-white flex items-center justify-center shadow-lg hover:shadow-xl transition-all">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-[#0084FF] hover:bg-[#0074e0] text-white flex items-center justify-center shadow-lg hover:shadow-xl transition-all">
               {/* Facebook Messenger Style Icon */}
-              <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 fill-current" viewBox="0 0 24 24">
                 <path d="M12 2C6.477 2 2 6.145 2 11.258c0 2.91 1.455 5.517 3.735 7.195V22l3.415-1.874c.905.251 1.865.388 2.85.388 5.523 0 10-4.145 10-9.256C22 6.145 17.523 2 12 2zm1.004 12.443l-2.56-2.73-5.002 2.73 5.498-5.836 2.624 2.73 4.938-2.73-5.498 5.836z" />
               </svg>
             </div>
           </a>
         )}
 
-        {/* BUTTON 3: Live Chat (Website Instant Dialog) */}
-        {liveChatSettings.enableLiveChat !== false && (
+        {/* BUTTON 4: Live Chat (Website Instant Dialog) */}
+        {showLiveChat && (
           <div
             onClick={() => setIsChatOpen(!isChatOpen)}
             className="group flex items-center space-x-2 cursor-pointer transition-transform hover:scale-105 active:scale-95"
@@ -344,13 +434,13 @@ export const FloatingContactWidget: React.FC = () => {
             <button
               type="button"
               aria-label="Toggle Live Chat"
-              className="w-12 h-12 rounded-full bg-gradient-to-tr from-rose-600 via-rose-500 to-amber-500 hover:from-rose-700 hover:to-amber-600 text-white flex items-center justify-center shadow-xl hover:shadow-2xl transition-all relative cursor-pointer"
+              className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-rose-600 via-rose-500 to-amber-500 hover:from-rose-700 hover:to-amber-600 text-white flex items-center justify-center shadow-xl hover:shadow-2xl transition-all relative cursor-pointer"
             >
               {isChatOpen ? (
-                <ChevronDown className="w-6 h-6 text-white" />
+                <ChevronDown className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               ) : (
                 <>
-                  <MessageSquare className="w-6 h-6 text-white" />
+                  <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                   <span className="w-3.5 h-3.5 bg-emerald-400 border-2 border-white rounded-full absolute -top-0.5 -right-0.5 animate-pulse" />
                 </>
               )}

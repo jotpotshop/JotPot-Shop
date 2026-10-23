@@ -23,6 +23,8 @@ export const OmnichannelChatManager: React.FC = () => {
   const {
     conversations,
     replyToConversation,
+    markConversationAsRead,
+    updateConversationStatus,
     toggleAiSalesAgent,
     liveChatSettings,
     products,
@@ -344,6 +346,37 @@ export const OmnichannelChatManager: React.FC = () => {
                 </div>
 
                 <div className="flex items-center space-x-2">
+                  {activeConv.unreadCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => markConversationAsRead(activeConv.id)}
+                      className="bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 text-[10px] font-bold px-2.5 py-1 rounded-xl cursor-pointer transition-colors"
+                      title="পঠিত হিসেবে চিহ্নিত করুন"
+                    >
+                      পঠিত চিহ্নিত করুন
+                    </button>
+                  )}
+
+                  {activeConv.status !== 'resolved' ? (
+                    <button
+                      type="button"
+                      onClick={() => updateConversationStatus(activeConv.id, 'resolved')}
+                      className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-bold px-2.5 py-1 rounded-xl cursor-pointer transition-colors"
+                      title="সমস্যা সমাধান হলে ক্লোজ করুন"
+                    >
+                      ✓ সমাধান চিহ্নিত করুন
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => updateConversationStatus(activeConv.id, 'open')}
+                      className="bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 text-[10px] font-bold px-2.5 py-1 rounded-xl cursor-pointer transition-colors"
+                      title="কথোপকথন পুনরায় চালু করুন"
+                    >
+                      পুনরায় ওপেন করুন
+                    </button>
+                  )}
+
                   <span
                     className={`text-[10px] font-bold px-2.5 py-1 rounded-xl ${
                       activeConv.status === 'open'
@@ -524,9 +557,14 @@ export const OmnichannelChatManager: React.FC = () => {
               </form>
             </>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-gray-400">
-              <MessageSquare className="w-12 h-12 text-gray-300 mb-2" />
-              <p className="text-xs">একটি কথোপকথন নির্বাচন করুন</p>
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-gray-400 space-y-2">
+              <div className="w-14 h-14 rounded-3xl bg-gray-50 flex items-center justify-center mx-auto text-gray-300">
+                <MessageSquare className="w-8 h-8" />
+              </div>
+              <h4 className="font-bold text-gray-700 text-sm">কোনো বার্তা নির্বাচন করা হয়নি</h4>
+              <p className="text-xs text-gray-400 max-w-xs mx-auto leading-relaxed">
+                বামপাশের তালিকা থেকে যেকোনো কাস্টমার কথোপকথন নির্বাচন করুন অথবা নতুন কোনো বার্তা আসলে এখানে স্বয়ংক্রিয়ভাবে ভেসে উঠবে।
+              </p>
             </div>
           )}
         </div>
