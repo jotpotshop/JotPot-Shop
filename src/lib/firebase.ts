@@ -856,7 +856,7 @@ export function findUndefinedPathsInPayload(data: any, currentPath = ''): string
 export async function saveProductsToFirestore(
   products: Product[],
   adminUserEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
+): Promise<{ success: boolean; error?: string }> {
   try {
     const docRef = doc(db, 'settings', 'products_catalog');
     const sanitizedProducts = cleanFirestorePayload(sanitizeProductRecords(products));
@@ -870,8 +870,62 @@ export async function saveProductsToFirestore(
       }),
       { merge: true }
     );
-  } catch (err) {
-    console.warn('Failed to save products to Firestore:', err);
+    return { success: true };
+  } catch (err: any) {
+    const errMsg = err?.message || String(err);
+    console.error('Failed to save products to Firestore:', err);
+    return { success: false, error: errMsg };
+  }
+}
+
+/**
+ * Saves a single product document to `/products/{productId}` in Cloud Firestore
+ */
+export async function saveSingleProductToFirestore(
+  product: Product,
+  adminUserEmail = 'jotpotshop.official@gmail.com'
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const docRef = doc(db, 'products', product.id);
+    const sanitized = cleanFirestorePayload(sanitizeProductRecords([product])[0]);
+    await setDoc(
+      docRef,
+      cleanFirestorePayload({
+        ...sanitized,
+        updatedAt: new Date().toISOString(),
+        updatedBy: adminUserEmail,
+        projectId: FIREBASE_PROJECT_INFO.projectId,
+      }),
+      { merge: true }
+    );
+    return { success: true };
+  } catch (err: any) {
+    console.warn(`Could not save single product /products/${product.id} (non-fatal):`, err);
+    return { success: false, error: err?.message || String(err) };
+  }
+}
+
+/**
+ * Deletes a single product document from `/products/{productId}` in Cloud Firestore
+ */
+export async function deleteSingleProductFromFirestore(
+  productId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const docRef = doc(db, 'products', productId);
+    // Overwrite with inactive/deleted state or deleteDoc
+    await setDoc(
+      docRef,
+      {
+        deleted: true,
+        deletedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+    return { success: true };
+  } catch (err: any) {
+    console.warn(`Could not delete single product /products/${productId}:`, err);
+    return { success: false, error: err?.message || String(err) };
   }
 }
 

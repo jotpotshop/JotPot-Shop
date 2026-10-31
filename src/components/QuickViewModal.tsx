@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { getAvailableStock, getStockStatusInfo } from '../utils/inventory';
+import { renderFormattedDescription } from '../utils/sanitizeHtml';
 
 export const QuickViewModal: React.FC = () => {
   const {
@@ -423,7 +424,13 @@ export const QuickViewModal: React.FC = () => {
 
           {activeTab === 'details' && (
             <div className="text-xs sm:text-sm text-gray-700 leading-relaxed space-y-4">
-              <p>{language === 'bn' ? product.descriptionBn : product.description}</p>
+              <div className="text-gray-700 text-xs sm:text-sm">
+                {renderFormattedDescription(
+                  language === 'bn'
+                    ? (product.descriptionBn || product.description)
+                    : (product.description || product.descriptionBn)
+                )}
+              </div>
 
               {/* Frequently Bought Together Box */}
               <div className="bg-white p-4 rounded-2xl border border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">

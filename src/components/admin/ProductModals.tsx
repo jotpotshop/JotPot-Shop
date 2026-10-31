@@ -16,19 +16,746 @@ import {
   Percent,
   Check,
   Sliders,
+  RefreshCw,
+  AlertCircle,
+  FileText,
 } from 'lucide-react';
 import { Product, NeedTag } from '../../types';
 import { CATEGORIES } from '../../data/mockData';
 import { OCCASIONS_LIST, detectProductOccasions } from '../../data/occasionsData';
+import { uploadAsset, compressImage } from '../../lib/firebase';
+import { RichTextEditor } from './RichTextEditor';
 
 // -------------------------------------------------------------
-// 1. PRODUCT EDIT MODAL
+// 1. PRODUCT ADD MODAL (Complete, Robust & Persistent)
+// -------------------------------------------------------------
+export interface ProductAddModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (product: Product) => Promise<{ success: boolean; error?: string }>;
+}
+
+export const ProductAddModal: React.FC<ProductAddModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+}) => {
+  const [name, setName] = useState('');
+  const [nameBn, setNameBn] = useState('');
+  const [category, setCategory] = useState('men-fashion');
+  const [subcategory, setSubcategory] = useState('');
+  const [brand, setBrand] = useState('JotPot Brand');
+  const [sku, setSku] = useState(() => `JPS-${Math.floor(100000 + Math.random() * 900000)}`);
+  const [price, setPrice] = useState<number | ''>(850);
+  const [oldPrice, setOldPrice] = useState<number | ''>(1150);
+  const [costPrice, setCostPrice] = useState<number | ''>(500);
+  const [stock, setStock] = useState<number | ''>(20);
+  const [lowStockThreshold, setLowStockThreshold] = useState<number>(5);
+  const [colors, setColors] = useState('');
+  const [sizes, setSizes] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [description, setDescription] = useState(
+    '<h2>Product Overview</h2><p>Premium crafted product designed for comfort, longevity, and everyday elegance. High-grade stitching and durable materials ensure supreme satisfaction.</p><h3>Key Highlights</h3><ul><li>Finest selected materials</li><li>Comfortable fit and breathable construction</li><li>Easy to wash and maintain</li></ul>'
+  );
+  const [descriptionBn, setDescriptionBn] = useState(
+    '<h2>পণ্যের মূল বৈশিষ্ট্য</h2><p>১০০% প্রিমিয়াম সুতি ও আরামদায়ক টেক্সচার দিয়ে তৈরি। দৈনন্দিন অফিস, ক্যাজুয়াল কিংবা বিশেষ অনুষ্ঠানে পরার জন্য উপযুক্ত। সহজে ধোয়া যায় এবং দীর্ঘস্থায়ী রং গ্যারান্টি।</p><h3>কেন এটি কিনবেন?</h3><ul><li>উন্নত ফিনিশিং ও নিখুঁত সেলাই</li><li>সারাদিনের সর্বোচ্চ আরাম ও স্বস্তি</li><li>প্রি-ওয়াশড থাকায় ধোয়ার পর সংকুচিত হবে না</li></ul>'
+  );
+  const [descLangTab, setDescLangTab] = useState<'bn' | 'en'>('bn');
+  const [isFlashSale, setIsFlashSale] = useState(false);
+  const [isBestSeller, setIsBestSeller] = useState(true);
+  const [isTrending, setIsTrending] = useState(false);
+  const [needTags, setNeedTags] = useState<NeedTag[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [variantStocks, setVariantStocks] = useState<Record<string, number>>({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  // Reset form when reopened
+  useEffect(() => {
+    if (isOpen) {
+      setSku(`JPS-${Math.floor(100000 + Math.random() * 900000)}`);
+      setSaveError(null);
+      setUploadError(null);
+      setValidationErrors({});
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setIsUploading(true);
+      setUploadError(null);
+      try {
+        const uploadResult = await uploadAsset(file, 'products', `prod_${Date.now()}`, 800);
+        setImageUrl(uploadResult.downloadUrl);
+      } catch (err: any) {
+        console.warn('Storage direct upload note:', err);
+        try {
+          const compressed = await compressImage(file, 800, 0.75);
+          if (compressed) {
+            setImageUrl(compressed);
+          } else {
+            setUploadError('ছবি প্রসেস করা সম্ভব হয়নি। অনুগ্রহ করে ছোট ছবি নির্বাচন করুন।');
+          }
+        } catch (e: any) {
+          setUploadError(e?.message || 'ছবি আপলোড ব্যর্থ হয়েছে');
+        }
+      } finally {
+        setIsUploading(false);
+      }
+    }
+  };
+
+  const handleGenerateSku = () => {
+    const catCode = category.substring(0, 3).toUpperCase();
+    const rand = Math.floor(1000 + Math.random() * 9000);
+    setSku(`JPS-${catCode}-${rand}`);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaveError(null);
+
+    // Validation
+    const errors: Record<string, string> = {};
+    if (!name.trim()) errors.name = 'ইংরেজি নাম প্রদান করা বাধ্যতামূলক';
+    if (!nameBn.trim()) errors.nameBn = 'বাংলা নাম প্রদান করা বাধ্যতামূলক';
+    const numPrice = Number(price);
+    if (isNaN(numPrice) || numPrice <= 0) errors.price = 'সঠিক বিক্রয় মূল্য (> 0) প্রদান করুন';
+    const numStock = Number(stock);
+    if (isNaN(numStock) || numStock < 0) errors.stock = 'সঠিক স্টক পরিমাণ (>= 0) লিখুন';
+    if (!imageUrl.trim()) errors.imageUrl = 'পণ্যের ছবি আপলোড করা বা লিংক দেওয়া বাধ্যতামূলক';
+
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+
+    setValidationErrors({});
+    setIsSaving(true);
+
+    const numOldPrice = Number(oldPrice) || 0;
+    const discountP =
+      numOldPrice > numPrice && numOldPrice > 0
+        ? Math.round(((numOldPrice - numPrice) / numOldPrice) * 100)
+        : 0;
+
+    const catObj = CATEGORIES.find(c => c.id === category);
+
+    const newProd: Product = {
+      id: `jps-prod-${Date.now()}`,
+      name: name.trim(),
+      nameBn: nameBn.trim(),
+      category,
+      categoryBn: catObj?.nameBn || 'ফ্যাশন',
+      subcategory: subcategory.trim() || 'General',
+      subcategoryBn: subcategory.trim() || 'সাধারণ',
+      brand: brand.trim() || 'JotPot Brand',
+      sku: sku.trim() || `JPS-${Date.now().toString().slice(-6)}`,
+      price: numPrice,
+      oldPrice: numOldPrice || undefined,
+      discountPercent: discountP || undefined,
+      costPrice: Number(costPrice) || 0,
+      stock: numStock,
+      variantStocks: Object.keys(variantStocks).length > 0 ? variantStocks : undefined,
+      lowStockThreshold: Number(lowStockThreshold) || 5,
+      colors: colors
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean),
+      sizes: sizes
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean),
+      images: [imageUrl.trim()],
+      description: description.trim() || name.trim(),
+      descriptionBn: descriptionBn.trim() || nameBn.trim(),
+      specifications: {
+        'ম্যাটেরিয়াল': '১০০% প্রিমিয়াম কোয়ালিটি',
+        'উৎস': 'বাংলাদেশ (Bangladesh)',
+        'স্ট্যান্ডার্ড': 'A+ গ্রেড স্ট্যান্ডার্ড',
+      },
+      warranty: '7 Days Replacement',
+      warrantyBn: '৭ দিনের রিপ্লেসমেন্ট গ্যারান্টি',
+      returnPolicy: '7 Days Easy Return',
+      returnPolicyBn: '৭ দিনের সহজ রিটার্ন পলিসি',
+      deliveryDays: 'Inside Dhaka 24-48 hrs, Outside 3-5 days',
+      deliveryDaysBn: 'ঢাকা সিটিতে ২৪-৪৮ ঘণ্টা, ঢাকার বাইরে ৩-৫ দিন',
+      tags: [category, subcategory.toLowerCase(), brand.toLowerCase()].filter(Boolean),
+      rating: 5.0,
+      reviewsCount: 1,
+      isFlashSale,
+      isBestSeller,
+      isTrending,
+      needTags:
+        needTags.length > 0
+          ? needTags
+          : detectProductOccasions({ name, nameBn, category, subcategory, description }),
+      reviews: [],
+    };
+
+    try {
+      const result = await onSave(newProd);
+      if (result.success) {
+        onClose();
+      } else {
+        setSaveError(result.error || 'Firebase-এ পণ্য সংরক্ষণ করতে সমস্যা হয়েছে।');
+      }
+    } catch (err: any) {
+      setSaveError(err?.message || 'সার্ভারে সংযোগ ব্যর্থ হয়েছে। পুনরায় চেষ্টা করুন।');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fade-in">
+      <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden my-auto border border-gray-100 flex flex-col max-h-[94vh]">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-950 via-slate-900 to-rose-950 text-white shrink-0">
+          <div className="flex items-center space-x-2.5">
+            <div className="w-9 h-9 rounded-xl bg-rose-600 flex items-center justify-center shadow-xs">
+              <Package className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-base text-white">
+                নতুন পণ্য যোগ করুন (Add New Product)
+              </h3>
+              <p className="text-[11px] text-gray-300">
+                ক্যাটালগ ও বিস্তারিত রিচ-টেক্সট বিবরণ সহ পণ্য তৈরি
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 text-gray-400 hover:text-white rounded-xl hover:bg-white/10 cursor-pointer transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Save Error Banner */}
+        {saveError && (
+          <div className="bg-rose-50 border-b border-rose-200 p-3 px-6 text-xs text-rose-800 flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>
+              <strong>সংরক্ষণ ব্যর্থ:</strong> {saveError}
+            </span>
+          </div>
+        )}
+
+        {/* Form Body */}
+        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 text-xs">
+          {/* Title Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-gray-800 mb-1">
+                পণ্যের নাম (English) *
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={e => {
+                  setName(e.target.value);
+                  if (validationErrors.name) setValidationErrors(prev => ({ ...prev, name: '' }));
+                }}
+                className={`w-full bg-gray-50 border rounded-xl p-2.5 text-xs transition-colors ${
+                  validationErrors.name
+                    ? 'border-rose-500 bg-rose-50/30'
+                    : 'border-gray-200 focus:border-rose-500 focus:bg-white'
+                }`}
+                placeholder="e.g. Premium Cotton Casual Shirt"
+              />
+              {validationErrors.name && (
+                <p className="text-rose-600 text-[10px] mt-1 font-bold">{validationErrors.name}</p>
+              )}
+            </div>
+            <div>
+              <label className="block font-bold text-gray-800 mb-1">
+                পণ্যের নাম (বাংলা) *
+              </label>
+              <input
+                type="text"
+                value={nameBn}
+                onChange={e => {
+                  setNameBn(e.target.value);
+                  if (validationErrors.nameBn) setValidationErrors(prev => ({ ...prev, nameBn: '' }));
+                }}
+                className={`w-full bg-gray-50 border rounded-xl p-2.5 text-xs transition-colors ${
+                  validationErrors.nameBn
+                    ? 'border-rose-500 bg-rose-50/30'
+                    : 'border-gray-200 focus:border-rose-500 focus:bg-white'
+                }`}
+                placeholder="যেমন: প্রিমিয়াম কটন ক্যাজুয়াল শার্ট"
+              />
+              {validationErrors.nameBn && (
+                <p className="text-rose-600 text-[10px] mt-1 font-bold">{validationErrors.nameBn}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Category, Subcategory, Brand, SKU */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div>
+              <label className="block font-bold text-gray-800 mb-1">ক্যাটাগরি *</label>
+              <select
+                value={category}
+                onChange={e => setCategory(e.target.value)}
+                className="w-full bg-gray-50 border border-gray-200 focus:border-rose-500 focus:bg-white rounded-xl p-2.5 text-xs transition-colors cursor-pointer"
+              >
+                {CATEGORIES.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.nameBn} ({c.name})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block font-bold text-gray-800 mb-1">সাবক্যাটাগরি</label>
+              <input
+                type="text"
+                value={subcategory}
+                onChange={e => setSubcategory(e.target.value)}
+                className="w-full bg-gray-50 border border-gray-200 focus:border-rose-500 focus:bg-white rounded-xl p-2.5 text-xs transition-colors"
+                placeholder="যেমন: শার্ট, প্যান্ট, ওয়াচ"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-gray-800 mb-1">ব্র্যান্ড</label>
+              <input
+                type="text"
+                value={brand}
+                onChange={e => setBrand(e.target.value)}
+                className="w-full bg-gray-50 border border-gray-200 focus:border-rose-500 focus:bg-white rounded-xl p-2.5 text-xs transition-colors"
+                placeholder="e.g. JotPot Brand"
+              />
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="font-bold text-gray-800">SKU কোড</label>
+                <button
+                  type="button"
+                  onClick={handleGenerateSku}
+                  className="text-[10px] text-rose-600 font-bold hover:underline cursor-pointer flex items-center space-x-0.5"
+                >
+                  <RefreshCw className="w-2.5 h-2.5" />
+                  <span>রিলোড</span>
+                </button>
+              </div>
+              <input
+                type="text"
+                value={sku}
+                onChange={e => setSku(e.target.value)}
+                className="w-full bg-gray-50 border border-gray-200 focus:border-rose-500 focus:bg-white rounded-xl p-2.5 text-xs font-mono font-bold transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* Pricing & Stock */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-gray-50/80 p-3 rounded-2xl border border-gray-200/60">
+            <div>
+              <label className="block font-bold text-gray-800 mb-1">
+                বিক্রয় মূল্য (৳) *
+              </label>
+              <input
+                type="number"
+                value={price}
+                onChange={e => {
+                  setPrice(e.target.value === '' ? '' : Number(e.target.value));
+                  if (validationErrors.price) setValidationErrors(prev => ({ ...prev, price: '' }));
+                }}
+                className={`w-full bg-white border rounded-xl p-2.5 text-xs font-bold text-rose-600 transition-colors ${
+                  validationErrors.price ? 'border-rose-500' : 'border-gray-200 focus:border-rose-500'
+                }`}
+                placeholder="850"
+              />
+              {validationErrors.price && (
+                <p className="text-rose-600 text-[10px] mt-1 font-bold">{validationErrors.price}</p>
+              )}
+            </div>
+            <div>
+              <label className="block font-bold text-gray-800 mb-1">
+                পূর্বের মূল্য (৳)
+              </label>
+              <input
+                type="number"
+                value={oldPrice}
+                onChange={e => setOldPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                className="w-full bg-white border border-gray-200 focus:border-rose-500 rounded-xl p-2.5 text-xs text-gray-500 transition-colors"
+                placeholder="1150"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-gray-800 mb-1">
+                ক্রয় খরচ (৳)
+              </label>
+              <input
+                type="number"
+                value={costPrice}
+                onChange={e => setCostPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                className="w-full bg-white border border-gray-200 focus:border-rose-500 rounded-xl p-2.5 text-xs text-gray-700 transition-colors"
+                placeholder="500"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-gray-800 mb-1">
+                স্টক পরিমাণ (pcs) *
+              </label>
+              <input
+                type="number"
+                value={stock}
+                onChange={e => {
+                  setStock(e.target.value === '' ? '' : Number(e.target.value));
+                  if (validationErrors.stock) setValidationErrors(prev => ({ ...prev, stock: '' }));
+                }}
+                className={`w-full bg-white border rounded-xl p-2.5 text-xs font-bold text-emerald-600 transition-colors ${
+                  validationErrors.stock ? 'border-rose-500' : 'border-gray-200 focus:border-rose-500'
+                }`}
+                placeholder="20"
+              />
+              {validationErrors.stock && (
+                <p className="text-rose-600 text-[10px] mt-1 font-bold">{validationErrors.stock}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Image Upload & Preview */}
+          <div className="space-y-2 pt-1 border-t border-gray-100">
+            <div className="flex items-center justify-between">
+              <label className="block font-bold text-gray-800">
+                পণ্যের ছবি নির্বাচন (Image Upload) *
+              </label>
+              <span className="text-[11px] text-gray-400">
+                সরাসরি ডিভাইস থেকে আপলোড (স্বয়ংক্রিয় অপ্টিমাইজড)
+              </span>
+            </div>
+
+            {uploadError && (
+              <p className="text-rose-600 text-[11px] font-bold bg-rose-50 p-2 rounded-xl border border-rose-100">
+                ⚠️ {uploadError}
+              </p>
+            )}
+
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              {imageUrl && (
+                <div className="relative group shrink-0">
+                  <img
+                    src={imageUrl}
+                    alt="Product preview"
+                    className="w-20 h-20 object-cover rounded-2xl border border-gray-200 shadow-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setImageUrl('')}
+                    className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white rounded-full p-1 shadow-md hover:bg-rose-700 cursor-pointer"
+                    title="ছবি মুছুন"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+
+              <div className="flex-1 w-full space-y-2">
+                <label className="border-2 border-dashed border-gray-300 hover:border-rose-500 hover:bg-rose-50/20 rounded-2xl p-3 flex items-center justify-center space-x-2 cursor-pointer transition-all">
+                  <Upload className="w-4 h-4 text-gray-500" />
+                  <span className="text-xs font-bold text-gray-700">
+                    {isUploading ? 'ছবি অপ্টিমাইজ ও আপলোড হচ্ছে...' : 'ডিভাইস থেকে পণ্যের ছবি আপলোড করুন'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={isUploading}
+                    onChange={handleImageFileChange}
+                  />
+                </label>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    value={imageUrl}
+                    onChange={e => {
+                      setImageUrl(e.target.value);
+                      if (validationErrors.imageUrl) setValidationErrors(prev => ({ ...prev, imageUrl: '' }));
+                    }}
+                    placeholder="অথবা সরাসরি ওয়েব ইমেজ লিংক দিন (https://images.unsplash.com/...)"
+                    className="w-full bg-gray-50 border border-gray-200 focus:border-rose-500 focus:bg-white rounded-xl px-3 py-1.5 text-xs font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+            {validationErrors.imageUrl && (
+              <p className="text-rose-600 text-[10px] font-bold">{validationErrors.imageUrl}</p>
+            )}
+          </div>
+
+          {/* DETAILED RICH-TEXT PRODUCT DESCRIPTION */}
+          <div className="space-y-2 pt-2 border-t border-gray-100">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <label className="font-bold text-gray-800 text-xs block">
+                  পণ্যের বিস্তারিত রিচ-টেক্সট বিবরণ (Rich-Text Product Description)
+                </label>
+                <p className="text-[11px] text-gray-500">
+                  হেডিং, বুলেট পয়েন্ট, বোল্ড টেক্সট ও প্যারাগ্রাফ সমর্থন করে
+                </p>
+              </div>
+
+              {/* Language Switcher Tabs */}
+              <div className="flex items-center space-x-1 bg-gray-100 p-0.5 rounded-xl border border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setDescLangTab('bn')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    descLangTab === 'bn'
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  বাংলা বিবরণ
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDescLangTab('en')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    descLangTab === 'en'
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  English Description
+                </button>
+              </div>
+            </div>
+
+            {/* Active Rich Text Editor */}
+            {descLangTab === 'bn' ? (
+              <RichTextEditor
+                value={descriptionBn}
+                onChange={setDescriptionBn}
+                label="বাংলায় পণ্যের বিস্তারিত বৈশিষ্ট্য ও সুবিধা লিখুন"
+                placeholder="যেমন: এই পণ্যটি ১০০% আরামদায়ক সুতি কাপড়ে তৈরি..."
+                minHeight="170px"
+              />
+            ) : (
+              <RichTextEditor
+                value={description}
+                onChange={setDescription}
+                label="Write Detailed Product Description in English"
+                placeholder="Describe key highlights, fabric quality, and sizing advice..."
+                minHeight="170px"
+              />
+            )}
+          </div>
+
+          {/* Variants: Colors & Sizes */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-gray-100">
+            <div>
+              <label className="block font-bold text-gray-800 mb-1">
+                রং / Available Colors (কমা দিয়ে লিখুন)
+              </label>
+              <input
+                type="text"
+                value={colors}
+                onChange={e => setColors(e.target.value)}
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 text-xs"
+                placeholder="Black, Navy Blue, Maroon"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-gray-800 mb-1">
+                সাইজ / Available Sizes (কমা দিয়ে লিখুন)
+              </label>
+              <input
+                type="text"
+                value={sizes}
+                onChange={e => setSizes(e.target.value)}
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 text-xs"
+                placeholder="M, L, XL, XXL"
+              />
+            </div>
+          </div>
+
+          {/* Variant Stocks Manager */}
+          {((colors && colors.trim().length > 0) || (sizes && sizes.trim().length > 0)) && (
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-gray-800 text-xs">
+                  ভ্যারিয়েন্ট ভিত্তিক স্টক বণ্টন (Variant Stock Allocation)
+                </span>
+                <span className="text-[10px] text-gray-500 font-medium">
+                  প্রতিটি ভ্যারিয়েন্টের আলাদা স্টক সংখ্যা
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto pt-1">
+                {(() => {
+                  const colorList = colors.split(',').map(s => s.trim()).filter(Boolean);
+                  const sizeList = sizes.split(',').map(s => s.trim()).filter(Boolean);
+                  const keysSet = new Set<string>();
+
+                  if (colorList.length > 0 && sizeList.length > 0) {
+                    colorList.forEach(c => {
+                      sizeList.forEach(s => keysSet.add(`${c}-${s}`));
+                    });
+                  } else if (colorList.length > 0) {
+                    colorList.forEach(c => keysSet.add(c));
+                  } else if (sizeList.length > 0) {
+                    sizeList.forEach(s => keysSet.add(s));
+                  }
+
+                  const variantKeys = Array.from(keysSet);
+                  if (variantKeys.length === 0) return null;
+
+                  return variantKeys.map(k => (
+                    <div
+                      key={k}
+                      className="bg-white border border-gray-200 rounded-xl p-2 flex items-center justify-between gap-1 shadow-2xs"
+                    >
+                      <span className="text-[11px] font-semibold text-gray-700 truncate" title={k}>
+                        {k}
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={variantStocks[k] ?? (typeof stock === 'number' ? Math.floor(stock / variantKeys.length) || 5 : 5)}
+                        onChange={e => {
+                          const val = Math.max(0, parseInt(e.target.value) || 0);
+                          setVariantStocks(prev => ({ ...prev, [k]: val }));
+                        }}
+                        className="w-16 bg-gray-50 border border-gray-200 rounded-lg px-1.5 py-0.5 text-xs text-right font-bold text-emerald-700 focus:bg-white focus:border-rose-500 transition-colors"
+                      />
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+          )}
+
+          {/* Badges / Promotion Flags */}
+          <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-gray-100">
+            <label className="flex items-center space-x-2 cursor-pointer text-xs font-bold text-gray-700">
+              <input
+                type="checkbox"
+                checked={isBestSeller}
+                onChange={e => setIsBestSeller(e.target.checked)}
+                className="rounded text-rose-600 focus:ring-rose-500 w-4 h-4 cursor-pointer"
+              />
+              <span>বেস্ট সেলার (Best Seller)</span>
+            </label>
+            <label className="flex items-center space-x-2 cursor-pointer text-xs font-bold text-gray-700">
+              <input
+                type="checkbox"
+                checked={isFlashSale}
+                onChange={e => setIsFlashSale(e.target.checked)}
+                className="rounded text-rose-600 focus:ring-rose-500 w-4 h-4 cursor-pointer"
+              />
+              <span>ফ্ল্যাশ সেল (Flash Sale)</span>
+            </label>
+            <label className="flex items-center space-x-2 cursor-pointer text-xs font-bold text-gray-700">
+              <input
+                type="checkbox"
+                checked={isTrending}
+                onChange={e => setIsTrending(e.target.checked)}
+                className="rounded text-rose-600 focus:ring-rose-500 w-4 h-4 cursor-pointer"
+              />
+              <span>ট্রেন্ডিং পণ্য (Trending)</span>
+            </label>
+          </div>
+
+          {/* Occasion / Shop by Need Badges */}
+          <div className="space-y-2 pt-3 border-t border-gray-100">
+            <div className="flex items-center justify-between">
+              <label className="font-bold text-gray-800 flex items-center space-x-1.5 text-xs">
+                <span>🎯 উপলক্ষ ও প্রয়োজন নির্বাচন (আপনার কী প্রয়োজন?)</span>
+              </label>
+              <button
+                type="button"
+                onClick={() =>
+                  setNeedTags(
+                    detectProductOccasions({ name, nameBn, category, subcategory, description })
+                  )
+                }
+                className="text-[11px] font-bold text-rose-600 hover:text-rose-700 cursor-pointer flex items-center space-x-1 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-100"
+              >
+                <Sparkles className="w-3 h-3 text-amber-500" />
+                <span>⚡ স্মার্ট অটো-ডিটেক্ট</span>
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {OCCASIONS_LIST.map(occ => {
+                const isSelected = needTags.includes(occ.id);
+                return (
+                  <button
+                    key={occ.id}
+                    type="button"
+                    onClick={() => {
+                      if (isSelected) {
+                        setNeedTags(needTags.filter(t => t !== occ.id));
+                      } else {
+                        setNeedTags([...needTags, occ.id]);
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center space-x-1.5 ${
+                      isSelected
+                        ? 'bg-gray-900 text-white border-gray-900 shadow-xs'
+                        : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                    }`}
+                  >
+                    <span>{occ.icon}</span>
+                    <span>{occ.titleBn}</span>
+                    {isSelected && <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="pt-4 border-t border-gray-100 flex items-center justify-end space-x-3">
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={onClose}
+              className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-bold hover:bg-gray-50 cursor-pointer transition-colors"
+            >
+              বাতিল করুন
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving || isUploading}
+              className="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold cursor-pointer transition-colors shadow-md shadow-rose-600/25 flex items-center space-x-2"
+            >
+              {isSaving ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                  <span>Firebase-এ সংরক্ষণ হচ্ছে...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  <span>পণ্য সেভ ও লাইভ করুন</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// -------------------------------------------------------------
+// 2. PRODUCT EDIT MODAL (Upgraded with RichTextEditor)
 // -------------------------------------------------------------
 interface ProductEditModalProps {
   product: Product | null;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (updated: Product) => void;
+  onSave: (updated: Product) => Promise<boolean | void> | void;
 }
 
 export const ProductEditModal: React.FC<ProductEditModalProps> = ({
@@ -53,12 +780,16 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
   const [imageUrl, setImageUrl] = useState('');
   const [description, setDescription] = useState('');
   const [descriptionBn, setDescriptionBn] = useState('');
+  const [descLangTab, setDescLangTab] = useState<'bn' | 'en'>('bn');
   const [isFlashSale, setIsFlashSale] = useState(false);
   const [isBestSeller, setIsBestSeller] = useState(false);
   const [isTrending, setIsTrending] = useState(false);
   const [needTags, setNeedTags] = useState<NeedTag[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [variantStocks, setVariantStocks] = useState<Record<string, number>>({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (product) {
@@ -87,30 +818,45 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
           ? product.needTags
           : detectProductOccasions(product)
       );
+      setSaveError(null);
+      setUploadError(null);
     }
   }, [product]);
 
   if (!isOpen || !product) return null;
 
-  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setIsUploading(true);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImageUrl(reader.result as string);
+      setUploadError(null);
+      try {
+        const uploadResult = await uploadAsset(file, 'products', `prod_${product.id}`, 800);
+        setImageUrl(uploadResult.downloadUrl);
+      } catch (err: any) {
+        console.warn('Storage direct upload note:', err);
+        try {
+          const compressed = await compressImage(file, 800, 0.75);
+          if (compressed) {
+            setImageUrl(compressed);
+          } else {
+            setUploadError('ছবি প্রসেস করা সম্ভব হয়নি।');
+          }
+        } catch (e: any) {
+          setUploadError(e?.message || 'ছবি আপলোড ব্যর্থ হয়েছে');
+        }
+      } finally {
         setIsUploading(false);
-      };
-      reader.onerror = () => {
-        setIsUploading(false);
-      };
-      reader.readAsDataURL(file);
+      }
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+
+    setSaveError(null);
+    setIsSaving(true);
 
     const discountP =
       oldPrice > price && oldPrice > 0
@@ -156,12 +902,18 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
           : detectProductOccasions({ name, nameBn, category, subcategory, description }),
     };
 
-    onSave(updatedProduct);
+    try {
+      await onSave(updatedProduct);
+    } catch (err: any) {
+      setSaveError(err?.message || 'পণ্য আপডেট করতে সমস্যা হয়েছে।');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fade-in">
-      <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden my-auto border border-gray-100 flex flex-col max-h-[92vh]">
+      <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden my-auto border border-gray-100 flex flex-col max-h-[94vh]">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-slate-900 text-white shrink-0">
           <div className="flex items-center space-x-2.5">
@@ -182,6 +934,16 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Save Error */}
+        {saveError && (
+          <div className="bg-rose-50 border-b border-rose-200 p-3 px-6 text-xs text-rose-800 flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>
+              <strong>ত্রুটি:</strong> {saveError}
+            </span>
+          </div>
+        )}
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 text-xs">
@@ -214,8 +976,8 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
             </div>
           </div>
 
-          {/* Category, Subcategory, Brand */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Category, Subcategory, Brand, SKU */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div>
               <label className="block font-bold text-gray-800 mb-1">ক্যাটাগরি</label>
               <select
@@ -241,6 +1003,15 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               />
             </div>
             <div>
+              <label className="block font-bold text-gray-800 mb-1">ব্র্যান্ড</label>
+              <input
+                type="text"
+                value={brand}
+                onChange={e => setBrand(e.target.value)}
+                className="w-full bg-gray-50 border border-gray-200 focus:border-rose-500 focus:bg-white rounded-xl p-2.5 text-xs transition-colors"
+              />
+            </div>
+            <div>
               <label className="block font-bold text-gray-800 mb-1">SKU কোড</label>
               <input
                 type="text"
@@ -252,7 +1023,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
           </div>
 
           {/* Prices & Stock */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-gray-50/80 p-3 rounded-2xl border border-gray-200/60">
             <div>
               <label className="block font-bold text-gray-800 mb-1">
                 বিক্রয় মূল্য (৳) *
@@ -262,7 +1033,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                 required
                 value={price}
                 onChange={e => setPrice(Number(e.target.value))}
-                className="w-full bg-gray-50 border border-gray-200 focus:border-rose-500 focus:bg-white rounded-xl p-2.5 text-xs font-bold text-rose-600 transition-colors"
+                className="w-full bg-white border border-gray-200 focus:border-rose-500 rounded-xl p-2.5 text-xs font-bold text-rose-600 transition-colors"
               />
             </div>
             <div>
@@ -273,7 +1044,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                 type="number"
                 value={oldPrice}
                 onChange={e => setOldPrice(Number(e.target.value))}
-                className="w-full bg-gray-50 border border-gray-200 focus:border-rose-500 focus:bg-white rounded-xl p-2.5 text-xs text-gray-500 transition-colors"
+                className="w-full bg-white border border-gray-200 focus:border-rose-500 rounded-xl p-2.5 text-xs text-gray-500 transition-colors"
               />
             </div>
             <div>
@@ -284,7 +1055,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                 type="number"
                 value={costPrice}
                 onChange={e => setCostPrice(Number(e.target.value))}
-                className="w-full bg-gray-50 border border-gray-200 focus:border-rose-500 focus:bg-white rounded-xl p-2.5 text-xs text-gray-700 transition-colors"
+                className="w-full bg-white border border-gray-200 focus:border-rose-500 rounded-xl p-2.5 text-xs text-gray-700 transition-colors"
               />
             </div>
             <div>
@@ -296,7 +1067,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                 required
                 value={stock}
                 onChange={e => setStock(Number(e.target.value))}
-                className="w-full bg-gray-50 border border-gray-200 focus:border-rose-500 focus:bg-white rounded-xl p-2.5 text-xs font-bold text-emerald-600 transition-colors"
+                className="w-full bg-white border border-gray-200 focus:border-rose-500 rounded-xl p-2.5 text-xs font-bold text-emerald-600 transition-colors"
               />
             </div>
           </div>
@@ -306,6 +1077,11 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
             <label className="block font-bold text-gray-800">
               পণ্যের ছবি পরিবর্তন (Image Upload / URL)
             </label>
+            {uploadError && (
+              <p className="text-rose-600 text-[11px] font-bold bg-rose-50 p-2 rounded-xl">
+                ⚠️ {uploadError}
+              </p>
+            )}
             <div className="flex flex-col sm:flex-row items-center gap-3">
               {imageUrl && (
                 <div className="relative group shrink-0">
@@ -329,12 +1105,13 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                 <label className="border-2 border-dashed border-gray-300 hover:border-rose-500 hover:bg-rose-50/20 rounded-2xl p-3 flex items-center justify-center space-x-2 cursor-pointer transition-all">
                   <Upload className="w-4 h-4 text-gray-500" />
                   <span className="text-xs font-bold text-gray-700">
-                    {isUploading ? 'আপলোড হচ্ছে...' : 'ডিভাইস থেকে নতুন ছবি আপলোড করুন'}
+                    {isUploading ? 'ছবি আপলোড ও অপ্টিমাইজ হচ্ছে...' : 'ডিভাইস থেকে নতুন ছবি আপলোড করুন'}
                   </span>
                   <input
                     type="file"
                     accept="image/*"
                     className="hidden"
+                    disabled={isUploading}
                     onChange={handleImageFileChange}
                   />
                 </label>
@@ -352,32 +1129,67 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
             </div>
           </div>
 
-          {/* Description */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-gray-100">
-            <div>
-              <label className="block font-bold text-gray-800 mb-1">বিবরণ (বাংলা)</label>
-              <textarea
-                rows={3}
+          {/* DETAILED RICH-TEXT PRODUCT DESCRIPTION */}
+          <div className="space-y-2 pt-2 border-t border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="font-bold text-gray-800 text-xs block">
+                  পণ্যের বিস্তারিত রিচ-টেক্সট বিবরণ (Rich-Text Description)
+                </label>
+                <p className="text-[11px] text-gray-500">
+                  প্যারাগ্রাফ, হেডিং ও বুলেট পয়েন্ট সহ কাস্টমারদের জন্য সুন্দর বিবরণ
+                </p>
+              </div>
+
+              {/* Language Switcher Tabs */}
+              <div className="flex items-center space-x-1 bg-gray-100 p-0.5 rounded-xl border border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setDescLangTab('bn')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    descLangTab === 'bn'
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  বাংলা বিবরণ
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDescLangTab('en')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    descLangTab === 'en'
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  English Description
+                </button>
+              </div>
+            </div>
+
+            {/* Active Rich Text Editor */}
+            {descLangTab === 'bn' ? (
+              <RichTextEditor
                 value={descriptionBn}
-                onChange={e => setDescriptionBn(e.target.value)}
-                className="w-full bg-gray-50 border border-gray-200 focus:border-rose-500 focus:bg-white rounded-xl p-2.5 text-xs"
-                placeholder="পণ্যের বিস্তারিত বৈশিষ্ট্য..."
+                onChange={setDescriptionBn}
+                label="বাংলা বিবরণ"
+                placeholder="পণ্যের বিস্তারিত বৈশিষ্ট্য, সুবিধা ও মেটেরিয়াল..."
+                minHeight="160px"
               />
-            </div>
-            <div>
-              <label className="block font-bold text-gray-800 mb-1">Description (English)</label>
-              <textarea
-                rows={3}
+            ) : (
+              <RichTextEditor
                 value={description}
-                onChange={e => setDescription(e.target.value)}
-                className="w-full bg-gray-50 border border-gray-200 focus:border-rose-500 focus:bg-white rounded-xl p-2.5 text-xs"
-                placeholder="Product highlights and details..."
+                onChange={setDescription}
+                label="English Description"
+                placeholder="Product highlights, specifications and details..."
+                minHeight="160px"
               />
-            </div>
+            )}
           </div>
 
           {/* Variants & Badges */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-gray-100">
             <div>
               <label className="block font-bold text-gray-800 mb-1">রং / Colors (কমা দিয়ে)</label>
               <input
@@ -458,7 +1270,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                 type="checkbox"
                 checked={isBestSeller}
                 onChange={e => setIsBestSeller(e.target.checked)}
-                className="rounded text-rose-600 focus:ring-rose-500 w-4 h-4"
+                className="rounded text-rose-600 focus:ring-rose-500 w-4 h-4 cursor-pointer"
               />
               <span>বেস্ট সেলার (Best Seller)</span>
             </label>
@@ -467,7 +1279,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                 type="checkbox"
                 checked={isFlashSale}
                 onChange={e => setIsFlashSale(e.target.checked)}
-                className="rounded text-rose-600 focus:ring-rose-500 w-4 h-4"
+                className="rounded text-rose-600 focus:ring-rose-500 w-4 h-4 cursor-pointer"
               />
               <span>ফ্ল্যাশ সেল (Flash Sale)</span>
             </label>
@@ -476,7 +1288,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                 type="checkbox"
                 checked={isTrending}
                 onChange={e => setIsTrending(e.target.checked)}
-                className="rounded text-rose-600 focus:ring-rose-500 w-4 h-4"
+                className="rounded text-rose-600 focus:ring-rose-500 w-4 h-4 cursor-pointer"
               />
               <span>ট্রেন্ডিং পণ্য (Trending)</span>
             </label>
@@ -497,6 +1309,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                 }
                 className="text-[11px] font-bold text-rose-600 hover:text-rose-700 cursor-pointer flex items-center space-x-1 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-100"
               >
+                <Sparkles className="w-3 h-3 text-amber-500" />
                 <span>⚡ স্মার্ট অটো-ডিটেক্ট</span>
               </button>
             </div>
@@ -536,6 +1349,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
           <div className="pt-4 border-t border-gray-100 flex items-center justify-end space-x-3">
             <button
               type="button"
+              disabled={isSaving}
               onClick={onClose}
               className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-bold hover:bg-gray-50 cursor-pointer transition-colors"
             >
@@ -543,10 +1357,20 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer transition-colors shadow-md shadow-rose-600/25 flex items-center space-x-2"
+              disabled={isSaving || isUploading}
+              className="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold cursor-pointer transition-colors shadow-md shadow-rose-600/25 flex items-center space-x-2"
             >
-              <Save className="w-4 h-4" />
-              <span>পরিবর্তন সংরক্ষণ করুন</span>
+              {isSaving ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                  <span>সংরক্ষণ হচ্ছে...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  <span>পরিবর্তন সংরক্ষণ করুন</span>
+                </>
+              )}
             </button>
           </div>
         </form>

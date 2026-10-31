@@ -1,8 +1,18 @@
 import { handleSteadfastRequest, SteadfastEnv } from '../src/server/steadfastHandler';
+import { handleAiChatRequest, AiChatEnv } from '../src/server/aiChatHandler';
 
 export default {
-  async fetch(request: Request, env: SteadfastEnv & { ASSETS?: { fetch: (req: Request) => Promise<Response> } }, _ctx: any) {
+  async fetch(
+    request: Request,
+    env: SteadfastEnv & AiChatEnv & { ASSETS?: { fetch: (req: Request) => Promise<Response> } },
+    _ctx: any
+  ) {
     const url = new URL(request.url);
+
+    // Route AI Chat API requests
+    if (url.pathname.startsWith('/api/ai-chat') || url.pathname.startsWith('/api/chat')) {
+      return handleAiChatRequest(request, env);
+    }
 
     // Route Steadfast server-side API requests
     if (url.pathname.startsWith('/api/steadfast')) {

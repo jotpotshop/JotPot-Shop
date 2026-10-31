@@ -86,6 +86,8 @@ import {
   fetchDeliverySettingsFromFirestore,
   subscribeToDeliverySettings,
   saveProductsToFirestore,
+  saveSingleProductToFirestore,
+  deleteSingleProductFromFirestore,
   fetchProductsFromFirestore,
   subscribeToProducts,
   cleanFirestorePayload,
@@ -147,11 +149,11 @@ interface ShopContextType {
 
   // Products
   products: Product[];
-  addProduct: (product: Product) => void;
-  updateProduct: (product: Product) => void;
-  deleteProduct: (productId: string) => void;
-  bulkDeleteProducts: (productIds: string[]) => void;
-  bulkUpdateProducts: (productIds: string[], updates: Partial<Product>) => void;
+  addProduct: (product: Product) => Promise<{ success: boolean; error?: string }>;
+  updateProduct: (product: Product) => Promise<{ success: boolean; error?: string }>;
+  deleteProduct: (productId: string) => Promise<{ success: boolean; error?: string }>;
+  bulkDeleteProducts: (productIds: string[]) => Promise<{ success: boolean; error?: string }>;
+  bulkUpdateProducts: (productIds: string[], updates: Partial<Product>) => Promise<{ success: boolean; error?: string }>;
 
   // Cart
   cart: CartItem[];
@@ -2336,8 +2338,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
-  // Products CRUD with auto-occasion tagging & local storage persistence
-  const addProduct = (product: Product) => {
+  // Products CRUD with auto-occasion tagging, robust async Firestore persistence, and error checking
+  const addProduct = async (product: Product): Promise<{ success: boolean; error?: string }> => {
     const finalProduct: Product = {
       ...product,
       needTags:
@@ -2345,17 +2347,22 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ? product.needTags
           : detectProductOccasions(product),
     };
-    setProducts(prev => {
-      const next = [finalProduct, ...prev];
-      localStorage.setItem('jps_products', JSON.stringify(next));
-      saveProductsToFirestore(next).catch(err => {
-        console.warn('Failed to sync added product to Firestore:', err);
-      });
-      return next;
-    });
+
+    const next = [finalProduct, ...products.filter(p => p.id !== finalProduct.id)];
+    const saveRes = await saveProductsToFirestore(next, user.email || 'jotpotshop.official@gmail.com');
+    if (!saveRes.success) {
+      return { success: false, error: saveRes.error };
+    }
+
+    // Double-sync to individual product document
+    saveSingleProductToFirestore(finalProduct, user.email || 'jotpotshop.official@gmail.com').catch(() => {});
+
+    setProducts(next);
+    localStorage.setItem('jps_products', JSON.stringify(next));
+    return { success: true };
   };
 
-  const updateProduct = (updated: Product) => {
+  const updateProduct = async (updated: Product): Promise<{ success: boolean; error?: string }> => {
     const finalProduct: Product = {
       ...updated,
       needTags:
@@ -2363,59 +2370,75 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ? updated.needTags
           : detectProductOccasions(updated),
     };
-    setProducts(prev => {
-      const next = prev.map(p => (p.id === finalProduct.id ? finalProduct : p));
-      localStorage.setItem('jps_products', JSON.stringify(next));
-      saveProductsToFirestore(next).catch(err => {
-        console.warn('Failed to sync updated product to Firestore:', err);
-      });
-      return next;
-    });
+
+    const next = products.map(p => (p.id === finalProduct.id ? finalProduct : p));
+    const saveRes = await saveProductsToFirestore(next, user.email || 'jotpotshop.official@gmail.com');
+    if (!saveRes.success) {
+      return { success: false, error: saveRes.error };
+    }
+
+    // Double-sync to individual product document
+    saveSingleProductToFirestore(finalProduct, user.email || 'jotpotshop.official@gmail.com').catch(() => {});
+
+    setProducts(next);
+    localStorage.setItem('jps_products', JSON.stringify(next));
+    return { success: true };
   };
 
-  const deleteProduct = (id: string) => {
-    setProducts(prev => {
-      const next = prev.filter(p => p.id !== id);
-      localStorage.setItem('jps_products', JSON.stringify(next));
-      saveProductsToFirestore(next).catch(err => {
-        console.warn('Failed to sync deleted product to Firestore:', err);
-      });
-      return next;
-    });
+  const deleteProduct = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    const next = products.filter(p => p.id !== id);
+    const saveRes = await saveProductsToFirestore(next, user.email || 'jotpotshop.official@gmail.com');
+    if (!saveRes.success) {
+      return { success: false, error: saveRes.error };
+    }
+
+    deleteSingleProductFromFirestore(id).catch(() => {});
+
+    setProducts(next);
+    localStorage.setItem('jps_products', JSON.stringify(next));
+    return { success: true };
   };
 
-  const bulkDeleteProducts = (productIds: string[]) => {
+  const bulkDeleteProducts = async (productIds: string[]): Promise<{ success: boolean; error?: string }> => {
     const idSet = new Set(productIds);
-    setProducts(prev => {
-      const next = prev.filter(p => !idSet.has(p.id));
-      localStorage.setItem('jps_products', JSON.stringify(next));
-      saveProductsToFirestore(next).catch(err => {
-        console.warn('Failed to sync bulk deleted products to Firestore:', err);
-      });
-      return next;
-    });
+    const next = products.filter(p => !idSet.has(p.id));
+    const saveRes = await saveProductsToFirestore(next, user.email || 'jotpotshop.official@gmail.com');
+    if (!saveRes.success) {
+      return { success: false, error: saveRes.error };
+    }
+
+    productIds.forEach(id => deleteSingleProductFromFirestore(id).catch(() => {}));
+
+    setProducts(next);
+    localStorage.setItem('jps_products', JSON.stringify(next));
+    return { success: true };
   };
 
-  const bulkUpdateProducts = (productIds: string[], updates: Partial<Product>) => {
+  const bulkUpdateProducts = async (
+    productIds: string[],
+    updates: Partial<Product>
+  ): Promise<{ success: boolean; error?: string }> => {
     const idSet = new Set(productIds);
-    setProducts(prev => {
-      const next = prev.map(p => {
-        if (!idSet.has(p.id)) return p;
-        return {
-          ...p,
-          ...updates,
-          needTags:
-            updates.needTags && updates.needTags.length > 0
-              ? updates.needTags
-              : p.needTags,
-        };
-      });
-      localStorage.setItem('jps_products', JSON.stringify(next));
-      saveProductsToFirestore(next).catch(err => {
-        console.warn('Failed to sync bulk updated products to Firestore:', err);
-      });
-      return next;
+    const next = products.map(p => {
+      if (!idSet.has(p.id)) return p;
+      return {
+        ...p,
+        ...updates,
+        needTags:
+          updates.needTags && updates.needTags.length > 0
+            ? updates.needTags
+            : p.needTags,
+      };
     });
+
+    const saveRes = await saveProductsToFirestore(next, user.email || 'jotpotshop.official@gmail.com');
+    if (!saveRes.success) {
+      return { success: false, error: saveRes.error };
+    }
+
+    setProducts(next);
+    localStorage.setItem('jps_products', JSON.stringify(next));
+    return { success: true };
   };
 
   // Complete The Look (Bundles) Operations
@@ -2788,59 +2811,112 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updatedList = [newConv, ...prev];
       }
 
-      // If AI Sales Assistant is ON, AI generates smart conversational sales response
-      if (liveChatSettings.enableAiSalesAgent) {
-        setTimeout(() => {
-          const lower = text.toLowerCase();
-          let matchedProduct = products.find(p => {
-            const nameLower = (p.name + ' ' + p.nameBn + ' ' + p.category + ' ' + p.subcategory).toLowerCase();
-            if (lower.includes('শার্ট') || lower.includes('shirt')) return nameLower.includes('shirt') || nameLower.includes('শার্ট');
-            if (lower.includes('পাঞ্জাবি') || lower.includes('panjabi')) return nameLower.includes('panjabi') || nameLower.includes('পাঞ্জাবি');
-            if (lower.includes('শাড়ি') || lower.includes('saree') || lower.includes('জামদানি')) return nameLower.includes('saree') || nameLower.includes('শাড়ি') || nameLower.includes('জামদানি');
-            if (lower.includes('ঘড়ি') || lower.includes('watch')) return nameLower.includes('watch') || nameLower.includes('ঘড়ি');
-            if (lower.includes('ইয়ারবাড') || lower.includes('earbud') || lower.includes('হেডফোন')) return nameLower.includes('earbud') || nameLower.includes('headphone');
-            return false;
-          }) || products[0];
+      // If AI Sales Assistant is ON, AI generates smart conversational response via server-side Gemini 3.8 Flash
+      if (liveChatSettings.enableAiSalesAgent !== false) {
+        // Collect existing conversation messages for conversational memory
+        const currentConv = updatedList.find(c => c.id === targetConvId);
+        const history = (currentConv?.messages || []).slice(-6).map(m => ({
+          sender: m.sender as 'customer' | 'ai' | 'staff',
+          text: m.text,
+        }));
 
-          let aiText = '';
-          if (lower.includes('ডেলিভারি') || lower.includes('চট্টগ্রাম') || lower.includes('চার্জ')) {
-            const ctgFree = deliverySettings.chattogramFreeDeliveryOffer;
-            aiText = `আসসালামু আলাইকুম! আমাদের ডেলিভারি চার্জ: ঢাকা সিটিতে ৳${deliverySettings.insideDhakaFee} (${deliverySettings.insideDhakaDays})। ${ctgFree ? '🎉 বিশেষ অফার: চট্টগ্রামে আজকে ডেলিভারি সম্পূর্ণ ফ্রি (৳০)!' : `চট্টগ্রামে ৳${deliverySettings.chattogramFee} (${deliverySettings.chattogramDays})।`} এছাড়া ৳${deliverySettings.freeDeliveryThreshold}+ অর্ডারে সারা দেশে ফ্রি ডেলিভারি!`;
-          } else if (lower.includes('পেমেন্ট') || lower.includes('বিকাশ') || lower.includes('ক্যাশ')) {
-            aiText = `আমরা সারা বাংলাদেশে ক্যাশ অন ডেলিভারি (হাতে পেয়ে টাকা পরিশোধ) সুবিধা দিচ্ছি। এছাড়া বিকাশ ও নগদে পার্সোনাল সেন্ড-মানি বা মার্চেন্ট পেমেন্ট করে দ্রুত অর্ডার করতে পারেন।`;
-          } else if (matchedProduct) {
-            aiText = `আসসালামু আলাইকুম! আপনি কি "${matchedProduct.nameBn || matchedProduct.name}" খুঁজছেন? এটি বর্তমানে স্টকে রয়েছে, রেগুলার প্রাইস ৳${matchedProduct.oldPrice || matchedProduct.price + 300}, কিন্তু বিশেষ অফারে মাত্র ৳${matchedProduct.price} টাকায় পাচ্ছেন! সারা দেশে ক্যাশ অন ডেলিভারি সুবিধা রয়েছে। আপনি চাইলে আমি এখনই অর্ডার কনফার্ম করতে সহায়তা করতে পারি।`;
-          } else {
-            aiText = `আসসালামু আলাইকুম! আমি ঝটপট এআই সেলস সহকারী। আমাদের স্টোরে ফ্যাশন, প্রিমিয়াম পাঞ্জাবি, শার্ট, জামদানি শাড়ি এবং লেটেস্ট গ্যাজেট কালেকশন ডিসকাউন্টে চলছে। আপনি কি কোনো নির্দিষ্ট পণ্য খুঁজছেন?`;
-          }
+        // Collect compact real products from Firebase state
+        const productsCatalog = products.slice(0, 25).map(p => ({
+          id: p.id,
+          name: p.name,
+          nameBn: p.nameBn,
+          category: p.category,
+          subcategory: p.subcategory,
+          price: p.price,
+          oldPrice: p.oldPrice,
+          stock: p.stock,
+          description: p.description?.slice(0, 150),
+          image: p.images?.[0],
+        }));
 
-          const aiMsg: UnifiedMessage = {
-            id: `msg-ai-${Date.now()}`,
-            sender: 'ai',
-            senderName: liveChatSettings.aiSalesAgentName || 'ঝটপট এআই সেলস সহকারী',
-            text: aiText,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            productId: matchedProduct?.id,
-            productName: matchedProduct?.nameBn || matchedProduct?.name,
-            productPrice: matchedProduct?.price,
-            productImage: matchedProduct?.images?.[0],
-          };
+        // Customer's latest order if exists
+        const latestOrder = orders.find(
+          o => (custPhone && o.phone === custPhone) || (custEmail && o.email === custEmail)
+        );
 
-          setConversations(current => {
-            const next = current.map(c =>
-              c.id === targetConvId
-                ? {
-                    ...c,
-                    lastMessage: aiText,
-                    lastMessageTime: 'এইমাত্র',
-                    messages: [...c.messages, aiMsg],
-                  }
-                : c
-            );
-            saveConversationsToFirestore(next).catch(() => {});
-            return next;
+        fetch('/api/ai-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: text,
+            conversationHistory: history,
+            customerInfo: { name: custName, phone: custPhone, email: custEmail },
+            customerOrder: latestOrder
+              ? {
+                  orderId: latestOrder.id,
+                  status: latestOrder.status,
+                  totalAmount: latestOrder.totalAmount,
+                  items: latestOrder.items.map(i => `${i.product.name} (x${i.quantity})`),
+                }
+              : undefined,
+            productsCatalog,
+            storeSettings: {
+              storeName: websiteSettings.storeName,
+              hotline: websiteSettings.hotline,
+              deliveryInsideDhakaFee: deliverySettings.insideDhakaFee,
+              deliveryOutsideDhakaFee: deliverySettings.outsideDhakaFee,
+              freeDeliveryThreshold: deliverySettings.freeDeliveryThreshold,
+              chattogramFreeDeliveryOffer: deliverySettings.chattogramFreeDeliveryOffer,
+            },
+          }),
+        })
+          .then(res => res.json())
+          .then((data: any) => {
+            const replyText = data.reply || 'ধন্যবাদ! আমি আপনাকে কীভাবে সাহায্য করতে পারি?';
+            const aiMsg: UnifiedMessage = {
+              id: `msg-ai-${Date.now()}`,
+              sender: 'ai',
+              senderName: liveChatSettings.aiSalesAgentName || 'ঝটপট এআই সহকারী',
+              text: replyText,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              productId: data.suggestedProduct?.id,
+              productName: data.suggestedProduct?.name,
+              productPrice: data.suggestedProduct?.price,
+              productImage: data.suggestedProduct?.image,
+            };
+
+            setConversations(current => {
+              const next = current.map(c =>
+                c.id === targetConvId
+                  ? {
+                      ...c,
+                      lastMessage: replyText,
+                      lastMessageTime: 'এইমাত্র',
+                      status: data.transferToHuman ? 'open' : c.status,
+                      messages: [...c.messages, aiMsg],
+                    }
+                  : c
+              );
+              saveConversationsToFirestore(next).catch(() => {});
+              return next;
+            });
+          })
+          .catch(() => {
+            // Graceful fallback if network fails
+            const fallbackText =
+              'আসসালামু আলাইকুম! সাময়িক নেটওয়ার্ক সমস্যার কারণে উত্তর দিতে বিলম্ব হচ্ছে। আপনি চাইলে সরাসরি হটলাইনে (01800-568768) যোগাযোগ করতে পারেন।';
+            const fallbackMsg: UnifiedMessage = {
+              id: `msg-ai-${Date.now()}`,
+              sender: 'ai',
+              senderName: liveChatSettings.aiSalesAgentName || 'ঝটপট এআই সহকারী',
+              text: fallbackText,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            };
+            setConversations(current => {
+              const next = current.map(c =>
+                c.id === targetConvId
+                  ? { ...c, lastMessage: fallbackText, lastMessageTime: 'এইমাত্র', messages: [...c.messages, fallbackMsg] }
+                  : c
+              );
+              saveConversationsToFirestore(next).catch(() => {});
+              return next;
+            });
           });
-        }, 600);
       }
 
       saveConversationsToFirestore(updatedList).catch(() => {});

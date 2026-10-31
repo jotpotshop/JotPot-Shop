@@ -64,6 +64,7 @@ import { OmnichannelChatManager } from './admin/OmnichannelChatManager';
 import { HelpCenterManager } from './admin/HelpCenterManager';
 import { RoleDashboards } from './admin/RoleDashboards';
 import {
+  ProductAddModal,
   ProductEditModal,
   ProductDeleteModal,
   BulkProductEditModal,
@@ -231,22 +232,6 @@ export const AdminPanel: React.FC = () => {
 
   // Add Product Modal State
   const [showAddProductModal, setShowAddProductModal] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [newTitleBn, setNewTitleBn] = useState('');
-  const [newCategory, setNewCategory] = useState('men-fashion');
-  const [newSubcategory, setNewSubcategory] = useState('Shirts');
-  const [newBrand, setNewBrand] = useState('JotPot Brand');
-  const [newSku, setNewSku] = useState(`JPS-${Math.floor(1000 + Math.random() * 9000)}`);
-  const [newPrice, setNewPrice] = useState(990);
-  const [newOldPrice, setNewOldPrice] = useState(1350);
-  const [newCostPrice, setNewCostPrice] = useState(550);
-  const [newStock, setNewStock] = useState(25);
-  const [newColors, setNewColors] = useState('Black, Blue, White');
-  const [newSizes, setNewSizes] = useState('M, L, XL');
-  const [newImageUrl, setNewImageUrl] = useState('https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?auto=format&fit=crop&w=800&q=80');
-  const [newDesc, setNewDesc] = useState('High quality fabric crafted for comfort and elegance.');
-  const [newDescBn, setNewDescBn] = useState('আরামদায়ক ও টেকসই সুতি কাপড়ে তৈরি প্রিমিয়াম কোয়ালিটি পণ্য।');
-  const [newNeedTags, setNewNeedTags] = useState<NeedTag[]>(['office', 'campus', 'everyday']);
 
   // Add Category Modal State
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
@@ -276,17 +261,44 @@ export const AdminPanel: React.FC = () => {
     }
   }, [adminToast]);
 
-  const handleSaveProductEdit = (updated: Product) => {
-    updateProduct(updated);
-    setProductToEdit(null);
-    setAdminToast({ message: `"${updated.name}" পণ্যটি সফলভাবে আপডেট করা হয়েছে!`, type: 'success' });
+  const handleCreateProductAsync = async (created: Product): Promise<{ success: boolean; error?: string }> => {
+    const res = await addProduct(created);
+    if (res.success) {
+      setAdminToast({
+        message: `"${created.nameBn || created.name}" পণ্যটি সফলভাবে Firebase-এ সংরক্ষিত ও স্টোরে লাইভ করা হয়েছে!`,
+        type: 'success',
+      });
+      return { success: true };
+    } else {
+      setAdminToast({
+        message: `পণ্য সংরক্ষণ ব্যর্থ: ${res.error || 'Firebase-এ সেভ করা সম্ভব হয়নি'}`,
+        type: 'error',
+      });
+      return { success: false, error: res.error };
+    }
   };
 
-  const handleConfirmProductDelete = (productId: string) => {
+  const handleSaveProductEdit = async (updated: Product) => {
+    const res = await updateProduct(updated);
+    if (res.success) {
+      setProductToEdit(null);
+      setAdminToast({ message: `"${updated.nameBn || updated.name}" পণ্যটি সফলভাবে আপডেট করা হয়েছে!`, type: 'success' });
+      return true;
+    } else {
+      setAdminToast({ message: `আপডেট ব্যর্থ: ${res.error || 'Firebase-এ আপডেট করা সম্ভব হয়নি'}`, type: 'error' });
+      return false;
+    }
+  };
+
+  const handleConfirmProductDelete = async (productId: string) => {
     const target = products.find(p => p.id === productId);
-    deleteProduct(productId);
-    setProductToDelete(null);
-    setAdminToast({ message: `"${target?.name || 'পণ্য'}" সফলভাবে মুছে ফেলা হয়েছে!`, type: 'success' });
+    const res = await deleteProduct(productId);
+    if (res.success) {
+      setProductToDelete(null);
+      setAdminToast({ message: `"${target?.nameBn || target?.name || 'পণ্য'}" সফলভাবে মুছে ফেলা হয়েছে!`, type: 'success' });
+    } else {
+      setAdminToast({ message: `মুছে ফেলা ব্যর্থ: ${res.error || 'Firebase ত্রুটি'}`, type: 'error' });
+    }
   };
 
   // Bulk Product Selection & Actions State
@@ -379,67 +391,6 @@ export const AdminPanel: React.FC = () => {
     return true;
   });
 
-  const handleCreateProduct = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim()) return;
-
-    const discountP = newOldPrice > newPrice ? Math.round(((newOldPrice - newPrice) / newOldPrice) * 100) : 0;
-
-    const created: Product = {
-      id: `jps-prod-${Date.now()}`,
-      name: newTitle,
-      nameBn: newTitleBn || newTitle,
-      category: newCategory,
-      categoryBn: CATEGORIES.find(c => c.id === newCategory)?.nameBn || 'ফ্যাশন',
-      subcategory: newSubcategory,
-      subcategoryBn: newSubcategory,
-      brand: newBrand,
-      sku: newSku,
-      price: Number(newPrice),
-      oldPrice: Number(newOldPrice),
-      discountPercent: discountP,
-      costPrice: Number(newCostPrice),
-      stock: Number(newStock),
-      lowStockThreshold: 5,
-      colors: newColors.split(',').map(s => s.trim()).filter(Boolean),
-      sizes: newSizes.split(',').map(s => s.trim()).filter(Boolean),
-      images: [newImageUrl],
-      description: newDesc,
-      descriptionBn: newDescBn,
-      specifications: { 'Origin': 'Bangladesh', 'Quality': 'Standard A+' },
-      warranty: '7 Days Replacement',
-      warrantyBn: '৭ দিনের রিপ্লেসমেন্ট',
-      returnPolicy: '7 Days Easy Return',
-      returnPolicyBn: '৭ দিনের সহজ রিটার্ন',
-      deliveryDays: 'Inside Dhaka 24-48 hours',
-      deliveryDaysBn: 'ঢাকা সিটিতে ২৪-৪৮ ঘণ্টা',
-      tags: [newCategory, newSubcategory.toLowerCase()],
-      rating: 5.0,
-      reviewsCount: 1,
-      isFlashSale: false,
-      isBestSeller: true,
-      needTags:
-        newNeedTags.length > 0
-          ? newNeedTags
-          : detectProductOccasions({
-              name: newTitle,
-              nameBn: newTitleBn,
-              category: newCategory,
-              subcategory: newSubcategory,
-              description: newDesc,
-            }),
-      reviews: [],
-    };
-
-    addProduct(created);
-    setShowAddProductModal(false);
-    setNewTitle('');
-    setNewTitleBn('');
-    setAdminToast({
-      message: `"${created.name}" পণ্যটি সফলভাবে যুক্ত ও স্টোরে লাইভ করা হয়েছে!`,
-      type: 'success',
-    });
-  };
 
   const handleCreateCoupon = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1853,225 +1804,11 @@ export const AdminPanel: React.FC = () => {
       </div>
 
       {/* Modal: Add Product */}
-      {showAddProductModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden my-auto border border-gray-100 flex flex-col max-h-[92vh]">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/70">
-              <h3 className="font-extrabold text-base text-gray-900">নতুন পণ্য যোগ করুন</h3>
-              <button
-                onClick={() => setShowAddProductModal(false)}
-                className="p-1.5 text-gray-400 hover:text-gray-900 rounded-lg hover:bg-gray-100 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateProduct} className="p-6 overflow-y-auto space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold mb-1">Product Title (English) *</label>
-                  <input
-                    type="text"
-                    required
-                    value={newTitle}
-                    onChange={e => setNewTitle(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">পণ্যের নাম (বাংলা) *</label>
-                  <input
-                    type="text"
-                    value={newTitleBn}
-                    onChange={e => setNewTitleBn(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-semibold mb-1">Category</label>
-                  <select
-                    value={newCategory}
-                    onChange={e => setNewCategory(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs"
-                  >
-                    {CATEGORIES.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">Subcategory</label>
-                  <input
-                    type="text"
-                    value={newSubcategory}
-                    onChange={e => setNewSubcategory(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">SKU</label>
-                  <input
-                    type="text"
-                    value={newSku}
-                    onChange={e => setNewSku(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-4 gap-3">
-                <div>
-                  <label className="block font-semibold mb-1">Price (৳)</label>
-                  <input
-                    type="number"
-                    value={newPrice}
-                    onChange={e => setNewPrice(Number(e.target.value))}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 text-xs font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">Old Price (৳)</label>
-                  <input
-                    type="number"
-                    value={newOldPrice}
-                    onChange={e => setNewOldPrice(Number(e.target.value))}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 text-xs text-gray-500"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">Cost Price (৳)</label>
-                  <input
-                    type="number"
-                    value={newCostPrice}
-                    onChange={e => setNewCostPrice(Number(e.target.value))}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">Stock</label>
-                  <input
-                    type="number"
-                    value={newStock}
-                    onChange={e => setNewStock(Number(e.target.value))}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 text-xs font-bold text-emerald-600"
-                  />
-                </div>
-              </div>
-
-              {/* Direct Product Image Upload (No URL) */}
-              <div className="space-y-2">
-                <label className="block font-semibold mb-1">পণ্যের ছবি আপলোড (Direct File Upload)</label>
-                {newImageUrl ? (
-                  <div className="flex items-center space-x-3 p-2 bg-gray-50 border border-gray-200 rounded-xl">
-                    <img
-                      src={newImageUrl}
-                      alt="Product preview"
-                      className="w-14 h-14 object-cover rounded-lg border border-gray-200"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-bold text-gray-800 truncate">ছবি আপলোড সম্পন্ন</p>
-                      <button
-                        type="button"
-                        onClick={() => setNewImageUrl('')}
-                        className="text-[10px] text-rose-600 hover:text-rose-800 font-bold mt-1 cursor-pointer"
-                      >
-                        ছবি পরিবর্তন বা মুছে ফেলুন
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <label className="border-2 border-dashed border-gray-300 hover:border-rose-500 hover:bg-rose-50/20 rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all">
-                    <Upload className="w-6 h-6 text-gray-400 mb-1" />
-                    <span className="text-xs font-bold text-gray-700">ডিভাইস থেকে পণ্যের ছবি নির্বাচন করুন</span>
-                    <span className="text-[10px] text-gray-400 mt-0.5">PNG, JPG, WEBP (সরাসরি আপলোড)</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={e => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            setNewImageUrl(reader.result as string);
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                    />
-                  </label>
-                )}
-              </div>
-
-              {/* Occasion / Shop by Need Tag Selection */}
-              <div className="space-y-2 pt-2 border-t border-gray-100">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-gray-800 flex items-center space-x-1.5 text-xs">
-                    <span>🎯 উপলক্ষ ও প্রয়োজন ট্যাগ (আপনার কী প্রয়োজন?)</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setNewNeedTags(
-                        detectProductOccasions({
-                          name: newTitle,
-                          nameBn: newTitleBn,
-                          category: newCategory,
-                          subcategory: newSubcategory,
-                          description: newDesc,
-                        })
-                      )
-                    }
-                    className="text-[11px] font-bold text-rose-600 hover:text-rose-700 cursor-pointer flex items-center space-x-1 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-100"
-                  >
-                    <span>⚡ স্মার্ট অটো-ডিটেক্ট</span>
-                  </button>
-                </div>
-                <p className="text-[10px] text-gray-500">
-                  যেসব উপলক্ষ নির্বাচন করবেন, হোমপেজের "আপনার কী প্রয়োজন?" ট্যাবে পণ্যটি সাথে সাথে যুক্ত হবে:
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {OCCASIONS_LIST.map(occ => {
-                    const isSelected = newNeedTags.includes(occ.id);
-                    return (
-                      <button
-                        key={occ.id}
-                        type="button"
-                        onClick={() => {
-                          if (isSelected) {
-                            setNewNeedTags(newNeedTags.filter(t => t !== occ.id));
-                          } else {
-                            setNewNeedTags([...newNeedTags, occ.id]);
-                          }
-                        }}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center space-x-1.5 ${
-                          isSelected
-                            ? 'bg-gray-900 text-white border-gray-900 shadow-xs'
-                            : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
-                        }`}
-                      >
-                        <span>{occ.icon}</span>
-                        <span>{occ.titleBn}</span>
-                        {isSelected && <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 rounded-xl text-xs cursor-pointer shadow-md"
-              >
-                পণ্য সেভ ও পাবলিশ করুন
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+      <ProductAddModal
+        isOpen={showAddProductModal}
+        onClose={() => setShowAddProductModal(false)}
+        onSave={handleCreateProductAsync}
+      />
 
       {/* Modal: Add Coupon */}
       {showAddCouponModal && (
