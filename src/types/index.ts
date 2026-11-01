@@ -160,6 +160,7 @@ export interface OrderCallLog {
 
 export interface Order {
   id: string;
+  customerUid?: string;
   customerName: string;
   phone: string;
   alternativePhone?: string;
@@ -448,6 +449,7 @@ export interface UnifiedMessage {
 
 export interface UnifiedConversation {
   id: string;
+  customerUid?: string;
   channel: MessageChannel;
   customerName: string;
   customerPhone?: string;

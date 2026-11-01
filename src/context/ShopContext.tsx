@@ -117,8 +117,11 @@ import {
   fetchCustomersFromFirestore,
   subscribeToCustomers,
   saveConversationsToFirestore,
+  saveSingleConversationToFirestore,
   fetchConversationsFromFirestore,
   subscribeToConversations,
+  ensureCustomerAuthSession,
+  logoutFirebaseAuth,
   saveHelpCenterSettingsToFirestore,
   fetchHelpCenterSettingsFromFirestore,
   subscribeToHelpCenterSettings,
@@ -134,11 +137,12 @@ export const FREE_DELIVERY_THRESHOLD = 1500;
 export const INSIDE_CITY_DELIVERY = 60;
 export const OUTSIDE_CITY_DELIVERY = 120;
 
-interface UserState {
+export interface UserState {
   isLoggedIn: boolean;
   name: string;
   phone: string;
   email: string;
+  uid?: string;
 }
 
 interface ShopContextType {
@@ -1773,8 +1777,14 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       },
     ];
 
+    const currentCustomerUid =
+      user.uid ||
+      registeredCustomers.find(c => c.phone === orderData.phone.trim())?.id ||
+      undefined;
+
     const rawOrder: Order = {
       id: orderId,
+      customerUid: currentCustomerUid,
       customerName: orderData.customerName.trim(),
       phone: orderData.phone.trim(),
       alternativePhone: orderData.alternativePhone?.trim() || undefined,
@@ -2565,14 +2575,20 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // User auth
-  const loginUser = (info: { name: string; phone: string; email: string }) => {
-    setUser({
-      isLoggedIn: true,
-      name: info.name,
-      phone: info.phone,
-      email: info.email,
+  const loginUser = (info: { name: string; phone: string; email: string; uid?: string }) => {
+    ensureCustomerAuthSession().then(authUid => {
+      const finalUid = info.uid || authUid || `cust-${Date.now()}`;
+      const updatedUser: UserState = {
+        isLoggedIn: true,
+        name: info.name,
+        phone: info.phone,
+        email: info.email,
+        uid: finalUid,
+      };
+      setUser(updatedUser);
+      localStorage.setItem('jps_user', JSON.stringify(updatedUser));
+      switchCustomerCart(info.phone || info.email);
     });
-    switchCustomerCart(info.phone || info.email);
   };
 
   const logoutUser = () => {
@@ -2581,12 +2597,15 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const key = getCustomerCartStorageKey(user.phone || user.email);
       localStorage.setItem(key, JSON.stringify(cart));
     }
-    // 2. Clear active in-memory cart completely so no other user or guest sees this customer's bag
+    // 2. Clear active in-memory cart and coupons completely
     setCart([]);
     setAppliedCoupon(null);
     localStorage.removeItem('jps_cart_guest');
     localStorage.removeItem('jps_cart');
-    setUser({ isLoggedIn: false, name: '', phone: '', email: '' });
+    localStorage.removeItem('jps_user');
+    setActiveChatConversationId(null);
+    logoutFirebaseAuth().catch(() => {});
+    setUser({ isLoggedIn: false, name: '', phone: '', email: '', uid: undefined });
   };
 
   // Synchronize registered customers to state, localStorage, and Cloud Firestore
@@ -2616,8 +2635,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: 'এই মোবাইল নম্বর বা ইমেইল দিয়ে ইতিমধ্যে অ্যাকাউন্ট তৈরি করা হয়েছে। লগইন করুন।' };
     }
 
+    const customerId = `cust-${Date.now()}`;
     const newCustomer: RegisteredCustomer = {
-      id: `cust-${Date.now()}`,
+      id: customerId,
       name: info.name.trim(),
       phone: cleanPhone,
       email: cleanEmail || `${cleanPhone}@customer.jotpotshop.com`,
@@ -2628,13 +2648,19 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     syncCustomers(prev => [newCustomer, ...prev]);
-    setUser({
-      isLoggedIn: true,
-      name: newCustomer.name,
-      phone: newCustomer.phone,
-      email: newCustomer.email,
+
+    ensureCustomerAuthSession().then(authUid => {
+      const updatedUser: UserState = {
+        isLoggedIn: true,
+        name: newCustomer.name,
+        phone: newCustomer.phone,
+        email: newCustomer.email,
+        uid: authUid || customerId,
+      };
+      setUser(updatedUser);
+      localStorage.setItem('jps_user', JSON.stringify(updatedUser));
+      switchCustomerCart(newCustomer.phone || newCustomer.email, newCustomer);
     });
-    switchCustomerCart(newCustomer.phone || newCustomer.email, newCustomer);
 
     return { success: true, message: 'কাস্টমার অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে! স্বাগতম।' };
   };
@@ -2649,13 +2675,18 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 
     if (found) {
-      setUser({
-        isLoggedIn: true,
-        name: found.name,
-        phone: found.phone,
-        email: found.email,
+      ensureCustomerAuthSession().then(authUid => {
+        const updatedUser: UserState = {
+          isLoggedIn: true,
+          name: found.name,
+          phone: found.phone,
+          email: found.email,
+          uid: authUid || found.id,
+        };
+        setUser(updatedUser);
+        localStorage.setItem('jps_user', JSON.stringify(updatedUser));
+        switchCustomerCart(found.phone || found.email, found);
       });
-      switchCustomerCart(found.phone || found.email, found);
       return { success: true, message: 'লগইন সফল হয়েছে!' };
     }
 
@@ -2684,15 +2715,19 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       syncCustomers(prev => [existing!, ...prev]);
     }
 
-    setUser({
-      isLoggedIn: true,
-      name: existing.name,
-      phone: existing.phone,
-      email: existing.email,
+    ensureCustomerAuthSession().then(authUid => {
+      const updatedUser: UserState = {
+        isLoggedIn: true,
+        name: existing!.name,
+        phone: existing!.phone,
+        email: existing!.email,
+        uid: authUid || existing!.id,
+      };
+      setUser(updatedUser);
+      localStorage.setItem('jps_user', JSON.stringify(updatedUser));
+      switchCustomerCart(existing!.email, existing);
     });
-    switchCustomerCart(existing.email, existing);
   };
-
 
   // Reset Customer Password
   const resetCustomerPassword = (phone: string, newPass: string) => {
@@ -2713,13 +2748,18 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       prev.map(c => (c.phone.replace(/\D/g, '') === cleanPhone ? { ...c, password: newPass } : c))
     );
 
-    setUser({
-      isLoggedIn: true,
-      name: found.name,
-      phone: found.phone,
-      email: found.email,
+    ensureCustomerAuthSession().then(authUid => {
+      const updatedUser: UserState = {
+        isLoggedIn: true,
+        name: found.name,
+        phone: found.phone,
+        email: found.email,
+        uid: authUid || found.id,
+      };
+      setUser(updatedUser);
+      localStorage.setItem('jps_user', JSON.stringify(updatedUser));
+      switchCustomerCart(found.phone || found.email, found);
     });
-    switchCustomerCart(found.phone || found.email, found);
 
     return { success: true, message: 'পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে এবং আপনি লগইন হয়েছেন!' };
   };
@@ -2773,18 +2813,29 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       timestamp: timeStr,
     };
 
+    const currentCustUid =
+      user.uid ||
+      registeredCustomers.find(c => c.phone === custPhone || (c.email && c.email.toLowerCase() === custEmail.toLowerCase()))?.id ||
+      undefined;
+
     setConversations(prev => {
       const existingIdx = prev.findIndex(
-        c => c.channel === channel && (c.customerPhone === custPhone || c.customerName === custName)
+        c =>
+          c.channel === channel &&
+          ((currentCustUid && c.customerUid === currentCustUid) ||
+            (c.customerPhone && c.customerPhone === custPhone) ||
+            (c.customerName && c.customerName === custName))
       );
 
       let updatedList: UnifiedConversation[];
       let targetConvId: string;
+      let targetConvObj: UnifiedConversation;
 
       if (existingIdx >= 0) {
         const existing = prev[existingIdx];
         const updatedConv: UnifiedConversation = {
           ...existing,
+          customerUid: existing.customerUid || currentCustUid,
           unreadCount: existing.unreadCount + 1,
           lastMessage: text,
           lastMessageTime: 'এইমাত্র',
@@ -2792,12 +2843,14 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           messages: [...existing.messages, newMsg],
         };
         targetConvId = existing.id;
+        targetConvObj = updatedConv;
         updatedList = [updatedConv, ...prev.filter((_, idx) => idx !== existingIdx)];
       } else {
-        const newConvId = `conv-${channel}-${Date.now()}`;
+        const newConvId = currentCustUid ? `conv-${currentCustUid}` : `conv-${channel}-${Date.now()}`;
         targetConvId = newConvId;
         const newConv: UnifiedConversation = {
           id: newConvId,
+          customerUid: currentCustUid,
           channel,
           customerName: custName,
           customerPhone: custPhone,
@@ -2808,8 +2861,11 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           status: 'open',
           messages: [newMsg],
         };
+        targetConvObj = newConv;
         updatedList = [newConv, ...prev];
       }
+
+      saveSingleConversationToFirestore(targetConvObj).catch(() => {});
 
       // If AI Sales Assistant is ON, AI generates smart conversational response via server-side Gemini 3.8 Flash
       if (liveChatSettings.enableAiSalesAgent !== false) {
@@ -2953,7 +3009,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setConversations(prev => {
       const next: UnifiedConversation[] = prev.map(c => {
         if (c.id === conversationId) {
-          return {
+          const updated: UnifiedConversation = {
             ...c,
             unreadCount: 0,
             lastMessage: replyText.trim(),
@@ -2961,6 +3017,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             status: 'waiting' as const,
             messages: [...c.messages, newReply],
           };
+          saveSingleConversationToFirestore(updated).catch(() => {});
+          return updated;
         }
         return c;
       });

@@ -4,6 +4,9 @@ import {
   Auth,
   GoogleAuthProvider,
   signInWithPopup,
+  signInAnonymously,
+  signOut,
+  onAuthStateChanged,
   User,
 } from 'firebase/auth';
 import {
@@ -1758,7 +1761,83 @@ export function formatBDPhoneNumber(phone: string): string {
 
 
 /**
- * Saves Live Chat Conversations to Cloud Firestore
+ * Ensures an active Firebase Auth session exists for the customer.
+ * Uses real Google Auth if already signed in, or initializes anonymous Firebase Auth session for UID-based ABAC isolation.
+ */
+export async function ensureCustomerAuthSession(): Promise<string> {
+  if (auth.currentUser?.uid) {
+    return auth.currentUser.uid;
+  }
+  try {
+    const cred = await signInAnonymously(auth);
+    return cred.user.uid;
+  } catch (err) {
+    console.warn('Could not establish Firebase Auth session:', err);
+    return '';
+  }
+}
+
+/**
+ * Signs out from Firebase Authentication completely
+ */
+export async function logoutFirebaseAuth(): Promise<void> {
+  try {
+    await signOut(auth);
+  } catch (err) {
+    console.warn('Firebase logout error:', err);
+  }
+}
+
+/**
+ * Saves a single private conversation to /conversations/{convId}
+ */
+export async function saveSingleConversationToFirestore(
+  conversation: UnifiedConversation,
+  authorEmail = 'jotpotshop.official@gmail.com'
+): Promise<void> {
+  if (!conversation || !conversation.id) return;
+  try {
+    const docRef = doc(db, 'conversations', conversation.id);
+    await setDoc(
+      docRef,
+      cleanFirestorePayload({
+        ...conversation,
+        updatedAt: new Date().toISOString(),
+        updatedBy: authorEmail,
+        projectId: FIREBASE_PROJECT_INFO.projectId,
+      }),
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn('Failed to save individual conversation to Firestore:', err);
+  }
+}
+
+/**
+ * Subscribes to a single customer's isolated conversation in /conversations/{convId}
+ */
+export function subscribeToCustomerConversation(
+  convId: string,
+  onUpdate: (conversation: UnifiedConversation | null) => void
+): Unsubscribe {
+  const docRef = doc(db, 'conversations', convId);
+  return onSnapshot(
+    docRef,
+    snapshot => {
+      if (snapshot.exists()) {
+        onUpdate(snapshot.data() as UnifiedConversation);
+      } else {
+        onUpdate(null);
+      }
+    },
+    error => {
+      console.warn('Customer conversation live subscription error:', error);
+    }
+  );
+}
+
+/**
+ * Saves Live Chat Conversations to Cloud Firestore (Global admin ledger)
  */
 export async function saveConversationsToFirestore(
   conversations: UnifiedConversation[],

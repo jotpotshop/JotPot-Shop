@@ -12,6 +12,9 @@ import {
   RotateCcw,
   UserCheck,
   ExternalLink,
+  Lock,
+  LogIn,
+  ShieldCheck,
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 
@@ -98,14 +101,16 @@ export const FloatingContactWidget: React.FC = () => {
     '01800568768'
   ).replace(/\D/g, '');
 
-  // Find customer's active livechat thread
-  const activeLiveChatConv = conversations.find(
-    c =>
-      c.channel === 'livechat' &&
-      ((user.phone && c.customerPhone === user.phone) ||
-        (user.email && c.customerEmail === user.email) ||
-        (user.name && c.customerName === user.name))
-  ) || conversations.find(c => c.channel === 'livechat');
+  // Strictly isolate active livechat thread to authenticated user's UID or verified phone/email
+  const activeLiveChatConv = user.isLoggedIn
+    ? conversations.find(
+        c =>
+          c.channel === 'livechat' &&
+          ((user.uid && c.customerUid === user.uid) ||
+            (user.phone && c.customerPhone === user.phone) ||
+            (user.email && c.customerEmail && c.customerEmail.toLowerCase() === user.email.toLowerCase()))
+      )
+    : undefined;
 
   const [localMessages, setLocalMessages] = useState<
     Array<{
@@ -119,9 +124,16 @@ export const FloatingContactWidget: React.FC = () => {
     }>
   >([]);
 
+  // Reset conversation messages immediately upon logout
+  useEffect(() => {
+    if (!user.isLoggedIn) {
+      setLocalMessages([]);
+    }
+  }, [user.isLoggedIn]);
+
   // Sync with shop context conversation messages when updated
   useEffect(() => {
-    if (activeLiveChatConv && activeLiveChatConv.messages && activeLiveChatConv.messages.length > 0) {
+    if (user.isLoggedIn && activeLiveChatConv && activeLiveChatConv.messages && activeLiveChatConv.messages.length > 0) {
       const mapped = activeLiveChatConv.messages.map(m => ({
         sender: (m.sender === 'customer' ? 'user' : m.sender === 'ai' ? 'ai' : 'agent') as
           | 'agent'
@@ -136,7 +148,7 @@ export const FloatingContactWidget: React.FC = () => {
       }));
       setLocalMessages(mapped);
     }
-  }, [activeLiveChatConv?.id, activeLiveChatConv?.messages?.length, activeLiveChatConv?.lastMessage]);
+  }, [user.isLoggedIn, activeLiveChatConv?.id, activeLiveChatConv?.messages?.length, activeLiveChatConv?.lastMessage]);
 
   // Auto scroll to bottom in chat
   useEffect(() => {
@@ -300,13 +312,59 @@ export const FloatingContactWidget: React.FC = () => {
             </div>
           )}
 
-          {/* Human Handover Reassurance Notice */}
-          {isHumanTransferred && (
-            <div className="bg-emerald-50 border-b border-emerald-200 text-emerald-900 px-3 py-1.5 text-[10px] font-bold flex items-center space-x-1.5">
-              <UserCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              <span>সাপোর্ট এজেন্টের কাছে অনুরোধ ফরোয়ার্ড করা হয়েছে।</span>
+          {/* Mandatory Login Gate for Live Chat */}
+          {!user.isLoggedIn ? (
+            <div className="p-6 text-center space-y-4 my-auto bg-slate-50/60">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center shadow-xs">
+                <Lock className="w-7 h-7" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-extrabold text-gray-900 text-sm sm:text-base">
+                  {t('লাইভ চ্যাটে লগইন বাধ্যতামূলক', 'Login Required for Live Chat')}
+                </h4>
+                <p className="text-xs text-gray-600 leading-relaxed max-w-xs mx-auto">
+                  {t(
+                    'আপনার কথোপকথন ও ব্যক্তিগত তথ্যের সর্বোচ্চ গোপনীয়তা বজায় রাখতে এবং অর্ডার সহায়তা পেতে অনুগ্রহ করে লগইন বা রেজিস্ট্রেশন করুন।',
+                    'To protect your private conversation and order details, please log in or register before using Live Chat.'
+                  )}
+                </p>
+              </div>
+
+              <div className="pt-2 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWidgetState('closed');
+                    setActiveModal('dashboard');
+                  }}
+                  className="w-full py-2.5 px-4 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center space-x-2"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>{t('লগইন / রেজিস্টার করুন', 'Login / Register')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWidgetState('menu')}
+                  className="w-full py-1.5 px-3 text-xs text-gray-500 hover:text-gray-800 font-semibold cursor-pointer"
+                >
+                  {t('অন্যান্য মাধ্যমে যোগাযোগ করুন', 'View other contact options')}
+                </button>
+              </div>
+
+              <div className="p-2.5 bg-white rounded-xl border border-gray-200/80 text-[11px] text-gray-500 flex items-center justify-center space-x-1.5 shadow-2xs">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{t('প্রতিটি কথোপকথন সম্পূর্ণ ব্যক্তিগত ও সুরক্ষিত', 'Your private chat is 100% confidential')}</span>
+              </div>
             </div>
-          )}
+          ) : (
+            <>
+              {/* Human Handover Reassurance Notice */}
+              {isHumanTransferred && (
+                <div className="bg-emerald-50 border-b border-emerald-200 text-emerald-900 px-3 py-1.5 text-[10px] font-bold flex items-center space-x-1.5">
+                  <UserCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>সাপোর্ট এজেন্টের কাছে অনুরোধ ফরোয়ার্ড করা হয়েছে।</span>
+                </div>
+              )}
 
           {/* Messages viewport */}
           <div className="h-[280px] sm:h-[320px] p-3 sm:p-3.5 overflow-y-auto space-y-3 text-xs bg-slate-50/70">
@@ -499,6 +557,8 @@ export const FloatingContactWidget: React.FC = () => {
               <Send className="w-4 h-4" />
             </button>
           </form>
+            </>
+          )}
         </div>
       )}
 
@@ -534,11 +594,18 @@ export const FloatingContactWidget: React.FC = () => {
               >
                 <div className="flex items-center space-x-2.5 min-w-0">
                   <div className="w-8 h-8 rounded-lg bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                    <MessageSquare className="w-4 h-4" />
+                    {user.isLoggedIn ? <MessageSquare className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   </div>
                   <div className="min-w-0">
-                    <p className="font-extrabold text-xs text-rose-900 leading-tight">লাইভ চ্যাট</p>
-                    <p className="text-[10px] text-rose-600 font-medium truncate">স্মার্ট এআই ও সরাসরি সহায়তা</p>
+                    <div className="flex items-center space-x-1.5">
+                      <p className="font-extrabold text-xs text-rose-900 leading-tight">লাইভ চ্যাট</p>
+                      {!user.isLoggedIn && (
+                        <span className="text-[9px] bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded font-bold">লগইন আবশ্যক</span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-rose-600 font-medium truncate">
+                      {user.isLoggedIn ? 'স্মার্ট এআই ও সরাসরি সহায়তা' : 'লগইন করে চ্যাট শুরু করুন'}
+                    </p>
                   </div>
                 </div>
                 <ChevronRight className="w-4 h-4 text-rose-400 group-hover:translate-x-0.5 transition-transform shrink-0" />

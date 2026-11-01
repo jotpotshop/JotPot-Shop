@@ -8,54 +8,87 @@ service cloud.firestore {
       return id is string && id.size() > 0 && id.size() <= 128;
     }
 
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    function isStaffOrAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email in ['mdmahmudulhashan0@gmail.com', 'jotpotshop.official@gmail.com'] ||
+        (exists(/databases/$(database)/documents/staff/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role in ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'])
+      );
+    }
+
     // Health check and connection validation
     match /test/{docId} {
       allow read, write: if isValidId(docId);
     }
 
-    // Global settings, branding, help center, and chat persistence
+    // Global settings, branding, help center, and transactional orders ledger
     match /settings/{settingId} {
       allow read: if isValidId(settingId);
-      allow write: if isValidId(settingId);
+      allow write: if isStaffOrAdmin() || (isAuthenticated() && (settingId == 'orders_data' || settingId == 'live_chat_conversations'));
     }
 
-    // Customer Live Chat & Omnichannel conversations
+    // Customer Live Chat & Omnichannel conversations:
+    // Read: Customer can read ONLY their own conversation (customerUid == request.auth.uid) OR staff/admin
+    // Create/Write: Customer can create/update ONLY their own conversation; staff/admin can manage & reply
     match /conversations/{convId} {
-      allow read, write: if isValidId(convId);
+      allow read: if isStaffOrAdmin() || (isAuthenticated() && (resource == null || resource.data.customerUid == request.auth.uid));
+      allow create: if isValidId(convId) && (isStaffOrAdmin() || (isAuthenticated() && request.resource.data.customerUid == request.auth.uid));
+      allow update: if isStaffOrAdmin() || (isAuthenticated() && resource.data.customerUid == request.auth.uid);
+      allow delete: if isStaffOrAdmin();
+
       match /messages/{messageId} {
-        allow read, write: if isValidId(messageId);
+        allow read: if isStaffOrAdmin() || (isAuthenticated() && get(/databases/$(database)/documents/conversations/$(convId)).data.customerUid == request.auth.uid);
+        allow write: if isStaffOrAdmin() || (isAuthenticated() && get(/databases/$(database)/documents/conversations/$(convId)).data.customerUid == request.auth.uid);
       }
     }
 
     // Products catalog
     match /products/{productId} {
       allow read: if isValidId(productId);
-      allow write: if isValidId(productId);
+      allow write: if isStaffOrAdmin();
     }
 
-    // Customer orders
+    // Customer orders:
+    // Read: Customer can read ONLY their own order documents (resource.data.customerUid == request.auth.uid) OR staff/admin
+    // Create: Authenticated customer can place order where customerUid == request.auth.uid (or staff/admin)
+    // Update/Delete: ONLY verified staff/admin can modify order status, paymentStatus, trackingNumber, or courierInfo
     match /orders/{orderId} {
-      allow read, write: if isValidId(orderId);
+      allow read: if isStaffOrAdmin() || (isAuthenticated() && (resource == null || resource.data.customerUid == request.auth.uid));
+      allow create: if isValidId(orderId) && (isStaffOrAdmin() || (isAuthenticated() && request.resource.data.customerUid == request.auth.uid));
+      allow update: if isStaffOrAdmin();
+      allow delete: if isStaffOrAdmin();
     }
 
     // Promo Coupons
     match /coupons/{couponId} {
-      allow read, write: if isValidId(couponId);
+      allow read: if isValidId(couponId);
+      allow write: if isStaffOrAdmin();
     }
 
     // Registered Customers
     match /customers/{customerId} {
-      allow read, write: if isValidId(customerId);
+      allow read: if isStaffOrAdmin() || isOwner(customerId);
+      allow write: if isStaffOrAdmin() || isOwner(customerId);
     }
 
     // Combo Bundles
     match /bundles/{bundleId} {
-      allow read, write: if isValidId(bundleId);
+      allow read: if isValidId(bundleId);
+      allow write: if isStaffOrAdmin();
     }
 
     // Staff Accounts
     match /staff/{staffId} {
-      allow read, write: if isValidId(staffId);
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
     }
   }
 }

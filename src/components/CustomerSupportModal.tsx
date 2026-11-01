@@ -10,6 +10,9 @@ import {
   Clock,
   MessageCircle,
   ExternalLink,
+  Lock,
+  LogIn,
+  ShieldCheck,
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { HelpCenterFaqCategory } from '../types';
@@ -32,14 +35,16 @@ export const CustomerSupportModal: React.FC = () => {
   const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Active customer livechat conversation thread
-  const activeConversation = conversations.find(
-    c =>
-      c.channel === 'livechat' &&
-      ((user.phone && c.customerPhone === user.phone) ||
-        (user.email && c.customerEmail === user.email) ||
-        (user.name && c.customerName === user.name))
-  ) || conversations.find(c => c.channel === 'livechat');
+  // Active customer livechat conversation thread strictly isolated to authenticated user
+  const activeConversation = user.isLoggedIn
+    ? conversations.find(
+        c =>
+          c.channel === 'livechat' &&
+          ((user.uid && c.customerUid === user.uid) ||
+            (user.phone && c.customerPhone === user.phone) ||
+            (user.email && c.customerEmail && c.customerEmail.toLowerCase() === user.email.toLowerCase()))
+      )
+    : undefined;
 
   // Filter FAQs for active category
   const publishedFaqs = (helpCenterSettings.faqs || [])
@@ -293,67 +298,100 @@ export const CustomerSupportModal: React.FC = () => {
               <span className="text-[10px] text-emerald-300 font-mono">অনলাইন</span>
             </div>
 
-            {/* Real Messages Viewport */}
-            <div className="flex-1 p-3 overflow-y-auto space-y-2.5 text-xs">
-              {/* Store Official Welcome Greeting */}
-              <div className="flex justify-start">
-                <div className="max-w-[85%] p-2.5 rounded-xl rounded-bl-none bg-white border border-gray-200 text-gray-800 shadow-2xs leading-relaxed">
-                  {isBn
-                    ? helpCenterSettings.welcomeMessageBn ||
-                      'আসসালামু আলাইকুম! ঝটপটশপ সাপোর্ট সেন্টারে আপনাকে স্বাগতম। কীভাবে সাহায্য করতে পারি?'
-                    : helpCenterSettings.welcomeMessage ||
-                      'Welcome to JotPotShop Support. How can we help you today?'}
+            {!user.isLoggedIn ? (
+              <div className="flex-1 p-6 flex flex-col items-center justify-center text-center space-y-3 bg-white">
+                <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center shadow-xs">
+                  <Lock className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-gray-900 text-sm">
+                    {t('লাইভ চ্যাটে লগইন বাধ্যতামূলক', 'Login Required for Live Chat')}
+                  </h4>
+                  <p className="text-[11px] text-gray-600 mt-1 leading-relaxed max-w-xs">
+                    {t(
+                      'আপনার ব্যক্তিগত কথোপকথন ও অর্ডার তথ্যের শতভাগ গোপনীয়তা নিশ্চিতে লাইভ চ্যাটে যুক্ত হওয়ার পূর্বে লগইন করুন।',
+                      'Please log in or register before starting a Live Chat session to protect your privacy.'
+                    )}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveModal('dashboard')}
+                  className="py-2.5 px-4 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center space-x-1.5"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>{t('লগইন / রেজিস্টার করুন', 'Login / Register')}</span>
+                </button>
+                <div className="text-[10px] text-gray-400 flex items-center space-x-1">
+                  <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                  <span>{t('সুরক্ষিত ও প্রাইভেট সেশন', 'Secure & Private')}</span>
                 </div>
               </div>
-
-              {/* Real Conversation messages from Firestore */}
-              {activeConversation &&
-                activeConversation.messages.map(m => {
-                  const isUser = m.sender === 'customer';
-                  return (
-                    <div
-                      key={m.id}
-                      className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
-                    >
-                      <div
-                        className={`max-w-[85%] p-2.5 rounded-xl leading-relaxed whitespace-pre-line ${
-                          isUser
-                            ? 'bg-rose-600 text-white font-medium rounded-br-none'
-                            : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-2xs'
-                        }`}
-                      >
-                        {m.text}
-                      </div>
-                      <span className="text-[9px] text-gray-400 px-1 mt-0.5">
-                        {m.timestamp} {isUser && '• পাঠানো হয়েছে'}
-                      </span>
+            ) : (
+              <>
+                {/* Real Messages Viewport */}
+                <div className="flex-1 p-3 overflow-y-auto space-y-2.5 text-xs">
+                  {/* Store Official Welcome Greeting */}
+                  <div className="flex justify-start">
+                    <div className="max-w-[85%] p-2.5 rounded-xl rounded-bl-none bg-white border border-gray-200 text-gray-800 shadow-2xs leading-relaxed">
+                      {isBn
+                        ? helpCenterSettings.welcomeMessageBn ||
+                          'আসসালামু আলাইকুম! ঝটপটশপ সাপোর্ট সেন্টারে আপনাকে স্বাগতম। কীভাবে সাহায্য করতে পারি?'
+                        : helpCenterSettings.welcomeMessage ||
+                          'Welcome to JotPotShop Support. How can we help you today?'}
                     </div>
-                  );
-                })}
-              <div ref={messagesEndRef} />
-            </div>
+                  </div>
 
-            {/* Real Chat Input */}
-            <form
-              onSubmit={handleSendMessage}
-              className="p-2 bg-white border-t border-gray-200 flex gap-1.5"
-            >
-              <input
-                type="text"
-                value={chatInput}
-                onChange={e => setChatInput(e.target.value)}
-                placeholder={t('এখানে মেসেজ লিখুন...', 'Type your message...')}
-                className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-rose-500"
-              />
-              <button
-                type="submit"
-                disabled={!chatInput.trim() || isSending}
-                className="bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white p-2 rounded-xl transition-colors cursor-pointer shrink-0"
-                title="মেসেজ পাঠান"
-              >
-                <Send className="w-3.5 h-3.5" />
-              </button>
-            </form>
+                  {/* Real Conversation messages from Firestore */}
+                  {activeConversation &&
+                    activeConversation.messages.map(m => {
+                      const isUser = m.sender === 'customer';
+                      return (
+                        <div
+                          key={m.id}
+                          className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
+                        >
+                          <div
+                            className={`max-w-[85%] p-2.5 rounded-xl leading-relaxed whitespace-pre-line ${
+                              isUser
+                                ? 'bg-rose-600 text-white font-medium rounded-br-none'
+                                : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-2xs'
+                            }`}
+                          >
+                            {m.text}
+                          </div>
+                          <span className="text-[9px] text-gray-400 px-1 mt-0.5">
+                            {m.timestamp} {isUser && '• পাঠানো হয়েছে'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* Real Chat Input */}
+                <form
+                  onSubmit={handleSendMessage}
+                  className="p-2 bg-white border-t border-gray-200 flex gap-1.5"
+                >
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    placeholder={t('এখানে মেসেজ লিখুন...', 'Type your message...')}
+                    className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-rose-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!chatInput.trim() || isSending}
+                    className="bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white p-2 rounded-xl transition-colors cursor-pointer shrink-0"
+                    title="মেসেজ পাঠান"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                </form>
+              </>
+            )}
           </div>
         </div>
       </div>
