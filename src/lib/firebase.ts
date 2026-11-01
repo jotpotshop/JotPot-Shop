@@ -48,6 +48,7 @@ import {
   RegisteredCustomer,
   UnifiedConversation,
   HelpCenterSettings,
+  TrustSectionSettings,
 } from '../types';
 import { getAvailableStock } from '../utils/inventory';
 import { INITIAL_PRODUCTS } from '../data/mockData';
@@ -1955,6 +1956,68 @@ export function subscribeToHelpCenterSettings(
     },
     error => {
       console.warn('Help Center live subscription error:', error);
+    }
+  );
+}
+
+/**
+ * Saves Trust Section Settings ("নিশ্চিন্ত কেনাকাটা ও বিশ্বস্ত ডেলিভারি সেবা") to Cloud Firestore
+ */
+export async function saveTrustSectionSettingsToFirestore(
+  settings: TrustSectionSettings,
+  adminUserEmail = 'jotpotshop.official@gmail.com'
+): Promise<void> {
+  try {
+    const docRef = doc(db, 'settings', 'trust_section');
+    await setDoc(
+      docRef,
+      cleanFirestorePayload({
+        ...settings,
+        updatedAt: new Date().toISOString(),
+        updatedBy: adminUserEmail,
+        projectId: FIREBASE_PROJECT_INFO.projectId,
+      }),
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn('Failed to save Trust Section settings to Firestore:', err);
+    throw err;
+  }
+}
+
+/**
+ * Fetches Trust Section Settings from Cloud Firestore
+ */
+export async function fetchTrustSectionSettingsFromFirestore(): Promise<TrustSectionSettings | null> {
+  try {
+    const docRef = doc(db, 'settings', 'trust_section');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return docSnap.data() as TrustSectionSettings;
+    }
+    return null;
+  } catch (err) {
+    console.warn('Could not fetch Trust Section settings from Firestore:', err);
+    return null;
+  }
+}
+
+/**
+ * Subscribes to live Trust Section Settings updates from Cloud Firestore
+ */
+export function subscribeToTrustSectionSettings(
+  onUpdate: (settings: TrustSectionSettings) => void
+): Unsubscribe {
+  const docRef = doc(db, 'settings', 'trust_section');
+  return onSnapshot(
+    docRef,
+    snapshot => {
+      if (snapshot.exists()) {
+        onUpdate(snapshot.data() as TrustSectionSettings);
+      }
+    },
+    error => {
+      console.warn('Trust Section live subscription error:', error);
     }
   );
 }

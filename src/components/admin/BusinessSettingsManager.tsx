@@ -1985,6 +1985,21 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
                 </div>
               ))}
             </div>
+
+            {/* Quick Link to Trust Section Editor */}
+            <div className="mt-4 p-4 rounded-2xl bg-gradient-to-r from-rose-50 to-orange-50 border border-rose-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-bold text-rose-700 bg-white px-2 py-0.5 rounded-md border border-rose-200">
+                  সেকশন কাস্টমাইজেশন
+                </span>
+                <h4 className="font-bold text-gray-900 text-xs">
+                  “নিশ্চিন্ত কেনাকাটা ও বিশ্বস্ত ডেলিভারি সেবা” সম্পূর্ণ এডিট করতে চান?
+                </h4>
+                <p className="text-[11px] text-gray-600">
+                  হেডিং, বিবরণ, আইকন, কালার থিম ও প্রতিটি ট্রাস্ট ফিচারের ক্রম এডমিন প্যানেলের "সেকশন: নিশ্চিন্ত কেনাকাটা" মেন্যু থেকে লাইভ প্রিভিউ সহ পরিবর্তন করুন।
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       )}

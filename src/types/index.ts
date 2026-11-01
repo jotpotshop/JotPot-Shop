@@ -549,3 +549,34 @@ export interface HelpCenterSettings {
   updatedAt?: string;
   updatedBy?: string;
 }
+
+// -------------------------------------------------------------
+// SUPER ADMIN TRUST SECTION MANAGEMENT TYPES
+// -------------------------------------------------------------
+export interface TrustFeatureItem {
+  id: string;
+  icon: string;
+  titleBn: string;
+  titleEn: string;
+  descBn: string;
+  descEn: string;
+  order: number;
+  isActive: boolean;
+}
+
+export interface TrustSectionSettings {
+  isEnabled: boolean;
+  tagBn: string;
+  tagEn: string;
+  headingBn: string;
+  headingEn: string;
+  subheadingBn: string;
+  subheadingEn: string;
+  bgColor: string; // Tailwind class or hex color (e.g. 'bg-white', '#ffffff')
+  textColor: string; // e.g. 'text-gray-900'
+  cardBgColor: string; // e.g. 'bg-gray-50/70'
+  accentColor: string; // e.g. 'rose' | 'emerald' | 'blue' | 'indigo' | 'amber'
+  features: TrustFeatureItem[];
+  updatedAt?: string;
+  updatedBy?: string;
+}

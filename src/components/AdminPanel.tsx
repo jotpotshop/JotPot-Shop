@@ -62,6 +62,7 @@ import { CourierManager } from './admin/CourierManager';
 import { ShippingLabelModal } from './admin/ShippingLabelModal';
 import { OmnichannelChatManager } from './admin/OmnichannelChatManager';
 import { HelpCenterManager } from './admin/HelpCenterManager';
+import { TrustSectionManager } from './admin/TrustSectionManager';
 import { RoleDashboards } from './admin/RoleDashboards';
 import {
   ProductAddModal,
@@ -115,6 +116,7 @@ export const ROLE_PERMITTED_TABS: Record<UserRole, string[]> = {
     'delivery',
     'reports',
     'helpcenter',
+    'trustsection',
     'roles',
     'settings',
   ],
@@ -133,6 +135,7 @@ export const ROLE_PERMITTED_TABS: Record<UserRole, string[]> = {
     'delivery',
     'reports',
     'helpcenter',
+    'trustsection',
     'settings',
   ],
   MANAGER: [
@@ -212,6 +215,7 @@ export const AdminPanel: React.FC = () => {
     | 'settings'
     | 'reports'
     | 'helpcenter'
+    | 'trustsection'
   >('dashboard'); // Defaults to role-specific dashboard
 
   // Strict RBAC Tab Access Enforcement: Prevent unauthorized role from accessing hidden tabs
@@ -853,6 +857,19 @@ export const AdminPanel: React.FC = () => {
             >
               <HelpCircle className="w-4 h-4 text-rose-500" />
               <span>{t('হেল্প সেন্টার ও FAQ কন্ট্রোল', 'Help Center & Support')}</span>
+            </button>
+          )}
+
+          {/* 11c. Section Management: নিশ্চিন্ত কেনাকাটা ও বিশ্বস্ত ডেলিভারি সেবা */}
+          {ROLE_PERMITTED_TABS[currentRole].includes('trustsection') && (
+            <button
+              onClick={() => setAdminTab('trustsection')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center space-x-2.5 transition-colors cursor-pointer ${
+                adminTab === 'trustsection' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4 text-emerald-500" />
+              <span>{t('সেকশন: নিশ্চিন্ত কেনাকাটা', 'Trust Section Editor')}</span>
             </button>
           )}
 
@@ -1720,6 +1737,9 @@ export const AdminPanel: React.FC = () => {
 
           {/* TAB: CUSTOMER SUPPORT & HELP CENTER (Super Admin) */}
           {adminTab === 'helpcenter' && <HelpCenterManager />}
+
+          {/* TAB: SECTION MANAGEMENT — নিশ্চিন্ত কেনাকাটা ও বিশ্বস্ত ডেলিভারি সেবা */}
+          {adminTab === 'trustsection' && <TrustSectionManager />}
 
           {/* TAB: REPORTS & ANALYTICS */}
           {adminTab === 'reports' && (() => {

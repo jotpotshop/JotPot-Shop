@@ -38,6 +38,7 @@ import {
   HelpCenterSettings,
   HelpCenterFaqItem,
   HelpCenterArticle,
+  TrustSectionSettings,
 } from '../types';
 import {
   INITIAL_PRODUCTS,
@@ -66,6 +67,7 @@ import {
   INITIAL_REGISTERED_CUSTOMERS,
   INITIAL_CONVERSATIONS,
   DEFAULT_HELP_CENTER_SETTINGS,
+  DEFAULT_TRUST_SECTION_SETTINGS,
 } from '../data/adminSettings';
 import {
   testFirebaseConnection,
@@ -125,6 +127,9 @@ import {
   saveHelpCenterSettingsToFirestore,
   fetchHelpCenterSettingsFromFirestore,
   subscribeToHelpCenterSettings,
+  saveTrustSectionSettingsToFirestore,
+  fetchTrustSectionSettingsFromFirestore,
+  subscribeToTrustSectionSettings,
   signInWithGooglePopup,
   resizeDataUrl,
   FirebaseConnectionDiagnostic,
@@ -365,6 +370,8 @@ interface ShopContextType {
   updateReviewSettings: (settings: Partial<ReviewSettings>) => void;
   helpCenterSettings: HelpCenterSettings;
   updateHelpCenterSettings: (settings: Partial<HelpCenterSettings>) => Promise<{ success: boolean; message: string }>;
+  trustSectionSettings: TrustSectionSettings;
+  updateTrustSectionSettings: (settings: Partial<TrustSectionSettings>) => Promise<{ success: boolean; message: string }>;
 
   // Categories Management (Add, Edit, Delete, Custom Icon)
   categories: Category[];
@@ -766,6 +773,14 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return saved ? { ...DEFAULT_HELP_CENTER_SETTINGS, ...JSON.parse(saved) } : DEFAULT_HELP_CENTER_SETTINGS;
     } catch {
       return DEFAULT_HELP_CENTER_SETTINGS;
+    }
+  });
+  const [trustSectionSettings, setTrustSectionSettings] = useState<TrustSectionSettings>(() => {
+    try {
+      const saved = localStorage.getItem('jps_trust_section_settings');
+      return saved ? { ...DEFAULT_TRUST_SECTION_SETTINGS, ...JSON.parse(saved) } : DEFAULT_TRUST_SECTION_SETTINGS;
+    } catch {
+      return DEFAULT_TRUST_SECTION_SETTINGS;
     }
   });
 
@@ -1243,6 +1258,26 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
+    // Fetch and subscribe Trust Section Settings from Firestore
+    fetchTrustSectionSettingsFromFirestore()
+      .then(remoteTrust => {
+        if (remoteTrust) {
+          setTrustSectionSettings(remoteTrust);
+          localStorage.setItem('jps_trust_section_settings', JSON.stringify(remoteTrust));
+        } else {
+          saveTrustSectionSettingsToFirestore(trustSectionSettings).catch(() => {});
+        }
+      })
+      .catch(err => {
+        console.warn('Initial Trust Section fetch from Firestore:', err);
+      });
+
+    const unsubTrustSection = subscribeToTrustSectionSettings(remoteTrust => {
+      if (remoteTrust) {
+        setTrustSectionSettings(remoteTrust);
+      }
+    });
+
     return () => {
       unsubscribe();
       unsubPayment();
@@ -1254,6 +1289,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubCouriers();
       unsubConversations();
       unsubHelpCenter();
+      unsubTrustSection();
     };
   }, []);
 
@@ -3268,6 +3304,50 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateTrustSectionSettings = async (
+    settings: Partial<TrustSectionSettings>
+  ): Promise<{ success: boolean; message: string }> => {
+    if (currentRole !== 'SUPER_ADMIN') {
+      showToast(
+        language === 'bn'
+          ? 'শুধুমাত্র সুপার এডমিন নিশ্চিন্ত কেনাকাটা (Trust Section) কনফিগারেশন পরিবর্তন করতে পারেন।'
+          : 'Only Super Admin can update Trust Section settings.',
+        'error'
+      );
+      return { success: false, message: 'Unauthorized: Only SUPER_ADMIN can modify Trust Section settings.' };
+    }
+
+    const merged: TrustSectionSettings = {
+      ...trustSectionSettings,
+      ...settings,
+      updatedAt: new Date().toISOString(),
+      updatedBy: adminUser?.email || 'admin@jotpotshop.com',
+    };
+
+    setTrustSectionSettings(merged);
+    localStorage.setItem('jps_trust_section_settings', JSON.stringify(merged));
+
+    try {
+      await saveTrustSectionSettingsToFirestore(merged, adminUser?.email || 'admin@jotpotshop.com');
+      showToast(
+        language === 'bn'
+          ? '✓ "নিশ্চিন্ত কেনাকাটা" সেকশন সেটিংস ক্লাউড ফায়ারবেসে সফলভাবে সেভ হয়েছে!'
+          : '✓ Trust Section settings saved successfully to Firestore!',
+        'success'
+      );
+      return { success: true, message: 'Settings saved to Firestore.' };
+    } catch (err) {
+      console.warn('Failed to save Trust Section settings to Firestore:', err);
+      showToast(
+        language === 'bn'
+          ? 'ক্লাউডে সেভ করতে সমস্যা হয়েছে, তবে লোকালি আপডেট হয়েছে।'
+          : 'Could not sync to cloud, but saved locally.',
+        'warning'
+      );
+      return { success: false, message: 'Failed to sync to Firestore.' };
+    }
+  };
+
   // Categories CRUD
   const addCategory = (category: Category) => {
     setCategories(prev => {
@@ -3682,6 +3762,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateReviewSettings,
         helpCenterSettings,
         updateHelpCenterSettings,
+        trustSectionSettings,
+        updateTrustSectionSettings,
         categories,
         addCategory,
         updateCategory,
