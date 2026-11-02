@@ -123,6 +123,7 @@ import {
   fetchConversationsFromFirestore,
   subscribeToConversations,
   ensureCustomerAuthSession,
+  ensureAdminFirebaseAuthSession,
   logoutFirebaseAuth,
   saveHelpCenterSettingsToFirestore,
   fetchHelpCenterSettingsFromFirestore,
@@ -847,6 +848,13 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         databaseId: FIREBASE_PROJECT_INFO.databaseId,
         storageBucket: FIREBASE_PROJECT_INFO.storageBucket,
         authDomain: FIREBASE_PROJECT_INFO.authDomain,
+        appInitialized: false,
+        authStatus: 'Disconnected / Error',
+        firestoreStatus: 'Connection Failed',
+        storageStatus: 'Active with Safe Fallback Compression',
+        lastReadTime: 'N/A',
+        lastWriteTime: 'N/A',
+        lastErrorMessage: errorMsg,
         message: 'Firebase connection failed',
         error: errorMsg,
       };
@@ -859,6 +867,17 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Test Firebase connection on mount
     refreshFirebaseConnection();
+
+    // Authenticate Firebase Auth session for active admin to guarantee Firestore permissions
+    try {
+      const savedAdmin = localStorage.getItem('jps_active_admin');
+      if (savedAdmin) {
+        const parsedAdmin = JSON.parse(savedAdmin);
+        if (parsedAdmin?.email) {
+          ensureAdminFirebaseAuthSession(parsedAdmin.email, parsedAdmin.password).catch(() => {});
+        }
+      }
+    } catch {}
 
     // Purge legacy demo orders and demo conversations from localStorage if present
     try {
@@ -2386,6 +2405,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Products CRUD with auto-occasion tagging, robust async Firestore persistence, and error checking
   const addProduct = async (product: Product): Promise<{ success: boolean; error?: string }> => {
+    const activeAdminEmail = adminUser?.email || 'mdmahmudulhashan0@gmail.com';
     const finalProduct: Product = {
       ...product,
       needTags:
@@ -2395,13 +2415,13 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const next = [finalProduct, ...products.filter(p => p.id !== finalProduct.id)];
-    const saveRes = await saveProductsToFirestore(next, user.email || 'jotpotshop.official@gmail.com');
+    const saveRes = await saveProductsToFirestore(next, activeAdminEmail);
     if (!saveRes.success) {
       return { success: false, error: saveRes.error };
     }
 
     // Double-sync to individual product document
-    saveSingleProductToFirestore(finalProduct, user.email || 'jotpotshop.official@gmail.com').catch(() => {});
+    saveSingleProductToFirestore(finalProduct, activeAdminEmail).catch(() => {});
 
     setProducts(next);
     localStorage.setItem('jps_products', JSON.stringify(next));
@@ -2409,6 +2429,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateProduct = async (updated: Product): Promise<{ success: boolean; error?: string }> => {
+    const activeAdminEmail = adminUser?.email || 'mdmahmudulhashan0@gmail.com';
     const finalProduct: Product = {
       ...updated,
       needTags:
@@ -2418,13 +2439,13 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const next = products.map(p => (p.id === finalProduct.id ? finalProduct : p));
-    const saveRes = await saveProductsToFirestore(next, user.email || 'jotpotshop.official@gmail.com');
+    const saveRes = await saveProductsToFirestore(next, activeAdminEmail);
     if (!saveRes.success) {
       return { success: false, error: saveRes.error };
     }
 
     // Double-sync to individual product document
-    saveSingleProductToFirestore(finalProduct, user.email || 'jotpotshop.official@gmail.com').catch(() => {});
+    saveSingleProductToFirestore(finalProduct, activeAdminEmail).catch(() => {});
 
     setProducts(next);
     localStorage.setItem('jps_products', JSON.stringify(next));
@@ -2432,13 +2453,14 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteProduct = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    const activeAdminEmail = adminUser?.email || 'mdmahmudulhashan0@gmail.com';
     const next = products.filter(p => p.id !== id);
-    const saveRes = await saveProductsToFirestore(next, user.email || 'jotpotshop.official@gmail.com');
+    const saveRes = await saveProductsToFirestore(next, activeAdminEmail);
     if (!saveRes.success) {
       return { success: false, error: saveRes.error };
     }
 
-    deleteSingleProductFromFirestore(id).catch(() => {});
+    deleteSingleProductFromFirestore(id, activeAdminEmail).catch(() => {});
 
     setProducts(next);
     localStorage.setItem('jps_products', JSON.stringify(next));
@@ -2446,14 +2468,15 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const bulkDeleteProducts = async (productIds: string[]): Promise<{ success: boolean; error?: string }> => {
+    const activeAdminEmail = adminUser?.email || 'mdmahmudulhashan0@gmail.com';
     const idSet = new Set(productIds);
     const next = products.filter(p => !idSet.has(p.id));
-    const saveRes = await saveProductsToFirestore(next, user.email || 'jotpotshop.official@gmail.com');
+    const saveRes = await saveProductsToFirestore(next, activeAdminEmail);
     if (!saveRes.success) {
       return { success: false, error: saveRes.error };
     }
 
-    productIds.forEach(id => deleteSingleProductFromFirestore(id).catch(() => {}));
+    productIds.forEach(id => deleteSingleProductFromFirestore(id, activeAdminEmail).catch(() => {}));
 
     setProducts(next);
     localStorage.setItem('jps_products', JSON.stringify(next));
@@ -2464,6 +2487,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     productIds: string[],
     updates: Partial<Product>
   ): Promise<{ success: boolean; error?: string }> => {
+    const activeAdminEmail = adminUser?.email || 'mdmahmudulhashan0@gmail.com';
     const idSet = new Set(productIds);
     const next = products.map(p => {
       if (!idSet.has(p.id)) return p;
@@ -2477,7 +2501,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     });
 
-    const saveRes = await saveProductsToFirestore(next, user.email || 'jotpotshop.official@gmail.com');
+    const saveRes = await saveProductsToFirestore(next, activeAdminEmail);
     if (!saveRes.success) {
       return { success: false, error: saveRes.error };
     }
@@ -3440,6 +3464,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsAdminView(true);
       setShowAdminLoginModal(false);
       localStorage.setItem('jps_active_admin', JSON.stringify(updatedUser));
+      ensureAdminFirebaseAuthSession('mdmahmudulhashan0@gmail.com', 'MahmuduLHashAn0@#').catch(() => {});
       return { success: true, message: 'সুপার এডমিন হিসেবে সফলভাবে লগইন সম্পন্ন হয়েছে!' };
     }
 
@@ -3473,6 +3498,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setShowAdminLoginModal(false);
       localStorage.setItem('jps_active_admin', JSON.stringify(updatedUser));
       setStaffAccounts(prev => prev.map(s => (s.id === updatedUser.id ? updatedUser : s)));
+      ensureAdminFirebaseAuthSession(updatedUser.email, cleanPass).catch(() => {});
       return { success: true, message: `স্বাগতম ${updatedUser.name}! সফলভাবে লগইন হয়েছে।` };
     }
 
@@ -3483,6 +3509,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAdminUser(null);
     setIsAdminView(false);
     localStorage.removeItem('jps_active_admin');
+    logoutFirebaseAuth().catch(() => {});
     if (typeof window !== 'undefined') {
       window.history.pushState(null, '', '/');
     }

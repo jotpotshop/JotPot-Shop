@@ -18,7 +18,13 @@ service cloud.firestore {
 
     function isStaffOrAdmin() {
       return isAuthenticated() && (
-        request.auth.token.email in ['mdmahmudulhashan0@gmail.com', 'jotpotshop.official@gmail.com'] ||
+        request.auth.token.email in [
+          'mdmahmudulhashan0@gmail.com',
+          'jotpotshop.official@gmail.com',
+          'admin.nusrat@jotpotshop.com',
+          'manager.mahmud@jotpotshop.com',
+          'staff.sultana@jotpotshop.com'
+        ] ||
         (exists(/databases/$(database)/documents/staff/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role in ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'])
       );
@@ -87,7 +93,7 @@ service cloud.firestore {
 
     // Staff Accounts
     match /staff/{staffId} {
-      allow read: if isStaffOrAdmin();
+      allow read: if isStaffOrAdmin() || isOwner(staffId);
       allow write: if isStaffOrAdmin();
     }
   }

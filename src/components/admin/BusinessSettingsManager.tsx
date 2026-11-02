@@ -36,6 +36,7 @@ import {
   uploadHeroBannerImage,
   FIREBASE_PROJECT_INFO,
 } from '../../lib/firebase';
+import { FirebaseConnectionDiagnosticCard } from './FirebaseConnectionDiagnosticCard';
 
 export type SettingsSection =
   | 'general'
@@ -530,6 +531,9 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
       {/* 1. Website Branding & Logo Upload Section (Super Admin Full Control) */}
       {activeSettingsSection === 'general' && (
         <div className="space-y-6">
+          {/* Firebase Cloud Connection Diagnostic */}
+          <FirebaseConnectionDiagnosticCard />
+
           {/* Hidden File Inputs */}
           <input
             ref={logoInputRef}

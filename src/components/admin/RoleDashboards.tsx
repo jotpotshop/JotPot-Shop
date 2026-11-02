@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { useShop } from '../../context/ShopContext';
 import { UserRole, Order, Product, SystemModule, PermissionAction } from '../../types';
+import { FirebaseConnectionDiagnosticCard } from './FirebaseConnectionDiagnosticCard';
 
 interface RoleDashboardsProps {
   setAdminTab: (tab: any) => void;
@@ -1370,6 +1371,9 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
       {/* 4D. SUPER ADMIN WORKSPACE: Financial Ledger & Infrastructure */}
       {currentRole === 'SUPER_ADMIN' && (
         <div className="space-y-6">
+          {/* Super Admin Firebase Connection Diagnostic Section */}
+          <FirebaseConnectionDiagnosticCard />
+
           {/* Platform Infrastructure & System Health Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-slate-900 rounded-3xl p-5 text-white border border-slate-800 space-y-2">
