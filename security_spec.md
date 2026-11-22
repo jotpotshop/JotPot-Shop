@@ -19,6 +19,7 @@
 | `/conversations/{convId}` & `/messages/{msgId}` | **Read**: `isStaffOrAdmin()` OR `resource.data.customerUid == request.auth.uid`. **Create / Update**: `isStaffOrAdmin()` OR authenticated owner preserving `customerUid == request.auth.uid` and `hasNoPasswordFields()`. **Delete**: Strictly `isStaffOrAdmin()`. |
 | `/staff/{staffId}` | **Read**: `isStaffOrAdmin()` OR `isOwner(staffId)`. **Write**: Strictly `isStaffOrAdmin()` with `hasNoPasswordFields()` and valid `role in ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']`. |
 | `/coupons/{couponId}`, `/bundles/{bundleId}` | **Read**: Public (`isValidId`). **Write**: Strictly `isStaffOrAdmin()`. |
+| `/media_assets/{fileId}` | **Read**: `isStaffOrAdmin()`, `visibility == 'public'`, or owner `uploadedByUid == request.auth.uid`. **Create**: Validated Cloudflare R2 metadata only (`isValidMediaAsset()`, max 10MB, no passwords/blobs); `isStaffOrAdmin()` or authenticated owner for `support` folder. **Update**: Strictly `isStaffOrAdmin()` with `isValidMediaAsset()`. **Delete**: `isStaffOrAdmin()` or owner for `support` folder. |
 | `/test/{docId}` | **Read**: `connection` doc for connectivity probe or `isStaffOrAdmin()`. **Write**: Strictly `isStaffOrAdmin()`. |
 
 ---

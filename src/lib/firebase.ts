@@ -30,14 +30,6 @@ import {
   Unsubscribe,
 } from 'firebase/firestore';
 import {
-  getStorage,
-  FirebaseStorage,
-  ref,
-  uploadBytesResumable,
-  getDownloadURL,
-  deleteObject,
-} from 'firebase/storage';
-import {
   WebsiteSettings,
   Category,
   HeroBannerSlide,
@@ -71,7 +63,7 @@ export const FIREBASE_PROJECT_INFO = {
   databaseId:
     firebaseConfigJson.firestoreDatabaseId ||
     'ai-studio-jotpotshop-389ae0a3-7bb3-43e0-a886-7d4d77268b7f',
-  storageBucket: firebaseConfigJson.storageBucket || 'jotpotshop.firebasestorage.app',
+  storageBucket: 'jotpotshop (Cloudflare R2)',
   authDomain: firebaseConfigJson.authDomain || 'jotpotshop.firebaseapp.com',
 };
 
@@ -115,9 +107,6 @@ export const db: Firestore = getFirestore(
     import.meta.env.VITE_FIREBASE_DATABASE_ID ||
     'ai-studio-jotpotshop-389ae0a3-7bb3-43e0-a886-7d4d77268b7f'
 );
-
-// Initialize Firebase Storage
-export const storage: FirebaseStorage = getStorage(app);
 
 // Structured Firestore Error & Telemetry Definitions
 export enum OperationType {
@@ -305,6 +294,25 @@ export async function testFirebaseConnection(): Promise<FirebaseConnectionDiagno
     }
   }
 
+  let r2StorageStatus = 'Cloudflare R2 (Checking...)';
+  try {
+    const r2Res = await fetch('/api/storage/status', { method: 'GET' });
+    if (r2Res.ok) {
+      const r2Data = (await r2Res.json()) as {
+        ok?: boolean;
+        bucketName?: string;
+        bindingType?: string;
+      };
+      r2StorageStatus = r2Data.ok
+        ? `Cloudflare R2 (${r2Data.bucketName || 'jotpotshop'})`
+        : 'Cloudflare R2 (Worker Unreachable)';
+    } else {
+      r2StorageStatus = `Cloudflare R2 (HTTP ${r2Res.status})`;
+    }
+  } catch {
+    r2StorageStatus = 'Cloudflare R2 (Worker Endpoint Pending)';
+  }
+
   return {
     connected: isAppInit && firestoreConnected,
     timestamp: new Date().toISOString(),
@@ -316,13 +324,13 @@ export async function testFirebaseConnection(): Promise<FirebaseConnectionDiagno
     authStatus,
     authEmail: currentAuthUser?.email || undefined,
     firestoreStatus,
-    storageStatus: 'Firebase Storage + Smart Compression Fallback',
+    storageStatus: r2StorageStatus,
     lastReadTime: lastSuccessfulReadTime,
     lastWriteTime: lastSuccessfulWriteTime || 'N/A (Pending write)',
     lastErrorMessage: lastFirebaseErrorMsg || undefined,
     latencyMs: latency,
     message: firestoreConnected
-      ? `Firebase active on project "${FIREBASE_PROJECT_INFO.projectId}" (${latency}ms)`
+      ? `Firebase active on project "${FIREBASE_PROJECT_INFO.projectId}" (${latency}ms) · Storage: Cloudflare R2`
       : `Firebase connection issue: ${errorMsg || 'Could not reach server'}`,
     error: errorMsg,
   };
@@ -729,185 +737,7 @@ export function resizeDataUrl(dataUrl: string, maxDim = 320, quality = 0.7): Pro
   });
 }
 
-export interface UploadAssetResult {
-  downloadUrl: string;
-  storagePath: string;
-  storageType: 'firebase_storage' | 'base64_fallback';
-  fileSize: number;
-}
 
-/**
- * Uploads any media asset to Firebase Storage with progress reporting (`uploadBytesResumable`),
- * falling back safely to compressed data URL only if Storage is unavailable/timed out.
- */
-export async function uploadAsset(
-  file: File,
-  folder: 'branding' | 'categories' | 'banners' | 'products',
-  assetPrefix: string,
-  maxDimension = 800,
-  onProgress?: (percent: number) => void
-): Promise<UploadAssetResult> {
-  const allowedExtensions = ['png', 'jpg', 'jpeg', 'webp', 'svg', 'gif'];
-  const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
-
-  if (!allowedExtensions.includes(ext)) {
-    throw new Error(
-      `ফাইল ফরম্যাট গ্রহণযোগ্য নয়। শুধু PNG, JPG, WebP, SVG বা GIF ফাইল নির্বাচন করুন। (Invalid file type: .${ext})`
-    );
-  }
-
-  if (file.size > 8 * 1024 * 1024) {
-    throw new Error('ফাইলের আকার সর্বোচ্চ ৮ মেগাবাইট (8MB) হতে পারবে।');
-  }
-
-  if (ext === 'svg') {
-    const text = await file.text();
-    if (!isSafeSvg(text)) {
-      throw new Error('নিরাপত্তা ঝুঁকি: SVG ফাইলে ক্ষতিকর স্ক্রিপ্ট বা কোড শনাক্ত হয়েছে।');
-    }
-  }
-
-  const timestamp = Date.now();
-  const safePrefix = assetPrefix.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const storagePath = `${folder}/${safePrefix}_${timestamp}.${ext}`;
-  const storageReference = ref(storage, storagePath);
-
-  const uploadTaskPromise = new Promise<string>((resolve, reject) => {
-    const uploadTask = uploadBytesResumable(storageReference, file, {
-      contentType: file.type || `image/${ext === 'svg' ? 'svg+xml' : ext}`,
-      customMetadata: {
-        assetPrefix: safePrefix,
-        uploadedAt: new Date().toISOString(),
-        originalName: file.name,
-      },
-    });
-
-    const timer = setTimeout(() => {
-      try {
-        uploadTask.cancel();
-      } catch {}
-      reject(new Error('Storage upload timed out'));
-    }, 15000);
-
-    uploadTask.on(
-      'state_changed',
-      snapshot => {
-        if (snapshot.totalBytes > 0 && onProgress) {
-          const pct = Math.min(99, Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100));
-          onProgress(pct);
-        }
-      },
-      err => {
-        clearTimeout(timer);
-        reject(err);
-      },
-      async () => {
-        try {
-          const url = await getDownloadURL(uploadTask.snapshot.ref);
-          clearTimeout(timer);
-          if (onProgress) onProgress(100);
-          resolve(url);
-        } catch (urlErr) {
-          clearTimeout(timer);
-          reject(urlErr);
-        }
-      }
-    );
-  });
-
-  try {
-    const downloadUrl = await uploadTaskPromise;
-    return {
-      downloadUrl,
-      storagePath,
-      storageType: 'firebase_storage',
-      fileSize: file.size,
-    };
-  } catch (storageError) {
-    console.warn('Firebase Storage resumable upload notice (using compressed fallback):', storageError);
-    if (onProgress) onProgress(85);
-    const compactDataUrl = await compressImage(file, maxDimension, 0.75);
-    if (onProgress) onProgress(100);
-    return {
-      downloadUrl: compactDataUrl || (await fileToDataUrl(file)),
-      storagePath: `local://${storagePath}`,
-      storageType: 'base64_fallback',
-      fileSize: file.size,
-    };
-  }
-}
-
-/**
- * Safely deletes an unused Firebase Storage image if it is no longer referenced elsewhere.
- */
-export async function cleanupUnusedStorageAsset(
-  oldUrl?: string,
-  remainingUrlsInUse: string[] = []
-): Promise<void> {
-  if (!oldUrl || typeof oldUrl !== 'string') return;
-  const trimmed = oldUrl.trim();
-  if (!trimmed || trimmed.startsWith('data:')) return;
-  if (remainingUrlsInUse.includes(trimmed)) return;
-
-  const isFirebaseUrl =
-    trimmed.includes('firebasestorage.googleapis.com') ||
-    trimmed.includes('firebasestorage.app') ||
-    trimmed.startsWith('gs://');
-  if (!isFirebaseUrl) return;
-
-  try {
-    let storagePath = '';
-    if (trimmed.startsWith('gs://')) {
-      const idx = trimmed.indexOf('/', 5);
-      if (idx > -1) storagePath = trimmed.slice(idx + 1);
-    } else if (trimmed.includes('/o/')) {
-      const afterO = trimmed.split('/o/')[1] || '';
-      const encodedPath = afterO.split('?')[0];
-      storagePath = decodeURIComponent(encodedPath);
-    }
-    if (!storagePath) return;
-
-    const targetRef = ref(storage, storagePath);
-    await deleteObject(targetRef);
-  } catch (err: any) {
-    if (err?.code !== 'storage/object-not-found') {
-      console.warn('Non-fatal Storage cleanup notice:', err?.message || err);
-    }
-  }
-}
-
-export async function uploadBrandingAsset(
-  file: File,
-  assetType: 'logo' | 'mobile_logo' | 'favicon',
-  onProgress?: (percent: number) => void
-): Promise<UploadAssetResult> {
-  const maxDim = assetType === 'favicon' ? 48 : assetType === 'mobile_logo' ? 200 : 360;
-  return uploadAsset(file, 'branding', assetType, maxDim, onProgress);
-}
-
-export async function uploadCategoryIcon(
-  file: File,
-  categoryId = 'category',
-  onProgress?: (percent: number) => void
-): Promise<UploadAssetResult> {
-  return uploadAsset(file, 'categories', `icon_${categoryId}`, 200, onProgress);
-}
-
-export async function uploadHeroBannerImage(
-  file: File,
-  bannerId = 'hero',
-  onProgress?: (percent: number) => void
-): Promise<UploadAssetResult> {
-  return uploadAsset(file, 'banners', `hero_${bannerId}`, 800, onProgress);
-}
-
-export async function uploadProductImage(
-  file: File,
-  productId = 'product',
-  onProgress?: (percent: number) => void
-): Promise<UploadAssetResult> {
-  return uploadAsset(file, 'products', `prod_${productId}`, 900, onProgress);
-}
 
 /**
  * Recursively removes `password` keys so plaintext passwords NEVER persist in Firestore.

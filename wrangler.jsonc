@@ -3,6 +3,17 @@
   "name": "jotpot-shop",
   "compatibility_date": "2024-09-23",
   "main": "functions/worker.ts",
+  "r2_buckets": [
+    {
+      "binding": "R2",
+      "bucket_name": "jotpotshop"
+    }
+  ],
+  "vars": {
+    "FIREBASE_PROJECT_ID": "jotpotshop",
+    "FIREBASE_DATABASE_ID": "ai-studio-jotpotshop-389ae0a3-7bb3-43e0-a886-7d4d77268b7f",
+    "ALLOWED_ORIGINS": "https://jotpotshop.com,https://www.jotpotshop.com,https://assets.jotpotshop.com"
+  },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

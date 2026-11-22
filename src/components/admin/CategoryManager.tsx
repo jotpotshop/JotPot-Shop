@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useShop } from '../../context/ShopContext';
 import { Category } from '../../types';
-import { uploadCategoryIcon, uploadHeroBannerImage, cleanupUnusedStorageAsset } from '../../lib/firebase';
+import { uploadCategoryIcon, uploadHeroBannerImage, cleanupUnusedR2Asset } from '../../lib/r2Storage';
 import { isImageIconUrl, resolveCategoryIcon } from '../../utils/categoryAssets';
 
 const PRESET_EMOJIS = ['👨', '👩', '📱', '💍', '👟', '👜', '🕶️', '🏠', '💄', '🎁', '⚡', '👕', '👗', '🎮', '🎧', '⌚', '🧸', '📚'];
@@ -86,7 +86,7 @@ export const CategoryManager: React.FC = () => {
           const prevIcon = target.icon;
           const saveRes = await updateCategory({ ...target, icon: res.downloadUrl });
           if (saveRes.success) {
-            cleanupUnusedStorageAsset(prevIcon, [res.downloadUrl]).catch(() => {});
+            cleanupUnusedR2Asset(prevIcon, [res.downloadUrl]).catch(() => {});
             setStatusMessage({
               type: 'success',
               text: `"${target.name}" ক্যাটাগরি আইকন সফলভাবে আপলোড ও আপডেট হয়েছে!`,
@@ -100,7 +100,7 @@ export const CategoryManager: React.FC = () => {
         }
       } else {
         if (catIcon && catIcon !== res.downloadUrl) {
-          cleanupUnusedStorageAsset(catIcon, [res.downloadUrl]).catch(() => {});
+          cleanupUnusedR2Asset(catIcon, [res.downloadUrl]).catch(() => {});
         }
         setCatIcon(res.downloadUrl);
         setStatusMessage({
@@ -187,8 +187,8 @@ export const CategoryManager: React.FC = () => {
     try {
       const res = await deleteCategory(id);
       if (res.success) {
-        cleanupUnusedStorageAsset(cat.icon, []).catch(() => {});
-        cleanupUnusedStorageAsset(cat.bannerImage, []).catch(() => {});
+        cleanupUnusedR2Asset(cat.icon, []).catch(() => {});
+        cleanupUnusedR2Asset(cat.bannerImage, []).catch(() => {});
         setDeletingCatId(null);
         setStatusMessage({ type: 'success', text: `ক্যাটাগরি "${cat.name}" মুছে ফেলা হয়েছে।` });
       } else {
@@ -613,7 +613,7 @@ export const CategoryManager: React.FC = () => {
                         ? `ব্যানার আপলোড হচ্ছে (${bannerUploadProgress}%)...`
                         : 'ডিভাইস থেকে ব্যানার নির্বাচন করুন'}
                     </span>
-                    <span className="text-[10px] text-gray-400 mt-0.5">PNG, JPG, WEBP (Firebase Storage)</span>
+                    <span className="text-[10px] text-gray-400 mt-0.5">PNG, JPG, WEBP (Cloudflare R2 WebP)</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -632,7 +632,7 @@ export const CategoryManager: React.FC = () => {
                           );
                           setCatBannerImage(uploadRes.downloadUrl);
                           if (prevBanner && prevBanner !== uploadRes.downloadUrl) {
-                            cleanupUnusedStorageAsset(prevBanner, [uploadRes.downloadUrl]).catch(() => {});
+                            cleanupUnusedR2Asset(prevBanner, [uploadRes.downloadUrl]).catch(() => {});
                           }
                         } catch (err: any) {
                           setStatusMessage({

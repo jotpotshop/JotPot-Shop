@@ -31,14 +31,15 @@ import {
 } from 'lucide-react';
 import { useShop } from '../../context/ShopContext';
 import { CourierPartner, WebsiteSettings, HeroBannerSlide } from '../../types';
+import { FIREBASE_PROJECT_INFO } from '../../lib/firebase';
 import {
   uploadBrandingAsset,
   uploadHeroBannerImage,
-  uploadAsset,
-  cleanupUnusedStorageAsset,
-  FIREBASE_PROJECT_INFO,
-} from '../../lib/firebase';
+  uploadAssetToR2,
+  cleanupUnusedR2Asset,
+} from '../../lib/r2Storage';
 import { FirebaseConnectionDiagnosticCard } from './FirebaseConnectionDiagnosticCard';
+import { R2StorageManagerPanel } from './R2StorageManagerPanel';
 
 export type SettingsSection =
   | 'general'
@@ -376,7 +377,7 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
         showSaveSuccess();
         setBrandingStatusMessage({
           type: 'success',
-          text: `ওয়েবসাইট ব্র্যান্ডিং ও লোগো সফলভাবে Firebase Storage ও Firestore (settings/branding)-এ স্থায়ীভাবে সংরক্ষিত হয়েছে!`,
+          text: `ওয়েবসাইট ব্র্যান্ডিং ও লোগো সফলভাবে Cloudflare R2 (jotpotshop) ও Firestore (settings/branding)-এ স্থায়ীভাবে সংরক্ষিত হয়েছে!`,
         });
       } else {
         setBrandingStatusMessage({
@@ -496,6 +497,9 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
           {/* Firebase Cloud Connection Diagnostic */}
           <FirebaseConnectionDiagnosticCard />
 
+          {/* Cloudflare R2 Storage & Legacy Firebase Migration Panel */}
+          <R2StorageManagerPanel />
+
           {/* Hidden File Inputs */}
           <input
             ref={logoInputRef}
@@ -577,7 +581,7 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
                     </span>
                   </div>
                   <p className="text-[11px] text-gray-300 mt-0.5 leading-[1.6]">
-                    Cloud Firestore ও Firebase Storage-এ সমস্ত লোগো ও ব্র্যান্ডিং সরাসরি সিঙ্ক হচ্ছে
+                    Cloud Firestore ও Cloudflare R2 Storage-এ সমস্ত লোগো ও ব্র্যান্ডিং সরাসরি সিঙ্ক হচ্ছে
                   </p>
                 </div>
               </div>
@@ -600,11 +604,11 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
                 <span className="text-gray-400 text-[10px] block">No: {FIREBASE_PROJECT_INFO.projectNumber}</span>
               </div>
               <div className="bg-[#1f2937] p-3 rounded-xl border border-white/10">
-                <span className="text-gray-400 block text-[10px] uppercase font-sans">Storage Bucket</span>
-                <span className="font-bold text-gray-200 truncate block" title={FIREBASE_PROJECT_INFO.storageBucket}>
-                  {FIREBASE_PROJECT_INFO.storageBucket}
+                <span className="text-gray-400 block text-[10px] uppercase font-sans">R2 Storage Bucket</span>
+                <span className="font-bold text-gray-200 truncate block" title="jotpotshop">
+                  jotpotshop (Cloudflare R2)
                 </span>
-                <span className="text-gray-400 text-[10px] block">Path: /branding/*</span>
+                <span className="text-gray-400 text-[10px] block">Prefix: branding/ · products/</span>
               </div>
               <div className="bg-[#1f2937] p-3 rounded-xl border border-white/10">
                 <span className="text-gray-400 block text-[10px] uppercase font-sans">Firestore Document</span>
@@ -840,7 +844,7 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
                     {websiteSettings.logoStoragePath && (
                       <div className="bg-white p-2 rounded-xl border border-[#e6e3dd] text-[10px] text-gray-500 font-mono break-all">
                         <span className="text-gray-400 font-bold uppercase block text-[9px] font-sans">
-                          Firebase Storage Path:
+                          Cloudflare R2 Object Key:
                         </span>
                         {websiteSettings.logoStoragePath}
                       </div>
@@ -2356,7 +2360,7 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
                       onClick={() => {
                         const oldUrl = liveChatSettings.agentAvatarUrl;
                         updateLiveChatSettings({ agentAvatarUrl: '' });
-                        if (oldUrl) cleanupUnusedStorageAsset(oldUrl, []).catch(() => {});
+                        if (oldUrl) cleanupUnusedR2Asset(oldUrl, []).catch(() => {});
                       }}
                       className="text-[10px] text-[#b91c1c] hover:underline font-bold cursor-pointer"
                     >
@@ -2372,7 +2376,7 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
                       ? `ছবি আপলোড হচ্ছে (${avatarUploadProgress}%)...`
                       : 'ডিভাইস থেকে এজেন্টের ছবি দিন'}
                   </span>
-                  <span className="text-[10px] text-gray-400">PNG, JPG, WEBP (Firebase Storage)</span>
+                  <span className="text-[10px] text-gray-400">PNG, JPG, WEBP (Cloudflare R2 WebP)</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -2384,16 +2388,17 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
                       const prevUrl = liveChatSettings.agentAvatarUrl;
                       setAvatarUploadProgress(10);
                       try {
-                        const res = await uploadAsset(
+                        const res = await uploadAssetToR2(
                           file,
                           'branding',
                           'agent_avatar',
                           256,
-                          pct => setAvatarUploadProgress(pct)
+                          pct => setAvatarUploadProgress(pct),
+                          { entityId: 'livechat_agent_avatar' }
                         );
                         await updateLiveChatSettings({ agentAvatarUrl: res.downloadUrl });
                         if (prevUrl && prevUrl !== res.downloadUrl) {
-                          cleanupUnusedStorageAsset(prevUrl, [res.downloadUrl]).catch(() => {});
+                          cleanupUnusedR2Asset(prevUrl, [res.downloadUrl]).catch(() => {});
                         }
                         showSaveSuccess();
                       } catch (err: any) {

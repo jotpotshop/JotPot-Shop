@@ -141,6 +141,31 @@
       },
       "required": ["id", "title"]
     },
+    "MediaAsset": {
+      "title": "MediaAsset",
+      "description": "Cloudflare R2 stored file metadata record persisted in Firestore",
+      "type": "object",
+      "properties": {
+        "fileId": { "type": "string" },
+        "fileName": { "type": "string" },
+        "objectKey": { "type": "string" },
+        "publicUrl": { "type": "string" },
+        "thumbnailKey": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "contentType": { "type": "string" },
+        "fileSize": { "type": "number" },
+        "width": { "type": "number" },
+        "height": { "type": "number" },
+        "folder": { "type": "string" },
+        "entityId": { "type": "string" },
+        "visibility": { "type": "string" },
+        "storageBackend": { "type": "string" },
+        "uploadedByUid": { "type": "string" },
+        "uploadedByEmail": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["fileId", "objectKey", "publicUrl", "contentType", "fileSize", "folder", "visibility"]
+    },
     "ConnectionTest": {
       "title": "ConnectionTest",
       "description": "Health check document for testing Firestore connectivity",
@@ -183,6 +208,10 @@
     "/bundles/{bundleId}": {
       "schema": "Bundle",
       "description": "Combo bundle product offers"
+    },
+    "/media_assets/{fileId}": {
+      "schema": "MediaAsset",
+      "description": "Cloudflare R2 file metadata registry linked to products, categories, branding, banners, and support uploads"
     },
     "/test/{docId}": {
       "schema": "ConnectionTest",

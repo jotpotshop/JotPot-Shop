@@ -582,3 +582,35 @@ export interface TrustSectionSettings {
   updatedAt?: string;
   updatedBy?: string;
 }
+
+// -------------------------------------------------------------
+// CLOUDFLARE R2 MEDIA ASSET METADATA TYPES
+// -------------------------------------------------------------
+export type StorageFolder =
+  | 'products'
+  | 'categories'
+  | 'branding'
+  | 'banners'
+  | 'support'
+  | 'documents';
+
+export interface MediaAssetRecord {
+  fileId: string;
+  fileName: string;
+  objectKey: string;
+  publicUrl: string;
+  thumbnailKey?: string;
+  thumbnailUrl?: string;
+  contentType: string;
+  fileSize: number;
+  width?: number;
+  height?: number;
+  folder: StorageFolder;
+  entityId: string;
+  visibility: 'public' | 'private';
+  storageBackend: 'cloudflare_r2';
+  uploadedByUid?: string;
+  uploadedByEmail?: string;
+  createdAt: string;
+}
+

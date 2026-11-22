@@ -1,13 +1,19 @@
 import { handleSteadfastRequest, SteadfastEnv } from '../src/server/steadfastHandler';
 import { handleAiChatRequest, AiChatEnv } from '../src/server/aiChatHandler';
+import { handleStorageRequest, StorageEnv } from '../src/server/storageHandler';
 
 export default {
   async fetch(
     request: Request,
-    env: SteadfastEnv & AiChatEnv & { ASSETS?: { fetch: (req: Request) => Promise<Response> } },
+    env: SteadfastEnv & AiChatEnv & StorageEnv & { ASSETS?: { fetch: (req: Request) => Promise<Response> } },
     _ctx: any
   ) {
     const url = new URL(request.url);
+
+    // Route Cloudflare R2 Storage API requests
+    if (url.pathname.startsWith('/api/storage')) {
+      return handleStorageRequest(request, env);
+    }
 
     // Route AI Chat API requests
     if (url.pathname.startsWith('/api/ai-chat') || url.pathname.startsWith('/api/chat')) {

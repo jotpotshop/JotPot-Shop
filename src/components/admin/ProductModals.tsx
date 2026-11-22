@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { Product, NeedTag } from '../../types';
 import { OCCASIONS_LIST, detectProductOccasions } from '../../data/occasionsData';
-import { uploadProductImage, compressImage, cleanupUnusedStorageAsset } from '../../lib/firebase';
+import { uploadProductImage, cleanupUnusedR2Asset } from '../../lib/r2Storage';
 import { useShop } from '../../context/ShopContext';
 import { RichTextEditor } from './RichTextEditor';
 
@@ -104,20 +104,12 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
         );
         setImageUrl(uploadResult.downloadUrl);
         if (previousUrl && previousUrl !== uploadResult.downloadUrl) {
-          cleanupUnusedStorageAsset(previousUrl, [uploadResult.downloadUrl]).catch(() => {});
+          cleanupUnusedR2Asset(previousUrl, [uploadResult.downloadUrl]).catch(() => {});
         }
       } catch (err: any) {
-        console.warn('Storage direct upload note:', err);
-        try {
-          const compressed = await compressImage(file, 800, 0.75);
-          if (compressed) {
-            setImageUrl(compressed);
-          } else {
-            setUploadError('ছবি প্রসেস করা সম্ভব হয়নি। অনুগ্রহ করে ছোট ছবি নির্বাচন করুন।');
-          }
-        } catch (e: any) {
-          setUploadError(e?.message || 'ছবি আপলোড ব্যর্থ হয়েছে');
-        }
+        setUploadError(
+          err?.message || 'Cloudflare R2-তে ছবি আপলোড ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।'
+        );
       } finally {
         setIsUploading(false);
         setUploadProgress(null);
@@ -470,7 +462,7 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      cleanupUnusedStorageAsset(imageUrl, []).catch(() => {});
+                      cleanupUnusedR2Asset(imageUrl, []).catch(() => {});
                       setImageUrl('');
                     }}
                     className="absolute -top-1.5 -right-1.5 bg-[#881337] text-white rounded-full p-1 shadow-sm hover:bg-[#6d0f2c] cursor-pointer"
@@ -887,20 +879,12 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
         );
         setImageUrl(uploadResult.downloadUrl);
         if (previousUrl && previousUrl !== uploadResult.downloadUrl) {
-          cleanupUnusedStorageAsset(previousUrl, [uploadResult.downloadUrl]).catch(() => {});
+          cleanupUnusedR2Asset(previousUrl, [uploadResult.downloadUrl]).catch(() => {});
         }
       } catch (err: any) {
-        console.warn('Storage direct upload note:', err);
-        try {
-          const compressed = await compressImage(file, 800, 0.75);
-          if (compressed) {
-            setImageUrl(compressed);
-          } else {
-            setUploadError('ছবি প্রসেস করা সম্ভব হয়নি।');
-          }
-        } catch (e: any) {
-          setUploadError(e?.message || 'ছবি আপলোড ব্যর্থ হয়েছে');
-        }
+        setUploadError(
+          err?.message || 'Cloudflare R2-তে ছবি আপলোড ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।'
+        );
       } finally {
         setIsUploading(false);
         setUploadProgress(null);
@@ -1161,7 +1145,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      cleanupUnusedStorageAsset(imageUrl, []).catch(() => {});
+                      cleanupUnusedR2Asset(imageUrl, []).catch(() => {});
                       setImageUrl('');
                     }}
                     className="absolute -top-1.5 -right-1.5 bg-[#881337] text-white rounded-full p-1 shadow-sm hover:bg-[#6d0f2c] cursor-pointer"

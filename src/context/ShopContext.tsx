@@ -882,7 +882,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         appInitialized: false,
         authStatus: 'Disconnected / Error',
         firestoreStatus: 'Connection Failed',
-        storageStatus: 'Active with Safe Fallback Compression',
+        storageStatus: 'Cloudflare R2 (jotpotshop)',
         lastReadTime: 'N/A',
         lastWriteTime: 'N/A',
         lastErrorMessage: errorMsg,

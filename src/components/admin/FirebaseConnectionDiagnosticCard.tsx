@@ -51,7 +51,7 @@ export const FirebaseConnectionDiagnosticCard: React.FC<DiagnosticCardProps> = (
   const isAppInit = Boolean(diag?.appInitialized ?? true);
   const authStatus = diag?.authStatus || 'Authenticated (Staff/Admin)';
   const firestoreStatus = diag?.firestoreStatus || (isConnected ? 'Connected' : 'Connecting...');
-  const storageStatus = diag?.storageStatus || 'Active with Safe Fallback Compression';
+  const storageStatus = diag?.storageStatus || 'Cloudflare R2 (jotpotshop)';
   const lastRead = formatTimestamp(diag?.lastReadTime);
   const lastWrite = formatTimestamp(diag?.lastWriteTime);
   const lastError = diag?.lastErrorMessage || diag?.error;
@@ -161,20 +161,20 @@ export const FirebaseConnectionDiagnosticCard: React.FC<DiagnosticCardProps> = (
           </p>
         </div>
 
-        {/* 4. Storage Status */}
+        {/* 4. Cloudflare R2 Storage Status */}
         <div className="bg-[#faf9f7] rounded-xl p-4 border border-[#e6e3dd] flex flex-col justify-between">
           <div className="flex items-center justify-between text-[#6b7280] text-xs mb-1">
-            <span className="font-semibold">Firebase Storage Status</span>
+            <span className="font-semibold">Cloudflare R2 Storage</span>
             <HardDrive className="w-4 h-4 text-[#374151]" />
           </div>
           <div className="flex items-center gap-1.5 mt-2">
             <CheckCircle2 className="w-4 h-4 text-[#15803d] shrink-0" />
-            <span className="font-bold text-xs text-[#111827] truncate">
-              Active / Safe Fallback
+            <span className="font-bold text-xs text-[#111827] truncate" title={storageStatus}>
+              {storageStatus}
             </span>
           </div>
           <p className="text-[11px] text-[#6b7280] mt-1">
-            স্বয়ংক্রিয় ক্লায়েন্ট অপ্টিমাইজেশন (&lt;60KB)
+            অটো WebP অপ্টিমাইজেশন · R2 এজ ক্যাশিং
           </p>
         </div>
       </div>

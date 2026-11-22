@@ -2,6 +2,7 @@ node_modules/
 build/
 dist/
 coverage/
+.r2-local-dev/
 .DS_Store
 *.log
 .env*

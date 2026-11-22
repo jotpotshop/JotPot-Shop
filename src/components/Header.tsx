@@ -20,6 +20,7 @@ import {
 import { useShop } from '../context/ShopContext';
 import { BD_DISTRICTS } from '../data/mockData';
 import { isImageIconUrl, resolveCategoryIcon } from '../utils/categoryAssets';
+import { HeaderGreeting } from './HeaderGreeting';
 
 export const Header: React.FC = () => {
   const {
@@ -137,8 +138,8 @@ export const Header: React.FC = () => {
       {/* 2. Main Header Row */}
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 w-full">
         <div className="flex items-center justify-between gap-2.5 sm:gap-5">
-          {/* Brand Logo */}
-          <div className="flex items-center shrink-0">
+          {/* Brand Logo + Dynamic Bangladesh Greeting */}
+          <div className="flex flex-col items-start min-w-0 shrink-1 sm:shrink-0">
             <button
               onClick={() => {
                 setSelectedCategory(null);
@@ -192,6 +193,9 @@ export const Header: React.FC = () => {
                 </span>
               </div>
             </button>
+            <div className="max-w-[205px] xs:max-w-[240px] sm:max-w-[340px] md:max-w-[360px] lg:max-w-[400px]">
+              <HeaderGreeting />
+            </div>
           </div>
 
           {/* Desktop/Tablet Search Bar */}

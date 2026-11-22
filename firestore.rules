@@ -225,5 +225,38 @@ service cloud.firestore {
         incoming().role in ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'];
       allow delete: if isValidId(staffId) && isStaffOrAdmin();
     }
+
+    function isValidMediaAsset(data) {
+      return data.fileId is string && data.fileId.size() > 0 && data.fileId.size() <= 128 &&
+        data.objectKey is string && data.objectKey.size() > 0 && data.objectKey.size() <= 256 &&
+        data.publicUrl is string && data.publicUrl.size() > 0 && data.publicUrl.size() <= 1024 &&
+        data.contentType is string && data.contentType.size() > 0 && data.contentType.size() <= 128 &&
+        data.fileSize is number && data.fileSize > 0 && data.fileSize <= 10485760 &&
+        data.folder in ['products', 'categories', 'branding', 'banners', 'support', 'documents'] &&
+        data.visibility in ['public', 'private'] &&
+        data.storageBackend == 'cloudflare_r2' &&
+        hasNoPasswordFields(data);
+    }
+
+    // Cloudflare R2 Media Metadata Registry (never stores binary blobs/base64, metadata only)
+    match /media_assets/{fileId} {
+      allow get: if isValidId(fileId) && (
+        isStaffOrAdmin() ||
+        existing().visibility == 'public' ||
+        (isAuthenticated() && existing().uploadedByUid == request.auth.uid)
+      );
+      allow list: if isStaffOrAdmin() ||
+        existing().visibility == 'public' ||
+        (isAuthenticated() && existing().uploadedByUid == request.auth.uid);
+      allow create: if isValidId(fileId) && isValidMediaAsset(incoming()) && (
+        isStaffOrAdmin() ||
+        (isAuthenticated() && incoming().folder == 'support' && incoming().uploadedByUid == request.auth.uid)
+      );
+      allow update: if isValidId(fileId) && isStaffOrAdmin() && isValidMediaAsset(incoming());
+      allow delete: if isValidId(fileId) && (
+        isStaffOrAdmin() ||
+        (isAuthenticated() && existing().folder == 'support' && existing().uploadedByUid == request.auth.uid)
+      );
+    }
   }
 }
