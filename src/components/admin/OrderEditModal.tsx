@@ -11,6 +11,7 @@ import {
   DollarSign,
   AlertCircle,
   Package,
+  Lock,
 } from 'lucide-react';
 import { useShop } from '../../context/ShopContext';
 import { BD_DISTRICTS } from '../../data/mockData';
@@ -91,24 +92,24 @@ const OrderEditModalContent: React.FC<OrderEditModalContentProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-      <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden my-auto border border-gray-100 flex flex-col max-h-[94vh]">
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+      <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden my-auto border border-[#e6e3dd] flex flex-col max-h-[94vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/70">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
+        <div className="px-6 py-4 border-b border-[#1f2937] flex items-center justify-between bg-[#111827] text-white">
+          <div className="flex items-center space-x-3">
+            <div className="w-9 h-9 rounded-xl bg-[#1f2937] border border-gray-700 text-white flex items-center justify-center">
               <Edit className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h3 className="font-extrabold text-base sm:text-lg text-gray-900">
+                <h3 className="font-extrabold text-base sm:text-lg text-white">
                   {t('অর্ডার সম্পাদনা করুন (Edit Order)', 'Edit Customer Order')}
                 </h3>
-                <span className="font-mono text-xs bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded">
+                <span className="font-mono text-xs bg-[#1f2937] border border-gray-700 text-gray-200 font-bold px-2 py-0.5 rounded tabular-nums">
                   #{order.id}
                 </span>
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-400">
                 {t('গ্রাহকের নাম, ঠিকানা, পণ্যের সংখ্যা ও মূল্য সংশোধন করুন', 'Modify customer address, items, and pricing adjustments')}
               </p>
             </div>
@@ -116,7 +117,7 @@ const OrderEditModalContent: React.FC<OrderEditModalContentProps> = ({
 
           <button
             onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+            className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-[#1f2937] transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -225,48 +226,55 @@ const OrderEditModalContent: React.FC<OrderEditModalContentProps> = ({
                   className="bg-white p-3 rounded-xl border border-gray-200 flex items-center justify-between gap-3"
                 >
                   <div className="flex items-center space-x-3 flex-1 min-w-0">
-                    <img
-                      src={item.product.images[0]}
-                      alt={item.product.name}
-                      className="w-10 h-10 object-cover rounded-lg shrink-0"
-                    />
+                    {item.product.images?.[0] ? (
+                      <img
+                        src={item.product.images[0]}
+                        alt={item.product.name}
+                        referrerPolicy="no-referrer"
+                        className="w-10 h-10 object-cover rounded-lg shrink-0 border border-[#e6e3dd]"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-[#faf9f7] border border-[#e6e3dd] flex items-center justify-center text-gray-400 shrink-0">
+                        <Package className="w-4 h-4" />
+                      </div>
+                    )}
                     <div className="min-w-0">
-                      <p className="font-bold text-gray-900 truncate text-xs">{item.product.name}</p>
-                      <div className="flex items-center space-x-2 text-[10px] text-gray-500">
+                      <p className="font-bold text-[#111827] truncate text-xs">{item.product.name}</p>
+                      <div className="flex items-center space-x-2 text-[10px] text-gray-500 tabular-nums">
                         {item.selectedColor && <span>Color: {item.selectedColor}</span>}
                         {item.selectedSize && <span>Size: {item.selectedSize}</span>}
-                        <span className="font-bold text-rose-600">Unit: {formatPrice(item.product.price)}</span>
+                        <span className="font-bold text-[#881337]">Unit: {formatPrice(item.product.price)}</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-3 shrink-0">
-                    <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                  <div className="flex items-center space-x-3 shrink-0 tabular-nums">
+                    <div className="flex items-center border border-[#e6e3dd] rounded-lg overflow-hidden bg-[#faf9f7]">
                       <button
                         type="button"
                         onClick={() => handleUpdateItemQuantity(idx, item.quantity - 1)}
-                        className="px-2 py-1 text-gray-600 hover:bg-gray-200"
+                        className="px-2 py-1 text-gray-600 hover:bg-gray-200 cursor-pointer"
                       >
                         -
                       </button>
-                      <span className="px-2.5 font-bold text-gray-900">{item.quantity}</span>
+                      <span className="px-2.5 font-bold text-[#111827]">{item.quantity}</span>
                       <button
                         type="button"
                         onClick={() => handleUpdateItemQuantity(idx, item.quantity + 1)}
-                        className="px-2 py-1 text-gray-600 hover:bg-gray-200"
+                        className="px-2 py-1 text-gray-600 hover:bg-gray-200 cursor-pointer"
                       >
                         +
                       </button>
                     </div>
 
-                    <span className="font-bold text-gray-900 w-16 text-right">
+                    <span className="font-bold text-[#111827] w-16 text-right">
                       {formatPrice(item.product.price * item.quantity)}
                     </span>
 
                     <button
                       type="button"
                       onClick={() => handleRemoveItem(idx)}
-                      className="text-gray-400 hover:text-rose-600 p-1"
+                      className="text-gray-400 hover:text-[#b91c1c] p-1 cursor-pointer"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -278,55 +286,55 @@ const OrderEditModalContent: React.FC<OrderEditModalContentProps> = ({
 
           {/* Pricing Adjustments & Status */}
           {isStaff && (
-            <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-[11px] text-amber-900 flex items-center space-x-2">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+            <div className="p-3 bg-[#faf9f7] rounded-2xl border border-[#e6e3dd] text-[11px] text-[#111827] flex items-center space-x-2">
+              <Lock className="w-4 h-4 text-[#881337] shrink-0" />
               <span>
-                🔒 <strong>স্টাফ অনুমতি সীমাবদ্ধ:</strong> আপনি শুধুমাত্র গ্রাহকের ফোন, অল্টারনেট নম্বর, ডেলিভারি ঠিকানা এবং নোট আপডেট করতে পারবেন। ডিসকাউন্ট ও স্ট্যাটাস পরিবর্তন শুধুমাত্র ম্যানেজার বা এডমিনের অনুমোদিত।
+                <strong>স্টাফ অনুমতি সীমাবদ্ধ:</strong> আপনি শুধুমাত্র গ্রাহকের ফোন, অল্টারনেট নম্বর, ডেলিভারি ঠিকানা এবং নোট আপডেট করতে পারবেন। ডিসকাউন্ট ও স্ট্যাটাস পরিবর্তন শুধুমাত্র ম্যানেজার বা এডমিনের অনুমোদিত।
               </span>
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-[#faf9f7] p-4 rounded-2xl border border-[#e6e3dd]">
             <div>
               <label className="block text-gray-600 font-semibold mb-1">
-                Discount (৳) {isStaff && '🔒'}
+                Discount (৳) {isStaff && <Lock className="w-3 h-3 inline ml-1 text-gray-400" />}
               </label>
               <input
                 type="number"
                 disabled={isStaff}
                 value={discount}
                 onChange={e => setDiscount(Number(e.target.value))}
-                className={`w-full border rounded-xl p-2 text-xs font-bold ${
-                  isStaff ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-200 text-rose-600'
+                className={`w-full border rounded-xl p-2 text-xs font-bold tabular-nums ${
+                  isStaff ? 'bg-gray-100 text-gray-400 border-[#e6e3dd] cursor-not-allowed' : 'bg-white border-[#e6e3dd] text-[#881337]'
                 }`}
               />
             </div>
 
             <div>
               <label className="block text-gray-600 font-semibold mb-1">
-                Delivery Charge (৳) {isStaff && '🔒'}
+                Delivery Charge (৳) {isStaff && <Lock className="w-3 h-3 inline ml-1 text-gray-400" />}
               </label>
               <input
                 type="number"
                 disabled={isStaff}
                 value={deliveryFee}
                 onChange={e => setDeliveryFee(Number(e.target.value))}
-                className={`w-full border rounded-xl p-2 text-xs font-bold ${
-                  isStaff ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-200 text-gray-900'
+                className={`w-full border rounded-xl p-2 text-xs font-bold tabular-nums ${
+                  isStaff ? 'bg-gray-100 text-gray-400 border-[#e6e3dd] cursor-not-allowed' : 'bg-white border-[#e6e3dd] text-[#111827]'
                 }`}
               />
             </div>
 
             <div>
               <label className="block text-gray-600 font-semibold mb-1">
-                Order Status {isStaff && '🔒'}
+                Order Status {isStaff && <Lock className="w-3 h-3 inline ml-1 text-gray-400" />}
               </label>
               <select
                 disabled={isStaff}
                 value={status}
                 onChange={e => setStatus(e.target.value as OrderStatus)}
                 className={`w-full border rounded-xl p-2 text-xs font-semibold ${
-                  isStaff ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-200 cursor-pointer'
+                  isStaff ? 'bg-gray-100 text-gray-400 border-[#e6e3dd] cursor-not-allowed' : 'bg-white border-[#e6e3dd] cursor-pointer'
                 }`}
               >
                 <option value="Pending">Pending (যাচাই অপেক্ষমান)</option>
@@ -343,14 +351,14 @@ const OrderEditModalContent: React.FC<OrderEditModalContentProps> = ({
 
             <div>
               <label className="block text-gray-600 font-semibold mb-1">
-                Payment Status {isStaff && '🔒'}
+                Payment Status {isStaff && <Lock className="w-3 h-3 inline ml-1 text-gray-400" />}
               </label>
               <select
                 disabled={isStaff}
                 value={paymentStatus}
                 onChange={e => setPaymentStatus(e.target.value as any)}
                 className={`w-full border rounded-xl p-2 text-xs font-semibold ${
-                  isStaff ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-200 cursor-pointer'
+                  isStaff ? 'bg-gray-100 text-gray-400 border-[#e6e3dd] cursor-not-allowed' : 'bg-white border-[#e6e3dd] cursor-pointer'
                 }`}
               >
                 <option value="Pending">Pending (অপেক্ষমান)</option>
@@ -360,24 +368,24 @@ const OrderEditModalContent: React.FC<OrderEditModalContentProps> = ({
           </div>
 
           {/* Summary Box */}
-          <div className="flex items-center justify-between bg-rose-50 p-4 rounded-2xl border border-rose-200 text-xs font-bold">
+          <div className="flex items-center justify-between bg-[#faf9f7] p-4 rounded-2xl border border-[#e6e3dd] text-xs font-bold">
             <span className="text-gray-700">সর্বমোট প্রদেয় মূল্য (New Total Amount):</span>
-            <span className="text-base text-rose-600 font-black">{formatPrice(totalAmount)}</span>
+            <span className="text-base text-[#881337] font-black tabular-nums">{formatPrice(totalAmount)}</span>
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center justify-end space-x-2 pt-2 border-t border-gray-100">
+          <div className="flex items-center justify-end space-x-2 pt-2 border-t border-[#e6e3dd]">
             <button
               type="button"
               onClick={onClose}
-              className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-4 py-2.5 rounded-xl text-xs cursor-pointer transition-colors"
+              className="bg-[#faf9f7] hover:bg-gray-100 border border-[#e6e3dd] text-gray-700 font-bold px-4 py-2.5 min-h-[40px] rounded-xl text-xs cursor-pointer transition-colors"
             >
               {t('বাতিল', 'Cancel')}
             </button>
 
             <button
               type="submit"
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs flex items-center space-x-1.5 shadow-md cursor-pointer transition-colors"
+              className="bg-[#881337] hover:bg-[#6d0f2c] text-white font-bold px-5 py-2.5 min-h-[40px] rounded-xl text-xs flex items-center space-x-1.5 cursor-pointer transition-colors"
             >
               <Save className="w-4 h-4" />
               <span>{t('সংশোধন সেভ করুন', 'Save Changes')}</span>

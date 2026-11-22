@@ -16,7 +16,7 @@ export const MobileBottomNav: React.FC = () => {
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-lg px-2 py-1.5 flex items-center justify-around">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#e6e3dd] px-2 py-1.5 flex items-center justify-around">
       <button
         onClick={() => {
           setSelectedCategory(null);
@@ -24,10 +24,10 @@ export const MobileBottomNav: React.FC = () => {
           setSelectedMaxBudget(null);
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
-        className="flex flex-col items-center justify-center py-1 px-2 text-gray-700 hover:text-rose-600 transition-colors cursor-pointer"
+        className="flex flex-col items-center justify-center py-1 px-2 min-h-[44px] text-gray-700 hover:text-[#881337] transition-colors cursor-pointer"
       >
         <Home className="w-5 h-5" />
-        <span className="text-[10px] font-semibold mt-0.5">{t('হোম', 'Home')}</span>
+        <span className="text-[10px] font-medium mt-0.5">{t('হোম', 'Home')}</span>
       </button>
 
       <button
@@ -39,47 +39,45 @@ export const MobileBottomNav: React.FC = () => {
             setSelectedCategory('men-fashion');
           }
         }}
-        className="flex flex-col items-center justify-center py-1 px-2 text-gray-700 hover:text-rose-600 transition-colors cursor-pointer"
+        className="flex flex-col items-center justify-center py-1 px-2 min-h-[44px] text-gray-700 hover:text-[#881337] transition-colors cursor-pointer"
       >
         <Grid className="w-5 h-5" />
-        <span className="text-[10px] font-semibold mt-0.5">{t('ক্যাটাগরি', 'Categories')}</span>
+        <span className="text-[10px] font-medium mt-0.5">{t('ক্যাটাগরি', 'Categories')}</span>
       </button>
 
       <button
         onClick={() => setActiveModal('search')}
-        className="flex flex-col items-center justify-center py-1 px-2 text-gray-700 hover:text-rose-600 transition-colors cursor-pointer"
+        className="flex flex-col items-center justify-center py-1 px-2 min-h-[44px] text-[#881337] transition-colors cursor-pointer"
       >
-        <div className="w-8 h-8 rounded-full bg-rose-600 text-white flex items-center justify-center -mt-3 shadow-md shadow-rose-600/30">
-          <Search className="w-4 h-4" />
-        </div>
-        <span className="text-[10px] font-semibold mt-0.5 text-rose-600">{t('খুঁজুন', 'Search')}</span>
+        <Search className="w-5 h-5" />
+        <span className="text-[10px] font-semibold mt-0.5">{t('খুঁজুন', 'Search')}</span>
       </button>
 
       <button
         onClick={() => setActiveModal('account')}
-        className="relative flex flex-col items-center justify-center py-1 px-2 text-gray-700 hover:text-rose-600 transition-colors cursor-pointer"
+        className="relative flex flex-col items-center justify-center py-1 px-2 min-h-[44px] text-gray-700 hover:text-[#881337] transition-colors cursor-pointer"
       >
         <Heart className="w-5 h-5" />
         {wishlist.length > 0 && (
-          <span className="absolute top-0 right-2 bg-rose-600 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+          <span className="absolute top-0.5 right-1 bg-[#881337] text-white text-[9px] font-semibold w-4 h-4 rounded-full flex items-center justify-center tabular-nums">
             {wishlist.length}
           </span>
         )}
-        <span className="text-[10px] font-semibold mt-0.5">{t('পছন্দ', 'Wishlist')}</span>
+        <span className="text-[10px] font-medium mt-0.5">{t('পছন্দ', 'Wishlist')}</span>
       </button>
 
       <button
         onClick={() => setActiveModal('cart')}
-        className="relative flex flex-col items-center justify-center py-1 px-2 text-gray-700 hover:text-rose-600 transition-colors cursor-pointer"
+        className="relative flex flex-col items-center justify-center py-1 px-2 min-h-[44px] text-gray-700 hover:text-[#881337] transition-colors cursor-pointer"
       >
         <ShoppingBag className="w-5 h-5" />
         {cartCount > 0 && (
-          <span className="absolute top-0 right-2 bg-rose-600 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+          <span className="absolute top-0.5 right-1 bg-[#881337] text-white text-[9px] font-semibold w-4 h-4 rounded-full flex items-center justify-center tabular-nums">
             {cartCount}
           </span>
         )}
-        <span className="text-[10px] font-semibold mt-0.5">{t('ব্যাগ', 'Cart')}</span>
+        <span className="text-[10px] font-medium mt-0.5">{t('ব্যাগ', 'Cart')}</span>
       </button>
-    </div>
+    </nav>
   );
 };

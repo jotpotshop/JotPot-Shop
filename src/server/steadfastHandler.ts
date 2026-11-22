@@ -554,8 +554,18 @@ export async function handleSteadfastRequest(
     const fbApiKey = env.FIREBASE_API_KEY || DEFAULT_FIREBASE_API_KEY;
 
     try {
+      const firestoreAuthToken = (
+        env.FIREBASE_SERVICE_ACCESS_TOKEN ||
+        (typeof process !== 'undefined' ? process.env?.FIREBASE_SERVICE_ACCESS_TOKEN : '') ||
+        ''
+      ).trim();
+      const firestoreHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(firestoreAuthToken ? { Authorization: `Bearer ${firestoreAuthToken}` } : {}),
+      };
+
       const ordersDataUrl = `https://firestore.googleapis.com/v1/projects/${fbProjectId}/databases/${fbDbId}/documents/settings/orders_data?key=${fbApiKey}`;
-      const ordersSnapRes = await fetch(ordersDataUrl);
+      const ordersSnapRes = await fetch(ordersDataUrl, { headers: firestoreHeaders });
 
       if (!ordersSnapRes.ok) {
         return new Response(
@@ -692,21 +702,43 @@ export async function handleSteadfastRequest(
       };
 
       const patchOrdersDataUrl = `https://firestore.googleapis.com/v1/projects/${fbProjectId}/databases/${fbDbId}/documents/settings/orders_data?updateMask.fieldPaths=items&updateMask.fieldPaths=updatedAt&updateMask.fieldPaths=updatedBy&key=${fbApiKey}`;
-      await fetch(patchOrdersDataUrl, {
+      const patchOrdersRes = await fetch(patchOrdersDataUrl, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: firestoreHeaders,
         body: JSON.stringify({ fields: updatedOrdersFields }),
       });
+
+      if (!patchOrdersRes.ok) {
+        const errBody = await patchOrdersRes.text().catch(() => '');
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `Failed to persist orders_data update in Firestore (HTTP ${patchOrdersRes.status}). ${errBody}`.trim(),
+          }),
+          { status: 502, headers: corsHeaders }
+        );
+      }
 
       // 2. Update individual order document at /orders/{orderId}
       const singleOrderDocUrl = `https://firestore.googleapis.com/v1/projects/${fbProjectId}/databases/${fbDbId}/documents/orders/${targetOrder.id}?key=${fbApiKey}`;
       const singleOrderEncoded = encodeFirestoreValue(targetOrder);
       if (singleOrderEncoded && singleOrderEncoded.mapValue) {
-        await fetch(singleOrderDocUrl, {
+        const singleOrderRes = await fetch(singleOrderDocUrl, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: firestoreHeaders,
           body: JSON.stringify({ fields: singleOrderEncoded.mapValue.fields }),
         });
+
+        if (!singleOrderRes.ok) {
+          const errBody = await singleOrderRes.text().catch(() => '');
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: `Failed to persist order document update in Firestore (HTTP ${singleOrderRes.status}). ${errBody}`.trim(),
+            }),
+            { status: 502, headers: corsHeaders }
+          );
+        }
       }
 
       return new Response(

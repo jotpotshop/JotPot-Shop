@@ -7,7 +7,6 @@ export interface OccasionConfig {
   titleEn: string;
   descriptionBn: string;
   descriptionEn: string;
-  color: string;
   keywords: string[];
 }
 
@@ -19,7 +18,6 @@ export const OCCASIONS_LIST: OccasionConfig[] = [
     titleEn: 'Gift',
     descriptionBn: 'প্রিয়জনকে উপহার দেওয়ার মতো প্রিমিয়াম ও আকর্ষণীয় পণ্যসমূহ',
     descriptionEn: 'Thoughtful and premium gifts for your loved ones',
-    color: 'from-pink-500 to-rose-500',
     keywords: [
       'gift',
       'উপহার',
@@ -48,7 +46,6 @@ export const OCCASIONS_LIST: OccasionConfig[] = [
     titleEn: 'Office',
     descriptionBn: 'কর্মক্ষেত্র ও অফিস প্রেজেন্টেশনে মানানসই মার্জিত পোশাক ও গ্যাজেট',
     descriptionEn: 'Formal & smart workwear, bags, and daily executive gadgets',
-    color: 'from-blue-600 to-indigo-700',
     keywords: [
       'office',
       'অফিস',
@@ -80,7 +77,6 @@ export const OCCASIONS_LIST: OccasionConfig[] = [
     titleEn: 'Campus',
     descriptionBn: 'কলেজ-ভার্সিটির ট্রেন্ডি, স্টাইলিশ ও সাশ্রয়ী নিত্যদিনের ফ্যাশন',
     descriptionEn: 'Trendy, casual, and affordable campus essentials for students',
-    color: 'from-amber-500 to-orange-600',
     keywords: [
       'campus',
       'ক্যাম্পাস',
@@ -111,7 +107,6 @@ export const OCCASIONS_LIST: OccasionConfig[] = [
     titleEn: 'Wedding',
     descriptionBn: 'বিয়ে, গায়ে হলুদ ও উৎসবমুখর পারিবারিক অনুষ্ঠানের বিশেষ কালেকশন',
     descriptionEn: 'Festive, traditional & wedding ceremonial attires and jewelry',
-    color: 'from-rose-600 to-red-700',
     keywords: [
       'wedding',
       'বিবাহ',
@@ -140,7 +135,6 @@ export const OCCASIONS_LIST: OccasionConfig[] = [
     titleEn: 'Travel',
     descriptionBn: 'ট্যুর, হাইকিং ও ভ্রমণের জন্য টেকসই ব্যাকপ্যাক, ট্রাভেল আনুষঙ্গিক',
     descriptionEn: 'Durable gear, backpacks, and accessories for trips and outdoor travels',
-    color: 'from-teal-500 to-cyan-600',
     keywords: [
       'travel',
       'ভ্রমণ',
@@ -167,7 +161,6 @@ export const OCCASIONS_LIST: OccasionConfig[] = [
     titleEn: 'Party',
     descriptionBn: 'নাইট-আউট, পার্টি ও গেট-টুগেদারে আকর্ষণীয় লুক তৈরি করার আইটেম',
     descriptionEn: 'Chic, statement pieces and party-ready looks to stand out',
-    color: 'from-purple-600 to-pink-600',
     keywords: [
       'party',
       'পার্টি',
@@ -193,7 +186,6 @@ export const OCCASIONS_LIST: OccasionConfig[] = [
     titleEn: 'Couple',
     descriptionBn: 'ম্যাচিং কাপল পোশাক, যুগল ঘড়ি ও বিশেষ ভালোবাসার কম্বো',
     descriptionEn: 'Matching partner sets, his & hers accessories, and romantic gifts',
-    color: 'from-red-500 to-rose-600',
     keywords: [
       'couple',
       'কাপল',
@@ -215,7 +207,6 @@ export const OCCASIONS_LIST: OccasionConfig[] = [
     titleEn: 'Formal',
     descriptionBn: 'মিটিং, ইন্টারভিউ ও কনফারেন্সের জন্য কমপ্লিট ক্লাসিক লুক',
     descriptionEn: 'Classic formal attire, leather shoes, belts & accessories',
-    color: 'from-slate-700 to-gray-900',
     keywords: [
       'formal',
       'ফর্মাল',
@@ -242,7 +233,6 @@ export const OCCASIONS_LIST: OccasionConfig[] = [
     titleEn: 'Everyday',
     descriptionBn: 'প্রতিদিনের আরামদায়ক ব্যবহার ও ক্যাজুয়াল চলাফেরার দরকারি আইটেম',
     descriptionEn: 'Everyday essential items, daily casual comfort wear',
-    color: 'from-emerald-500 to-teal-600',
     keywords: [
       'everyday',
       'দৈনন্দিন',

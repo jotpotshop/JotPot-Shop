@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: 'Hind Siliguri', 'Noto Sans Bengali', 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-serif-bn: 'Noto Serif Bengali', 'Hind Siliguri', Georgia, serif;
+  --color-ink: #111827;
+  --color-paper: #faf9f7;
+  --color-surface: #ffffff;
+  --color-border-warm: #e6e3dd;
+  --color-accent: #881337;
+  --color-accent-hover: #9f1239;
+  --color-trust: #15803d;
+}
+
 @layer base {
   html, body {
     max-width: 100%;
@@ -9,8 +21,90 @@
   }
 
   body {
-    font-family: 'Plus Jakarta Sans', 'Hind Siliguri', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    font-family: var(--font-sans);
+    background-color: #faf9f7;
+    color: #111827;
+    line-height: 1.65;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
+
+  h1, h2, h3, h4 {
+    letter-spacing: -0.01em;
+    line-height: 1.35;
+  }
+}
+
+.font-editorial {
+  font-family: var(--font-serif-bn);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Rich Bangla/English Product Description Typography */
+.rich-description-preview {
+  color: #374151;
+  font-size: 0.9375rem;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.rich-description-preview h2,
+.rich-description-preview h3,
+.rich-description-preview h4 {
+  color: #111827;
+  font-weight: 700;
+  margin-top: 1.15em;
+  margin-bottom: 0.45em;
+  line-height: 1.4;
+}
+
+.rich-description-preview h2 {
+  font-size: 1.125rem;
+}
+
+.rich-description-preview h3 {
+  font-size: 1rem;
+}
+
+.rich-description-preview p {
+  margin-bottom: 0.75em;
+}
+
+.rich-description-preview ul {
+  list-style-type: disc;
+  padding-left: 1.35rem;
+  margin-bottom: 0.85em;
+}
+
+.rich-description-preview ol {
+  list-style-type: decimal;
+  padding-left: 1.35rem;
+  margin-bottom: 0.85em;
+}
+
+.rich-description-preview li {
+  margin-bottom: 0.35em;
+}
+
+.rich-description-preview blockquote {
+  border-left: 3px solid #881337;
+  padding-left: 0.875rem;
+  color: #4b5563;
+  margin: 0.85em 0;
+  background-color: #faf9f7;
+  padding-top: 0.45rem;
+  padding-bottom: 0.45rem;
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+
+.rich-description-preview strong,
+.rich-description-preview b {
+  color: #111827;
+  font-weight: 600;
 }
 
 /* Custom scrollbar */
@@ -19,21 +113,21 @@
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #f5f4f0;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #d1cdc4;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #9ca3af;
 }
 
-@keyframes pulse-subtle {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.85; }
-}
-
-.animate-pulse-subtle {
-  animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

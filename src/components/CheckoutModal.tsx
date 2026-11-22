@@ -13,6 +13,8 @@ import {
   User,
   Copy,
   Check,
+  Banknote,
+  Package,
 } from 'lucide-react';
 import { useShop, FREE_DELIVERY_THRESHOLD } from '../context/ShopContext';
 import { getAvailableStock } from '../utils/inventory';
@@ -57,7 +59,6 @@ export const CheckoutModal: React.FC = () => {
 
   if (activeModal !== 'checkout') return null;
 
-  // Delivery fee calculation with Chattogram Zone & Free Delivery Offer support
   const freeThreshold = deliverySettings?.freeDeliveryThreshold ?? FREE_DELIVERY_THRESHOLD;
   const isFreeThresholdMet = cartSubtotal >= freeThreshold;
 
@@ -175,8 +176,6 @@ export const CheckoutModal: React.FC = () => {
       }
     }
 
-    setIsSubmitting(true);
-
     let paymentDetailsObj: {
       senderNumber?: string;
       trxId?: string;
@@ -240,29 +239,30 @@ export const CheckoutModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-      <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden my-auto border border-gray-100 flex flex-col max-h-[94vh]">
+    <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+      <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden my-auto border border-[#e6e3dd] flex flex-col max-h-[94vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/70">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-xs">
-              <Truck className="w-5 h-5" />
+        <div className="px-6 py-4 border-b border-[#e6e3dd] flex items-center justify-between bg-[#faf9f7]">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-[#111827] text-white flex items-center justify-center shrink-0">
+              <Truck className="w-4.5 h-4.5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-base sm:text-lg text-gray-900">
-                {t('ওয়ান-পেজ এক্সপ্রেস চেকআউট', 'One-Page Express Checkout')}
+              <h3 className="font-editorial font-bold text-base sm:text-lg text-[#111827]">
+                {t('অর্ডার ও ডেলিভারি তথ্য', 'Express Checkout')}
               </h3>
               <p className="text-xs text-gray-500">
-                {t('গেস্ট চেকআউট সমর্থিত — কোনো পাসওয়ার্ড ছাড়াই দ্রুত অর্ডার করুন', 'Guest checkout enabled — order quickly without hassle')}
+                {t('গেস্ট চেকআউট সমর্থিত — লগইন ছাড়াই দ্রুত অর্ডার সম্পন্ন করুন', 'Guest checkout enabled — complete your order quickly')}
               </p>
             </div>
           </div>
 
           <button
             onClick={() => setActiveModal(null)}
-            className="p-1.5 text-gray-400 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+            aria-label={t('বন্ধ করুন', 'Close')}
+            className="p-2 text-gray-500 hover:text-[#111827] rounded-lg hover:bg-white transition-colors cursor-pointer"
           >
-            <X className="w-6 h-6" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -273,8 +273,8 @@ export const CheckoutModal: React.FC = () => {
             {/* Saved Addresses quick pick */}
             {savedAddresses.length > 0 && (
               <div>
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-2">
-                  {t('সংরক্ষিত ঠিকানা থেকে নির্বাচন করুন (১-ক্লিক):', 'Quick Pick Saved Address:')}
+                <span className="text-xs font-semibold text-gray-500 block mb-2">
+                  {t('সংরক্ষিত ঠিকানা থেকে বেছে নিন:', 'Saved addresses:')}
                 </span>
                 <div className="flex flex-wrap gap-2">
                   {savedAddresses.map(addr => (
@@ -282,9 +282,9 @@ export const CheckoutModal: React.FC = () => {
                       type="button"
                       key={addr.id}
                       onClick={() => handleSelectSavedAddress(addr.id)}
-                      className="bg-gray-50 hover:bg-rose-50 text-gray-700 hover:text-rose-700 border border-gray-200 hover:border-rose-300 rounded-xl px-3 py-1.5 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
+                      className="bg-[#faf9f7] hover:bg-white text-[#111827] border border-[#e6e3dd] hover:border-[#111827] rounded-lg px-3 py-1.5 min-h-[36px] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
-                      {addr.label === 'Home' ? <Home className="w-3.5 h-3.5" /> : <Briefcase className="w-3.5 h-3.5" />}
+                      {addr.label === 'Home' ? <Home className="w-3.5 h-3.5 text-gray-500" /> : <Briefcase className="w-3.5 h-3.5 text-gray-500" />}
                       <span>{addr.label}: {addr.area}</span>
                     </button>
                   ))}
@@ -293,9 +293,9 @@ export const CheckoutModal: React.FC = () => {
             )}
 
             {/* Customer Contact */}
-            <div className="bg-gray-50/70 p-4 rounded-2xl border border-gray-100 space-y-3">
-              <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center space-x-1.5">
-                <User className="w-3.5 h-3.5 text-rose-600" />
+            <div className="bg-[#faf9f7] p-4 rounded-xl border border-[#e6e3dd] space-y-3.5">
+              <h4 className="text-xs font-bold text-[#111827] flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-[#881337]" />
                 <span>{t('গ্রাহকের তথ্য', 'Customer Details')}</span>
               </h4>
 
@@ -310,7 +310,7 @@ export const CheckoutModal: React.FC = () => {
                     value={name || ''}
                     onChange={e => setName(e.target.value)}
                     placeholder={t('যেমন: তানভীর আহমেদ', 'e.g. Tanvir Ahmed')}
-                    className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs focus:outline-hidden focus:border-rose-500"
+                    className="w-full min-h-[42px] bg-white border border-[#e6e3dd] rounded-lg px-3.5 py-2 text-xs text-[#111827] focus:outline-none focus:border-[#111827]"
                   />
                 </div>
 
@@ -326,7 +326,7 @@ export const CheckoutModal: React.FC = () => {
                       value={phone || ''}
                       onChange={e => setPhone(e.target.value)}
                       placeholder="017XXXXXXXX"
-                      className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-hidden focus:border-rose-500 font-mono"
+                      className="w-full min-h-[42px] bg-white border border-[#e6e3dd] rounded-lg pl-9 pr-3 py-2 text-xs text-[#111827] focus:outline-none focus:border-[#111827] font-mono tabular-nums"
                     />
                   </div>
                 </div>
@@ -343,16 +343,16 @@ export const CheckoutModal: React.FC = () => {
                     value={alternativePhone || ''}
                     onChange={e => setAlternativePhone(e.target.value)}
                     placeholder="018XXXXXXXX"
-                    className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-hidden focus:border-rose-500 font-mono"
+                    className="w-full min-h-[42px] bg-white border border-[#e6e3dd] rounded-lg pl-9 pr-3 py-2 text-xs text-[#111827] focus:outline-none focus:border-[#111827] font-mono tabular-nums"
                   />
                 </div>
               </div>
             </div>
 
             {/* Delivery Location & Address */}
-            <div className="bg-gray-50/70 p-4 rounded-2xl border border-gray-100 space-y-3">
-              <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center space-x-1.5">
-                <MapPin className="w-3.5 h-3.5 text-rose-600" />
+            <div className="bg-[#faf9f7] p-4 rounded-xl border border-[#e6e3dd] space-y-3.5">
+              <h4 className="text-xs font-bold text-[#111827] flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-[#881337]" />
                 <span>{t('ডেলিভারি ঠিকানা', 'Delivery Address')}</span>
               </h4>
 
@@ -364,7 +364,7 @@ export const CheckoutModal: React.FC = () => {
                   <select
                     value={district}
                     onChange={e => handleDistrictChange(e.target.value)}
-                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-hidden focus:border-rose-500"
+                    className="w-full min-h-[42px] bg-white border border-[#e6e3dd] rounded-lg px-3 py-2 text-xs text-[#111827] focus:outline-none focus:border-[#111827]"
                   >
                     {BD_DISTRICTS.map(d => (
                       <option key={d} value={d}>{d}</option>
@@ -382,7 +382,7 @@ export const CheckoutModal: React.FC = () => {
                     value={area || ''}
                     onChange={e => setArea(e.target.value)}
                     placeholder={t('যেমন: ধানমন্ডি / মিরপুর / আগ্রাবাদ', 'e.g. Dhanmondi / Agrabad')}
-                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-hidden focus:border-rose-500"
+                    className="w-full min-h-[42px] bg-white border border-[#e6e3dd] rounded-lg px-3 py-2 text-xs text-[#111827] focus:outline-none focus:border-[#111827]"
                   />
                 </div>
               </div>
@@ -396,99 +396,93 @@ export const CheckoutModal: React.FC = () => {
                   required
                   value={fullAddress || ''}
                   onChange={e => setFullAddress(e.target.value)}
-                  placeholder={t('বাড়ি নং, রোড নং, ফ্ল্যাট বা ল্যান্ডমার্ক...', 'House No, Road No, Flat or Nearby Landmark...')}
-                  className="w-full bg-white border border-gray-200 rounded-xl p-3 text-xs focus:outline-hidden focus:border-rose-500"
+                  placeholder={t('বাড়ি নং, রোড নং, ফ্ল্যাট বা পরিচিত স্থান...', 'House No, Road No, Flat or Nearby Landmark...')}
+                  className="w-full bg-white border border-[#e6e3dd] rounded-lg p-3 text-xs text-[#111827] focus:outline-none focus:border-[#111827]"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  {t('বিশেষ কোনো নির্দেশনা বা নোট (ঐচ্ছিক)', 'Delivery Note / Customer Instructions (Optional)')}
+                  {t('বিশেষ কোনো নির্দেশনা (ঐচ্ছিক)', 'Delivery Note (Optional)')}
                 </label>
                 <input
                   type="text"
                   value={customerNote || ''}
                   onChange={e => setCustomerNote(e.target.value)}
-                  placeholder={t('যেমন: ৪টার পর ডেলিভারি দিবেন, কল না পেলে অল্টারনেটে দিবেন...', 'e.g. Call before delivery, deliver after 4 PM...')}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-hidden focus:border-rose-500"
+                  placeholder={t('যেমন: বিকাল ৪টার পর ডেলিভারি দিবেন...', 'e.g. Call before delivery, deliver after 4 PM...')}
+                  className="w-full min-h-[42px] bg-white border border-[#e6e3dd] rounded-lg px-3 py-2 text-xs text-[#111827] focus:outline-none focus:border-[#111827]"
                 />
               </div>
 
-              {/* Delivery Speed Selector with 3 Zones (Dhaka, Chattogram, Outside) */}
-              <div className="pt-2">
+              {/* Delivery Zone Selector */}
+              <div className="pt-1">
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-xs font-semibold text-gray-700">
-                    {t('ডেলিভারি জোন নির্বাচন:', 'Delivery Speed / Zone:')}
+                    {t('ডেলিভারি জোন:', 'Delivery Zone:')}
                   </label>
                   {deliverySettings.chattogramFreeDeliveryOffer && (
-                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-black px-2 py-0.5 rounded-full animate-pulse">
-                      🎉 চট্টগ্রাম স্পেশাল অফার এক্টিভ
+                    <span className="text-[11px] text-[#15803d] font-semibold">
+                      {t('চট্টগ্রাম সিটিতে ফ্রি ডেলিভারি চলছে', 'Chattogram free delivery active')}
                     </span>
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  {/* Inside Dhaka */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 tabular-nums">
                   <button
                     type="button"
                     onClick={() => setDeliveryOption('inside')}
-                    className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                    className={`p-3 rounded-xl border text-left cursor-pointer transition-colors ${
                       deliveryOption === 'inside'
-                        ? 'border-rose-600 bg-rose-50/80 text-rose-950 font-bold ring-2 ring-rose-500/20'
-                        : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                        ? 'border-[#111827] bg-white text-[#111827] ring-1 ring-[#111827]'
+                        : 'border-[#e6e3dd] bg-white text-gray-700 hover:border-gray-400'
                     }`}
                   >
-                    <div className="text-xs font-bold">{t('ঢাকা সিটি ভেতরে', 'Inside Dhaka City')}</div>
+                    <div className="text-xs font-semibold">{t('ঢাকা সিটি ভেতরে', 'Inside Dhaka City')}</div>
                     <div className="text-[11px] text-gray-500 mt-0.5">
-                      {isFreeThresholdMet ? (
-                        <span className="text-emerald-600 font-extrabold uppercase">FREE DELIVERY</span>
+                      {isFreeThresholdMet || deliverySettings.dhakaFreeDeliveryOffer ? (
+                        <span className="text-[#15803d] font-semibold">{t('ফ্রি ডেলিভারি', 'Free Delivery')}</span>
                       ) : (
                         `৳${deliverySettings.insideDhakaFee} (${deliverySettings.insideDhakaDays || '১-২ দিন'})`
                       )}
                     </div>
                   </button>
 
-                  {/* Chattogram City Zone */}
                   <button
                     type="button"
                     onClick={() => setDeliveryOption('chattogram')}
-                    className={`p-3 rounded-xl border text-left cursor-pointer transition-all relative ${
+                    className={`p-3 rounded-xl border text-left cursor-pointer transition-colors ${
                       deliveryOption === 'chattogram'
-                        ? 'border-amber-500 bg-amber-50/90 text-amber-950 font-bold ring-2 ring-amber-500/30'
-                        : 'border-gray-200 bg-white text-gray-700 hover:bg-amber-50/40'
+                        ? 'border-[#111827] bg-white text-[#111827] ring-1 ring-[#111827]'
+                        : 'border-[#e6e3dd] bg-white text-gray-700 hover:border-gray-400'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold">{t('চট্টগ্রাম সিটি', 'Chattogram City')}</span>
-                      <span className="text-[9px] bg-amber-200 text-amber-900 font-black px-1.5 py-0.2 rounded">Zone</span>
-                    </div>
+                    <div className="text-xs font-semibold">{t('চট্টগ্রাম সিটি', 'Chattogram City')}</div>
                     <div className="text-[11px] mt-0.5">
                       {isFreeThresholdMet || deliverySettings.chattogramFreeDeliveryOffer ? (
-                        <span className="text-emerald-700 font-black flex items-center">
-                          🎉 {t('সম্পূর্ণ ফ্রি ডেলিভারি (৳০)', 'FREE Delivery (৳0)')}
+                        <span className="text-[#15803d] font-semibold">
+                          {t('ফ্রি ডেলিভারি (৳০)', 'Free Delivery (৳0)')}
                         </span>
                       ) : (
-                        <span className="text-amber-800 font-bold">
+                        <span className="text-gray-600">
                           {`৳${deliverySettings.chattogramFee ?? 80} (${deliverySettings.chattogramDays || '১-২ দিন'})`}
                         </span>
                       )}
                     </div>
                   </button>
 
-                  {/* Outside Dhaka & Chattogram */}
                   <button
                     type="button"
                     onClick={() => setDeliveryOption('outside')}
-                    className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                    className={`p-3 rounded-xl border text-left cursor-pointer transition-colors ${
                       deliveryOption === 'outside'
-                        ? 'border-rose-600 bg-rose-50/80 text-rose-950 font-bold ring-2 ring-rose-500/20'
-                        : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                        ? 'border-[#111827] bg-white text-[#111827] ring-1 ring-[#111827]'
+                        : 'border-[#e6e3dd] bg-white text-gray-700 hover:border-gray-400'
                     }`}
                   >
-                    <div className="text-xs font-bold">{t('অন্যান্য জেলা সমূহ', 'Other Districts')}</div>
+                    <div className="text-xs font-semibold">{t('অন্যান্য জেলা', 'Other Districts')}</div>
                     <div className="text-[11px] text-gray-500 mt-0.5">
                       {isFreeThresholdMet ? (
-                        <span className="text-emerald-600 font-extrabold uppercase">FREE DELIVERY</span>
+                        <span className="text-[#15803d] font-semibold">{t('ফ্রি ডেলিভারি', 'Free Delivery')}</span>
                       ) : (
                         `৳${deliverySettings.outsideDhakaFee} (${deliverySettings.outsideDhakaDays || '২-৩ দিন'})`
                       )}
@@ -496,12 +490,11 @@ export const CheckoutModal: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Special Chattogram Banner when selected */}
                 {deliveryOption === 'chattogram' && deliverySettings.chattogramFreeDeliveryOffer && (
-                  <div className="mt-2 p-2.5 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 text-[11px] text-emerald-900 flex items-center space-x-2 animate-in fade-in">
-                    <span className="text-sm">🎉</span>
-                    <span className="font-semibold">
-                      {deliverySettings.chattogramOfferTextBn || 'আজকে চট্টগ্রাম সিটির গ্রাহকদের জন্য ডেলিভারি চার্জ সম্পূর্ণ ফ্রি!'}
+                  <div className="mt-2.5 p-2.5 rounded-lg bg-white border border-[#15803d]/30 text-xs text-[#15803d] flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 shrink-0" />
+                    <span className="font-medium">
+                      {deliverySettings.chattogramOfferTextBn || 'চট্টগ্রাম সিটির গ্রাহকদের জন্য ডেলিভারি চার্জ সম্পূর্ণ ফ্রি!'}
                     </span>
                   </div>
                 )}
@@ -509,95 +502,87 @@ export const CheckoutModal: React.FC = () => {
             </div>
 
             {/* Payment Method Selector */}
-            <div className="bg-gray-50/70 p-4 rounded-2xl border border-gray-100 space-y-3">
-              <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center space-x-1.5">
-                <CreditCard className="w-3.5 h-3.5 text-rose-600" />
+            <div className="bg-[#faf9f7] p-4 rounded-xl border border-[#e6e3dd] space-y-3.5">
+              <h4 className="text-xs font-bold text-[#111827] flex items-center gap-1.5">
+                <CreditCard className="w-3.5 h-3.5 text-[#881337]" />
                 <span>{t('পেমেন্ট মাধ্যম নির্বাচন করুন', 'Payment Method')}</span>
               </h4>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                {/* Cash on Delivery */}
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('cod')}
-                  className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                  className={`p-3 rounded-xl border text-left cursor-pointer transition-colors ${
                     paymentMethod === 'cod'
-                      ? 'border-rose-600 bg-rose-50 text-rose-950 font-bold shadow-xs'
-                      : 'border-gray-200 bg-white text-gray-700'
+                      ? 'border-[#111827] bg-white text-[#111827] ring-1 ring-[#111827]'
+                      : 'border-[#e6e3dd] bg-white text-gray-700 hover:border-gray-400'
                   }`}
                 >
-                  <div className="flex items-center space-x-1.5">
-                    <span className="text-base">💵</span>
-                    <span className="text-xs font-bold">{t('ক্যাশ অন ডেলিভারি', 'Cash on Delivery')}</span>
+                  <div className="flex items-center gap-1.5">
+                    <Banknote className="w-4 h-4 text-[#15803d] shrink-0" />
+                    <span className="text-xs font-semibold">{t('ক্যাশ অন ডেলিভারি', 'Cash on Delivery')}</span>
                   </div>
-                  <p className="text-[10px] text-gray-500 mt-1">{t('পণ্য হাতে পেয়ে টাকা দিন', 'Pay when delivered')}</p>
+                  <p className="text-[11px] text-gray-500 mt-1">{t('পণ্য হাতে পেয়ে টাকা দিন', 'Pay on delivery')}</p>
                 </button>
 
-                {/* bKash */}
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('bkash')}
-                  className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                  className={`p-3 rounded-xl border text-left cursor-pointer transition-colors ${
                     paymentMethod === 'bkash'
-                      ? 'border-pink-600 bg-pink-50 text-pink-950 font-bold shadow-xs'
-                      : 'border-gray-200 bg-white text-gray-700'
+                      ? 'border-pink-700 bg-white text-[#111827] ring-1 ring-pink-700'
+                      : 'border-[#e6e3dd] bg-white text-gray-700 hover:border-gray-400'
                   }`}
                 >
-                  <div className="flex items-center space-x-1.5">
-                    <span className="w-4 h-4 rounded-full bg-pink-600 text-white text-[9px] font-bold flex items-center justify-center">b</span>
-                    <span className="text-xs font-bold text-pink-700">bKash (বিকাশ)</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-4 h-4 rounded-full bg-pink-600 text-white text-[9px] font-bold flex items-center justify-center shrink-0">b</span>
+                    <span className="text-xs font-semibold text-pink-800">bKash (বিকাশ)</span>
                   </div>
-                  <p className="text-[10px] text-gray-500 mt-1">{t('ইন্সট্যান্ট মোবাইল ব্যাংকিং', 'Instant Mobile Pay')}</p>
+                  <p className="text-[11px] text-gray-500 mt-1">{t('মোবাইল ব্যাংকিং', 'Mobile Banking')}</p>
                 </button>
 
-                {/* Nagad */}
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('nagad')}
-                  className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                  className={`p-3 rounded-xl border text-left cursor-pointer transition-colors ${
                     paymentMethod === 'nagad'
-                      ? 'border-amber-600 bg-amber-50 text-amber-950 font-bold shadow-xs'
-                      : 'border-gray-200 bg-white text-gray-700'
+                      ? 'border-amber-700 bg-white text-[#111827] ring-1 ring-amber-700'
+                      : 'border-[#e6e3dd] bg-white text-gray-700 hover:border-gray-400'
                   }`}
                 >
-                  <div className="flex items-center space-x-1.5">
-                    <span className="w-4 h-4 rounded-full bg-amber-600 text-white text-[9px] font-bold flex items-center justify-center">ন</span>
-                    <span className="text-xs font-bold text-amber-700">Nagad (নগদ)</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-4 h-4 rounded-full bg-amber-600 text-white text-[9px] font-bold flex items-center justify-center shrink-0">ন</span>
+                    <span className="text-xs font-semibold text-amber-800">Nagad (নগদ)</span>
                   </div>
-                  <p className="text-[10px] text-gray-500 mt-1">{t('নগদ মোবাইল পেমেন্ট', 'Nagad Online Pay')}</p>
+                  <p className="text-[11px] text-gray-500 mt-1">{t('নগদ পেমেন্ট', 'Nagad Pay')}</p>
                 </button>
               </div>
 
-              {/* bKash Payment Form & Instructions */}
+              {/* bKash Payment Form */}
               {paymentMethod === 'bkash' && (
-                <div className="mt-2 bg-pink-50/80 p-3.5 rounded-2xl border border-pink-200 space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-pink-200/60">
-                    <div className="flex items-center space-x-2">
-                      <span className="w-5 h-5 rounded-full bg-pink-600 text-white text-[10px] font-bold flex items-center justify-center">
-                        b
-                      </span>
-                      <span className="text-xs font-black text-pink-900">
-                        {paymentSettings.bkashAccountType === 'Personal'
-                          ? t('বিকাশ পার্সোনাল সেন্ড মানি', 'bKash Personal Send Money')
-                          : t('বিকাশ অনলাইন মার্চেন্ট পেমেন্ট', 'bKash Merchant Payment')}
-                      </span>
-                    </div>
-                    <span className="bg-pink-200/70 text-pink-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                      {paymentSettings.bkashAccountType === 'Personal' ? 'Personal Account' : 'Merchant Gateway'}
+                <div className="mt-2 bg-white p-4 rounded-xl border border-pink-200 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-[#e6e3dd]">
+                    <span className="text-xs font-bold text-pink-900">
+                      {paymentSettings.bkashAccountType === 'Personal'
+                        ? t('বিকাশ পার্সোনাল সেন্ড মানি', 'bKash Personal Send Money')
+                        : t('বিকাশ মার্চেন্ট পেমেন্ট', 'bKash Merchant Payment')}
+                    </span>
+                    <span className="text-[11px] text-pink-800 font-medium">
+                      {paymentSettings.bkashAccountType === 'Personal' ? 'Personal' : 'Merchant'}
                     </span>
                   </div>
 
                   {paymentSettings.bkashAccountType === 'Personal' ? (
                     <div className="space-y-3">
-                      <div className="bg-white p-3 rounded-xl border border-pink-200 space-y-2">
-                        <p className="text-[11px] text-pink-900 font-medium">
+                      <div className="bg-[#faf9f7] p-3 rounded-lg border border-[#e6e3dd] space-y-2">
+                        <p className="text-xs text-gray-700 leading-relaxed">
                           {paymentSettings.bkashInstructionsBn ||
-                            'বিকাশ অ্যাপ অথবা *247# ডায়াল করে নিচের নম্বরে সেন্ড মানি (Send Money) সম্পন্ন করুন:'}
+                            'বিকাশ অ্যাপ অথবা *247# ডায়াল করে নিচের নম্বরে সেন্ড মানি সম্পন্ন করুন:'}
                         </p>
-                        <div className="flex items-center justify-between bg-pink-50 p-2 rounded-lg border border-pink-100">
+                        <div className="flex items-center justify-between bg-white p-2.5 rounded-lg border border-[#e6e3dd]">
                           <div>
-                            <span className="text-[10px] text-gray-500 block">পার্সোনাল বিকাশ নম্বর:</span>
-                            <span className="text-xs font-mono font-black text-pink-700">
+                            <span className="text-[11px] text-gray-500 block">{t('পার্সোনাল বিকাশ নম্বর:', 'bKash Number:')}</span>
+                            <span className="text-xs font-mono font-bold text-[#111827] tabular-nums">
                               {paymentSettings.bkashNumber || '01712-345678'}
                             </span>
                           </div>
@@ -608,36 +593,35 @@ export const CheckoutModal: React.FC = () => {
                               setCopiedNumber(true);
                               setTimeout(() => setCopiedNumber(false), 2000);
                             }}
-                            className="bg-white hover:bg-pink-100 text-pink-700 border border-pink-200 px-2 py-1 rounded text-[10px] font-bold flex items-center space-x-1 cursor-pointer transition-colors"
+                            className="bg-[#faf9f7] hover:bg-gray-100 text-[#111827] border border-[#e6e3dd] px-2.5 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1 cursor-pointer transition-colors"
                           >
-                            {copiedNumber ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                            <span>{copiedNumber ? 'কপি হয়েছে' : 'কপি করুন'}</span>
+                            {copiedNumber ? <Check className="w-3 h-3 text-[#15803d]" /> : <Copy className="w-3 h-3" />}
+                            <span>{copiedNumber ? t('কপি হয়েছে', 'Copied') : t('কপি', 'Copy')}</span>
                           </button>
                         </div>
-                        <div className="flex items-center justify-between text-xs text-pink-950 font-bold pt-1">
-                          <span>সেন্ড মানি অ্যামাউন্ট:</span>
-                          <span className="text-rose-600 font-extrabold">{formatPrice(totalAmount)}</span>
+                        <div className="flex items-center justify-between text-xs text-[#111827] font-semibold pt-1 tabular-nums">
+                          <span>{t('সেন্ড মানি অ্যামাউন্ট:', 'Amount to Send:')}</span>
+                          <span className="text-[#881337] font-bold">{formatPrice(totalAmount)}</span>
                         </div>
                       </div>
 
-                      {/* Customer inputs after sending money */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <div>
-                          <label className="block text-[11px] font-bold text-pink-950 mb-1">
-                            {t('১. আপনার বিকাশ নম্বর *', '1. Your Sender bKash Number *')}
+                          <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                            {t('১. আপনার বিকাশ নম্বর *', '1. Sender bKash Number *')}
                           </label>
                           <input
                             type="tel"
                             required
                             value={personalSenderNumber}
                             onChange={e => setPersonalSenderNumber(e.target.value)}
-                            placeholder="যে নম্বর থেকে টাকা পাঠিয়েছেন"
-                            className="w-full bg-white border border-pink-300 rounded-xl p-2 text-xs font-mono focus:border-pink-500"
+                            placeholder="01XXXXXXXXX"
+                            className="w-full min-h-[38px] bg-white border border-[#e6e3dd] rounded-lg px-2.5 py-1.5 text-xs font-mono tabular-nums focus:outline-none focus:border-[#111827]"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-[11px] font-bold text-pink-950 mb-1">
+                          <label className="block text-[11px] font-semibold text-gray-700 mb-1">
                             {t('২. ট্রানজেকশন আইডি (TrxID) *', '2. Transaction ID (TrxID) *')}
                           </label>
                           <input
@@ -645,28 +629,28 @@ export const CheckoutModal: React.FC = () => {
                             required
                             value={personalTrxId}
                             onChange={e => setPersonalTrxId(e.target.value)}
-                            placeholder="যেমন: BL9A7K2M4P"
-                            className="w-full bg-white border border-pink-300 rounded-xl p-2 text-xs font-mono uppercase focus:border-pink-500"
+                            placeholder="BL9A7K2M4P"
+                            className="w-full min-h-[38px] bg-white border border-[#e6e3dd] rounded-lg px-2.5 py-1.5 text-xs font-mono uppercase focus:outline-none focus:border-[#111827]"
                           />
                         </div>
                       </div>
 
                       <div>
-                        <label className="block text-[11px] font-bold text-pink-950 mb-1">
-                          {t('৩. প্রেরিত টাকার পরিমাণ (৳ অ্যামাউন্ট)', '3. Paid Amount (৳) *')}
+                        <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                          {t('৩. প্রেরিত টাকার পরিমাণ (৳)', '3. Paid Amount (৳)')}
                         </label>
                         <input
                           type="number"
                           value={personalAmount || totalAmount}
                           onChange={e => setPersonalAmount(e.target.value)}
                           placeholder={String(totalAmount)}
-                          className="w-full bg-white border border-pink-300 rounded-xl p-2 text-xs font-bold text-gray-900 focus:border-pink-500 font-mono"
+                          className="w-full min-h-[38px] bg-white border border-[#e6e3dd] rounded-lg px-2.5 py-1.5 text-xs font-mono font-semibold text-[#111827] tabular-nums focus:outline-none focus:border-[#111827]"
                         />
                       </div>
                     </div>
                   ) : (
                     <div>
-                      <label className="block text-xs font-bold text-pink-900 mb-1">
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
                         {t('আপনার বিকাশ নম্বর প্রদান করুন:', 'Enter Your bKash Number:')}
                       </label>
                       <input
@@ -674,12 +658,12 @@ export const CheckoutModal: React.FC = () => {
                         value={bkashNumber}
                         onChange={e => setBkashNumber(e.target.value)}
                         placeholder="01XXXXXXXXX"
-                        className="w-full bg-white border border-pink-300 rounded-xl p-2 text-xs font-mono"
+                        className="w-full min-h-[40px] bg-white border border-[#e6e3dd] rounded-lg px-3 py-2 text-xs font-mono tabular-nums focus:outline-none focus:border-[#111827]"
                       />
-                      <p className="text-[10px] text-pink-700 mt-1">
+                      <p className="text-[11px] text-gray-500 mt-1">
                         {t(
-                          'অর্ডার কনফার্ম করার পর বিকাশ মার্চেন্ট ওটিপি পপআপে পেমেন্ট যাচাই হবে।',
-                          'bKash gateway will verify payment upon confirmation.'
+                          'অর্ডার নিশ্চিত করার পর পেমেন্ট যাচাই করা হবে।',
+                          'Payment will be verified upon confirmation.'
                         )}
                       </p>
                     </div>
@@ -687,36 +671,31 @@ export const CheckoutModal: React.FC = () => {
                 </div>
               )}
 
-              {/* Nagad Payment Form & Instructions */}
+              {/* Nagad Payment Form */}
               {paymentMethod === 'nagad' && (
-                <div className="mt-2 bg-amber-50/80 p-3.5 rounded-2xl border border-amber-200 space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-amber-200/60">
-                    <div className="flex items-center space-x-2">
-                      <span className="w-5 h-5 rounded-full bg-amber-600 text-white text-[10px] font-bold flex items-center justify-center">
-                        ন
-                      </span>
-                      <span className="text-xs font-black text-amber-900">
-                        {paymentSettings.nagadAccountType === 'Personal'
-                          ? t('নগদ পার্সোনাল সেন্ড মানি', 'Nagad Personal Send Money')
-                          : t('নগদ অনলাইন মার্চেন্ট পেমেন্ট', 'Nagad Merchant Payment')}
-                      </span>
-                    </div>
-                    <span className="bg-amber-200/70 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                      {paymentSettings.nagadAccountType === 'Personal' ? 'Personal Account' : 'Merchant Gateway'}
+                <div className="mt-2 bg-white p-4 rounded-xl border border-amber-200 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-[#e6e3dd]">
+                    <span className="text-xs font-bold text-amber-900">
+                      {paymentSettings.nagadAccountType === 'Personal'
+                        ? t('নগদ পার্সোনাল সেন্ড মানি', 'Nagad Personal Send Money')
+                        : t('নগদ মার্চেন্ট পেমেন্ট', 'Nagad Merchant Payment')}
+                    </span>
+                    <span className="text-[11px] text-amber-800 font-medium">
+                      {paymentSettings.nagadAccountType === 'Personal' ? 'Personal' : 'Merchant'}
                     </span>
                   </div>
 
                   {paymentSettings.nagadAccountType === 'Personal' ? (
                     <div className="space-y-3">
-                      <div className="bg-white p-3 rounded-xl border border-amber-200 space-y-2">
-                        <p className="text-[11px] text-amber-900 font-medium">
+                      <div className="bg-[#faf9f7] p-3 rounded-lg border border-[#e6e3dd] space-y-2">
+                        <p className="text-xs text-gray-700 leading-relaxed">
                           {paymentSettings.nagadInstructionsBn ||
-                            'নগদ অ্যাপ অথবা *167# ডায়াল করে নিচের নম্বরে সেন্ড মানি (Send Money) সম্পন্ন করুন:'}
+                            'নগদ অ্যাপ অথবা *167# ডায়াল করে নিচের নম্বরে সেন্ড মানি সম্পন্ন করুন:'}
                         </p>
-                        <div className="flex items-center justify-between bg-amber-50 p-2 rounded-lg border border-amber-100">
+                        <div className="flex items-center justify-between bg-white p-2.5 rounded-lg border border-[#e6e3dd]">
                           <div>
-                            <span className="text-[10px] text-gray-500 block">পার্সোনাল নগদ নম্বর:</span>
-                            <span className="text-xs font-mono font-black text-amber-700">
+                            <span className="text-[11px] text-gray-500 block">{t('পার্সোনাল নগদ নম্বর:', 'Nagad Number:')}</span>
+                            <span className="text-xs font-mono font-bold text-[#111827] tabular-nums">
                               {paymentSettings.nagadNumber || '01812-345678'}
                             </span>
                           </div>
@@ -727,36 +706,35 @@ export const CheckoutModal: React.FC = () => {
                               setCopiedNumber(true);
                               setTimeout(() => setCopiedNumber(false), 2000);
                             }}
-                            className="bg-white hover:bg-amber-100 text-amber-700 border border-amber-200 px-2 py-1 rounded text-[10px] font-bold flex items-center space-x-1 cursor-pointer transition-colors"
+                            className="bg-[#faf9f7] hover:bg-gray-100 text-[#111827] border border-[#e6e3dd] px-2.5 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1 cursor-pointer transition-colors"
                           >
-                            {copiedNumber ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                            <span>{copiedNumber ? 'কপি হয়েছে' : 'কপি করুন'}</span>
+                            {copiedNumber ? <Check className="w-3 h-3 text-[#15803d]" /> : <Copy className="w-3 h-3" />}
+                            <span>{copiedNumber ? t('কপি হয়েছে', 'Copied') : t('কপি', 'Copy')}</span>
                           </button>
                         </div>
-                        <div className="flex items-center justify-between text-xs text-amber-950 font-bold pt-1">
-                          <span>সেন্ড মানি অ্যামাউন্ট:</span>
-                          <span className="text-rose-600 font-extrabold">{formatPrice(totalAmount)}</span>
+                        <div className="flex items-center justify-between text-xs text-[#111827] font-semibold pt-1 tabular-nums">
+                          <span>{t('সেন্ড মানি অ্যামাউন্ট:', 'Amount to Send:')}</span>
+                          <span className="text-[#881337] font-bold">{formatPrice(totalAmount)}</span>
                         </div>
                       </div>
 
-                      {/* Customer inputs after sending money */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <div>
-                          <label className="block text-[11px] font-bold text-amber-950 mb-1">
-                            {t('১. আপনার নগদ নম্বর *', '1. Your Sender Nagad Number *')}
+                          <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                            {t('১. আপনার নগদ নম্বর *', '1. Sender Nagad Number *')}
                           </label>
                           <input
                             type="tel"
                             required
                             value={personalSenderNumber}
                             onChange={e => setPersonalSenderNumber(e.target.value)}
-                            placeholder="যে নম্বর থেকে টাকা পাঠিয়েছেন"
-                            className="w-full bg-white border border-amber-300 rounded-xl p-2 text-xs font-mono focus:border-amber-500"
+                            placeholder="01XXXXXXXXX"
+                            className="w-full min-h-[38px] bg-white border border-[#e6e3dd] rounded-lg px-2.5 py-1.5 text-xs font-mono tabular-nums focus:outline-none focus:border-[#111827]"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-[11px] font-bold text-amber-950 mb-1">
+                          <label className="block text-[11px] font-semibold text-gray-700 mb-1">
                             {t('২. ট্রানজেকশন আইডি (TrxID) *', '2. Transaction ID (TrxID) *')}
                           </label>
                           <input
@@ -764,28 +742,28 @@ export const CheckoutModal: React.FC = () => {
                             required
                             value={personalTrxId}
                             onChange={e => setPersonalTrxId(e.target.value)}
-                            placeholder="যেমন: 72K9M2P"
-                            className="w-full bg-white border border-amber-300 rounded-xl p-2 text-xs font-mono uppercase focus:border-amber-500"
+                            placeholder="72K9M2P"
+                            className="w-full min-h-[38px] bg-white border border-[#e6e3dd] rounded-lg px-2.5 py-1.5 text-xs font-mono uppercase focus:outline-none focus:border-[#111827]"
                           />
                         </div>
                       </div>
 
                       <div>
-                        <label className="block text-[11px] font-bold text-amber-950 mb-1">
-                          {t('৩. প্রেরিত টাকার পরিমাণ (৳ অ্যামাউন্ট)', '3. Paid Amount (৳) *')}
+                        <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                          {t('৩. প্রেরিত টাকার পরিমাণ (৳)', '3. Paid Amount (৳)')}
                         </label>
                         <input
                           type="number"
                           value={personalAmount || totalAmount}
                           onChange={e => setPersonalAmount(e.target.value)}
                           placeholder={String(totalAmount)}
-                          className="w-full bg-white border border-amber-300 rounded-xl p-2 text-xs font-bold text-gray-900 focus:border-amber-500 font-mono"
+                          className="w-full min-h-[38px] bg-white border border-[#e6e3dd] rounded-lg px-2.5 py-1.5 text-xs font-mono font-semibold text-[#111827] tabular-nums focus:outline-none focus:border-[#111827]"
                         />
                       </div>
                     </div>
                   ) : (
                     <div>
-                      <label className="block text-xs font-bold text-amber-900 mb-1">
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
                         {t('আপনার নগদ নম্বর প্রদান করুন:', 'Enter Your Nagad Number:')}
                       </label>
                       <input
@@ -793,7 +771,7 @@ export const CheckoutModal: React.FC = () => {
                         value={nagadNumber}
                         onChange={e => setNagadNumber(e.target.value)}
                         placeholder="01XXXXXXXXX"
-                        className="w-full bg-white border border-amber-300 rounded-xl p-2 text-xs font-mono"
+                        className="w-full min-h-[40px] bg-white border border-[#e6e3dd] rounded-lg px-3 py-2 text-xs font-mono tabular-nums focus:outline-none focus:border-[#111827]"
                       />
                     </div>
                   )}
@@ -804,27 +782,39 @@ export const CheckoutModal: React.FC = () => {
 
           {/* Right Column: Order Summary & Place Button (5 cols) */}
           <div className="md:col-span-5 flex flex-col justify-between space-y-4">
-            <div className="bg-gray-50 rounded-2xl p-4 sm:p-5 border border-gray-200/80 space-y-4">
-              <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+            <div className="bg-[#faf9f7] rounded-xl p-4 sm:p-5 border border-[#e6e3dd] space-y-4">
+              <h4 className="text-xs font-bold text-[#111827]">
                 {t('অর্ডার সারাংশ', 'Order Summary')}
               </h4>
 
               {/* Preview items */}
-              <div className="max-h-48 overflow-y-auto divide-y divide-gray-200 space-y-2 pr-1">
+              <div className="max-h-48 overflow-y-auto divide-y divide-[#e6e3dd] space-y-2 pr-1">
                 {cart.map((item, idx) => (
-                  <div key={idx} className="pt-2 flex items-center justify-between text-xs">
-                    <div className="flex items-center space-x-2 min-w-0 pr-2">
-                      <img src={item.product.images[0]} alt={item.product.name} className="w-10 h-10 object-cover rounded-md shrink-0" />
+                  <div key={idx} className="pt-2 first:pt-0 flex items-center justify-between text-xs gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-10 h-10 rounded-md border border-[#e6e3dd] bg-white shrink-0 overflow-hidden flex items-center justify-center">
+                        {item.product.images[0] ? (
+                          <img
+                            src={item.product.images[0]}
+                            alt={language === 'bn' ? item.product.nameBn : item.product.name}
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <Package className="w-4 h-4 text-gray-300" />
+                        )}
+                      </div>
                       <div className="min-w-0">
-                        <p className="font-semibold text-gray-900 truncate">
+                        <p className="font-semibold text-[#111827] truncate">
                           {language === 'bn' ? item.product.nameBn : item.product.name}
                         </p>
-                        <p className="text-[10px] text-gray-500">
-                          Qty: {item.quantity} {item.selectedColor ? `• ${item.selectedColor}` : ''}
+                        <p className="text-[11px] text-gray-500 tabular-nums">
+                          {t('পরিমাণ:', 'Qty:')} {item.quantity}
+                          {item.selectedColor ? ` · ${item.selectedColor}` : ''}
                         </p>
                       </div>
                     </div>
-                    <span className="font-bold text-gray-900 shrink-0">
+                    <span className="font-semibold text-[#111827] shrink-0 tabular-nums">
                       {formatPrice(item.product.price * item.quantity)}
                     </span>
                   </div>
@@ -832,49 +822,49 @@ export const CheckoutModal: React.FC = () => {
               </div>
 
               {/* Price Calculations */}
-              <div className="border-t border-gray-200 pt-3 space-y-1.5 text-xs text-gray-600">
+              <div className="border-t border-[#e6e3dd] pt-3 space-y-1.5 text-xs text-gray-600 tabular-nums">
                 <div className="flex justify-between">
                   <span>{t('সাবটোটাল', 'Subtotal')}</span>
-                  <span className="font-semibold text-gray-900">{formatPrice(cartSubtotal)}</span>
+                  <span className="font-semibold text-[#111827]">{formatPrice(cartSubtotal)}</span>
                 </div>
 
                 {couponDiscount > 0 && (
-                  <div className="flex justify-between text-emerald-600 font-semibold">
+                  <div className="flex justify-between text-[#15803d] font-medium">
                     <span>{t('ডিসকাউন্ট', 'Discount')}</span>
-                    <span>-{formatPrice(couponDiscount)}</span>
+                    <span>−{formatPrice(couponDiscount)}</span>
                   </div>
                 )}
 
                 <div className="flex justify-between">
                   <span>{t('ডেলিভারি চার্জ', 'Delivery Fee')}</span>
-                  <span className="font-semibold text-gray-900">
+                  <span className="font-semibold text-[#111827]">
                     {deliveryCharge === 0 ? (
-                      <span className="text-emerald-600 font-bold uppercase">{t('ফ্রি', 'FREE')}</span>
+                      <span className="text-[#15803d] font-semibold">{t('ফ্রি', 'Free')}</span>
                     ) : (
                       formatPrice(deliveryCharge)
                     )}
                   </span>
                 </div>
 
-                <div className="border-t border-gray-200 pt-2 flex justify-between text-base font-black text-gray-900">
+                <div className="border-t border-[#e6e3dd] pt-2.5 flex justify-between text-base font-bold text-[#111827]">
                   <span>{t('মোট প্রদেয় টাকা', 'Total Payable')}</span>
-                  <span className="text-rose-600 text-lg">{formatPrice(totalAmount)}</span>
+                  <span className="text-[#881337] text-lg">{formatPrice(totalAmount)}</span>
                 </div>
               </div>
             </div>
 
             {/* Inventory Warning Banner */}
             {hasInventoryErrors && (
-              <div className="bg-amber-50 border border-amber-300 text-amber-900 text-xs p-3.5 rounded-xl flex items-start space-x-2.5">
-                <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+              <div className="bg-amber-50 border border-amber-200 text-amber-900 text-xs p-3.5 rounded-xl flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0 text-amber-700 mt-0.5" />
                 <div className="space-y-1">
-                  <div className="font-bold text-amber-950">
-                    {t('স্টক ঘাটতি সতর্কতা:', 'Stock Insufficiency Alert:')}
+                  <div className="font-bold">
+                    {t('স্টক সতর্কতা:', 'Stock Alert:')}
                   </div>
                   <div>
                     {t(
-                      'আপনার ব্যাগের কিছু পণ্য বর্তমানে স্টকে নেই বা পর্যাপ্ত স্টক নেই। অনুগ্রহ করে ব্যাগে গিয়ে পরিমাণ কমিয়ে নিন।',
-                      'Some items in your cart are out of stock or exceed available quantity. Please adjust your cart before checkout.'
+                      'আপনার ব্যাগের কিছু পণ্য বর্তমানে পর্যাপ্ত স্টকে নেই। অনুগ্রহ করে ব্যাগে গিয়ে পরিমাণ ঠিক করুন।',
+                      'Some items in your cart exceed available stock. Please adjust your cart before checkout.'
                     )}
                   </div>
                 </div>
@@ -883,7 +873,7 @@ export const CheckoutModal: React.FC = () => {
 
             {/* Error banner */}
             {errorMessage && (
-              <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3 rounded-xl flex items-center space-x-2">
+              <div className="bg-rose-50 border border-rose-200 text-[#881337] text-xs p-3 rounded-xl flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{errorMessage}</span>
               </div>
@@ -894,23 +884,23 @@ export const CheckoutModal: React.FC = () => {
               <button
                 type="submit"
                 disabled={isSubmitting || hasInventoryErrors}
-                className="w-full bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-sm sm:text-base py-4 rounded-2xl flex items-center justify-center space-x-2 shadow-xl shadow-rose-600/30 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:shadow-none"
+                className="w-full bg-[#881337] hover:bg-[#6d0f2c] text-white font-semibold text-sm sm:text-base py-3.5 min-h-[48px] rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-300"
               >
                 {isSubmitting ? (
                   <span>{t('অর্ডার প্রসেস হচ্ছে...', 'Processing Order...')}</span>
                 ) : hasInventoryErrors ? (
-                  <span>{t('পর্যাপ্ত স্টক নেই (স্টক চেক করুন)', 'Stock Unavailable — Check Cart')}</span>
+                  <span>{t('পর্যাপ্ত স্টক নেই (স্টক চেক করুন)', 'Stock Unavailable')}</span>
                 ) : (
                   <>
-                    <CheckCircle className="w-5 h-5" />
-                    <span>{t('অর্ডার নিশ্চিত করুন (Place Order)', 'Place Order Now')}</span>
+                    <CheckCircle className="w-4.5 h-4.5" />
+                    <span>{t('অর্ডার নিশ্চিত করুন', 'Place Order')}</span>
                   </>
                 )}
               </button>
 
-              <div className="flex items-center justify-center space-x-2 text-[11px] text-gray-500 text-center">
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span>{t('১০০% নিরাপদ শপিং ও ক্যাশ অন ডেলিভারি নিশ্চয়তা', '100% Safe Shopping & Cash on Delivery Guarantee')}</span>
+              <div className="flex items-center justify-center gap-2 text-xs text-gray-500 text-center">
+                <ShieldCheck className="w-4 h-4 text-[#15803d] shrink-0" />
+                <span>{t('১০০% নিরাপদ শপিং ও ক্যাশ অন ডেলিভারি সুবিধা', 'Secure Checkout & Cash on Delivery Support')}</span>
               </div>
             </div>
           </div>

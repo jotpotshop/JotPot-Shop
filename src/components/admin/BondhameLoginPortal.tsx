@@ -11,23 +11,25 @@ export const BondhameLoginPortal: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setIsLoading(true);
 
-    setTimeout(() => {
-      const res = adminLogin(identifier, password);
-      setIsLoading(false);
+    try {
+      const res = await adminLogin(identifier, password);
       if (!res.success) {
         setErrorMsg(res.message);
       } else {
-        // Successful login will automatically trigger AdminPanel view in App.tsx
         if (typeof window !== 'undefined') {
           window.history.pushState(null, '', '/bondhame');
         }
       }
-    }, 200);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'লগইন প্রক্রিয়ায় ত্রুটি হয়েছে।');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleReturnToStore = () => {
@@ -38,49 +40,50 @@ export const BondhameLoginPortal: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-[#faf9f7] text-[#111827] flex flex-col items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-md">
         {/* Brand Header */}
-        <div className="text-center mb-6 space-y-2">
+        <div className="text-center mb-6 space-y-2.5">
           {websiteSettings.logoUrl && (
-            <div className="inline-block p-2 bg-white/10 rounded-2xl border border-white/20 backdrop-blur-md mb-2">
+            <div className="inline-flex items-center justify-center p-2.5 bg-white rounded-xl border border-[#e6e3dd] mb-1">
               <img
                 src={websiteSettings.logoUrl}
                 alt={websiteSettings.storeName}
+                referrerPolicy="no-referrer"
                 className="h-10 max-w-[160px] object-contain"
               />
             </div>
           )}
-          <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-300 text-xs font-bold">
-            <ShieldCheck className="w-4 h-4 text-amber-400" />
-            <span>সিকিউর এডমিন রুট: /bondhame</span>
+          <div className="flex items-center justify-center gap-1.5 text-xs font-medium text-[#6b7280]">
+            <ShieldCheck className="w-4 h-4 text-[#881337]" />
+            <span>সিকিউর এডমিন পোর্টাল</span>
+            <span aria-hidden="true">·</span>
+            <span className="font-mono text-[#374151]">/bondhame</span>
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-white">
+          <h1 className="text-2xl font-bold tracking-tight text-[#111827] font-editorial">
             {websiteSettings.storeName || 'JotPotShop'} এডমিন প্যানেল
           </h1>
-          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+          <p className="text-xs text-[#6b7280] max-w-sm mx-auto leading-relaxed">
             এই পোর্টালটি শুধুমাত্র সুপার এডমিন এবং অনুমোদিত স্টাফদের জন্য সংরক্ষিত।
           </p>
         </div>
 
-        {/* Login Box */}
-        <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-rose-500 via-amber-400 to-rose-600" />
-
+        {/* Login Card */}
+        <div className="bg-white border border-[#e6e3dd] rounded-2xl p-6 sm:p-8 shadow-sm">
           {errorMsg && (
-            <div className="mb-5 p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-2xl flex items-start space-x-2.5 text-xs text-rose-300 animate-in shake duration-200">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+            <div className="mb-5 p-3.5 bg-[#fef2f2] border border-[#fecaca] rounded-xl flex items-start gap-2.5 text-xs text-[#991b1b]">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-[#b91c1c]" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           <form onSubmit={handleLogin} autoComplete="off" className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">
+              <label className="block text-xs font-semibold text-[#111827] mb-1.5">
                 ইমেইল বা ইউজারনেম
               </label>
               <div className="relative">
-                <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
+                <Mail className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   required
@@ -89,17 +92,17 @@ export const BondhameLoginPortal: React.FC = () => {
                   placeholder="ইমেইল বা ইউজারনেম লিখুন"
                   autoComplete="off"
                   name="admin_login_identifier"
-                  className="w-full bg-slate-950/80 border border-slate-700 rounded-2xl pl-10 pr-4 py-3 text-xs text-white placeholder:text-slate-600 focus:outline-hidden focus:border-rose-500 focus:ring-1 focus:ring-rose-500 font-mono transition-all"
+                  className="w-full min-h-[44px] bg-[#faf9f7] border border-[#e6e3dd] rounded-xl pl-10 pr-4 py-2.5 text-sm text-[#111827] placeholder:text-[#9ca3af] focus:bg-white focus:outline-hidden focus:border-[#881337] font-mono transition-colors"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">
+              <label className="block text-xs font-semibold text-[#111827] mb-1.5">
                 পাসওয়ার্ড
               </label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
+                <Lock className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
@@ -108,12 +111,13 @@ export const BondhameLoginPortal: React.FC = () => {
                   placeholder="••••••••••••"
                   autoComplete="new-password"
                   name="admin_login_password"
-                  className="w-full bg-slate-950/80 border border-slate-700 rounded-2xl pl-10 pr-10 py-3 text-xs text-white placeholder:text-slate-600 focus:outline-hidden focus:border-rose-500 focus:ring-1 focus:ring-rose-500 font-mono transition-all"
+                  className="w-full min-h-[44px] bg-[#faf9f7] border border-[#e6e3dd] rounded-xl pl-10 pr-10 py-2.5 text-sm text-[#111827] placeholder:text-[#9ca3af] focus:bg-white focus:outline-hidden focus:border-[#881337] font-mono transition-colors"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-3.5 text-slate-500 hover:text-slate-300 cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-[#6b7280] hover:text-[#111827] cursor-pointer"
+                  aria-label={showPassword ? 'পাসওয়ার্ড লুকান' : 'পাসওয়ার্ড দেখুন'}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -123,14 +127,14 @@ export const BondhameLoginPortal: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-extrabold py-3.5 rounded-2xl flex items-center justify-center space-x-2 cursor-pointer shadow-lg shadow-rose-900/30 hover:shadow-rose-900/50 active:scale-[0.99] transition-all disabled:opacity-70 mt-3"
+              className="w-full min-h-[44px] bg-[#881337] hover:bg-[#6d0f2c] text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-colors disabled:opacity-70 mt-2"
             >
               {isLoading ? (
-                <span className="text-xs">যাচাই করা হচ্ছে...</span>
+                <span className="text-sm">যাচাই করা হচ্ছে...</span>
               ) : (
                 <>
                   <LogIn className="w-4 h-4" />
-                  <span className="text-xs">এডমিন প্যানেলে প্রবেশ করুন</span>
+                  <span className="text-sm">এডমিন প্যানেলে প্রবেশ করুন</span>
                 </>
               )}
             </button>
@@ -141,9 +145,9 @@ export const BondhameLoginPortal: React.FC = () => {
         <div className="text-center mt-6">
           <button
             onClick={handleReturnToStore}
-            className="inline-flex items-center space-x-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer group"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-[#6b7280] hover:text-[#111827] transition-colors cursor-pointer group"
           >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
             <span>{t('সাধারণ কাস্টমার স্টোরে ফিরে যান', 'Return to Storefront')}</span>
           </button>
         </div>

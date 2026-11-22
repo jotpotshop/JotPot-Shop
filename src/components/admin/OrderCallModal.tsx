@@ -64,24 +64,24 @@ export const OrderCallModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-      <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden my-auto border border-gray-100 flex flex-col max-h-[94vh]">
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+      <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden my-auto border border-[#e6e3dd] flex flex-col max-h-[94vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-rose-50/60">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-xs">
-              <PhoneCall className="w-5 h-5 animate-pulse" />
+        <div className="px-6 py-4 border-b border-[#1f2937] flex items-center justify-between bg-[#111827] text-white">
+          <div className="flex items-center space-x-3">
+            <div className="w-9 h-9 rounded-xl bg-[#1f2937] border border-gray-700 text-white flex items-center justify-center">
+              <PhoneCall className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h3 className="font-extrabold text-base sm:text-lg text-gray-900">
+                <h3 className="font-extrabold text-base sm:text-lg text-white">
                   {t('গ্রাহককে কল ও অর্ডার ভেরিফিকেশন', 'Customer Call & Verification')}
                 </h3>
-                <span className="font-mono text-xs bg-rose-100 text-rose-800 font-bold px-2 py-0.5 rounded">
+                <span className="font-mono text-xs bg-[#1f2937] border border-gray-700 text-gray-200 font-bold px-2 py-0.5 rounded tabular-nums">
                   #{order.id}
                 </span>
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-400">
                 {t('অর্ডার কনফার্ম করার জন্য গ্রাহকের সাথে সরাসরি কথা বলুন', 'Verify delivery address, items and payment details')}
               </p>
             </div>
@@ -89,7 +89,7 @@ export const OrderCallModal: React.FC = () => {
 
           <button
             onClick={() => setOrderForCall(null)}
-            className="p-1.5 text-gray-400 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+            className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-[#1f2937] transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -99,18 +99,18 @@ export const OrderCallModal: React.FC = () => {
         <div className="p-5 sm:p-6 overflow-y-auto space-y-5 text-xs">
           {/* Quick Dial Action Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex items-center justify-between">
+            <div className="bg-[#f0fdf4] border border-[#bbf7d0] rounded-2xl p-3.5 flex items-center justify-between">
               <div>
-                <span className="text-[10px] uppercase font-bold text-emerald-800 block">
+                <span className="text-[10px] uppercase font-bold text-[#15803d] block">
                   {t('প্রধান মোবাইল নম্বর', 'Primary Phone')}
                 </span>
-                <span className="font-mono font-bold text-sm text-gray-900">{order.phone}</span>
-                <p className="text-[10px] text-gray-500">{order.customerName}</p>
+                <span className="font-mono font-bold text-sm text-[#111827] tabular-nums">{order.phone}</span>
+                <p className="text-[10px] text-gray-600">{order.customerName}</p>
               </div>
 
               <a
                 href={`tel:${order.phone}`}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-2 rounded-xl flex items-center space-x-1.5 shadow-xs cursor-pointer transition-colors"
+                className="bg-[#15803d] hover:bg-[#166534] text-white font-bold px-3.5 py-2 min-h-[38px] rounded-xl flex items-center space-x-1.5 cursor-pointer transition-colors"
               >
                 <Phone className="w-3.5 h-3.5" />
                 <span>{t('কল করুন', 'Call Now')}</span>
@@ -118,26 +118,26 @@ export const OrderCallModal: React.FC = () => {
             </div>
 
             {order.alternativePhone ? (
-              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3.5 flex items-center justify-between">
+              <div className="bg-[#faf9f7] border border-[#e6e3dd] rounded-2xl p-3.5 flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-blue-800 block">
+                  <span className="text-[10px] uppercase font-bold text-gray-600 block">
                     {t('বিকল্প নম্বর (অল্টারনেট)', 'Alternate Phone')}
                   </span>
-                  <span className="font-mono font-bold text-sm text-gray-900">{order.alternativePhone}</span>
+                  <span className="font-mono font-bold text-sm text-[#111827] tabular-nums">{order.alternativePhone}</span>
                   <p className="text-[10px] text-gray-500">{t('দ্বিতীয় যোগাযোগ নম্বর', 'Secondary Contact')}</p>
                 </div>
 
                 <a
                   href={`tel:${order.alternativePhone}`}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-2 rounded-xl flex items-center space-x-1.5 shadow-xs cursor-pointer transition-colors"
+                  className="bg-[#111827] hover:bg-gray-800 text-white font-bold px-3.5 py-2 min-h-[38px] rounded-xl flex items-center space-x-1.5 cursor-pointer transition-colors"
                 >
                   <Phone className="w-3.5 h-3.5" />
                   <span>{t('কল করুন', 'Call')}</span>
                 </a>
               </div>
             ) : (
-              <div className="bg-gray-50 border border-gray-200 rounded-2xl p-3.5 flex items-center text-gray-500">
-                <span className="text-[11px] italic">
+              <div className="bg-[#faf9f7] border border-[#e6e3dd] rounded-2xl p-3.5 flex items-center text-gray-500">
+                <span className="text-[11px]">
                   {t('কোনো বিকল্প ফোন নম্বর দেওয়া নেই', 'No alternative phone provided')}
                 </span>
               </div>
@@ -209,14 +209,14 @@ export const OrderCallModal: React.FC = () => {
               <select
                 value={callOutcome}
                 onChange={e => setCallOutcome(e.target.value as any)}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs font-semibold focus:border-rose-500 cursor-pointer"
+                className="w-full bg-[#faf9f7] border border-[#e6e3dd] rounded-xl p-2.5 text-xs font-semibold focus:border-[#881337] cursor-pointer"
               >
-                <option value="Confirmed">✓ অর্ডার নিশ্চিত (Confirmed & Ready to Dispatch)</option>
-                <option value="Customer Unreachable">⚠️ ফোন ধরেননি (Customer Unreachable)</option>
-                <option value="Number Busy">⏳ নম্বর ব্যস্ত (Number Busy)</option>
-                <option value="Requested Delay">📅 গ্রাহক পরে ডেলিভারি চেয়েছেন (Requested Delay)</option>
-                <option value="Customer Cancelled">❌ গ্রাহক অর্ডার বাতিল করেছেন (Customer Cancelled)</option>
-                <option value="Wrong Info">❓ ভুল ঠিকানা বা অনির্ভরযোগ্য তথ্য (Wrong Info)</option>
+                <option value="Confirmed">অর্ডার নিশ্চিত (Confirmed & Ready to Dispatch)</option>
+                <option value="Customer Unreachable">ফোন ধরেননি (Customer Unreachable)</option>
+                <option value="Number Busy">নম্বর ব্যস্ত (Number Busy)</option>
+                <option value="Requested Delay">গ্রাহক পরে ডেলিভারি চেয়েছেন (Requested Delay)</option>
+                <option value="Customer Cancelled">গ্রাহক অর্ডার বাতিল করেছেন (Customer Cancelled)</option>
+                <option value="Wrong Info">ভুল ঠিকানা বা অনির্ভরযোগ্য তথ্য (Wrong Info)</option>
               </select>
             </div>
 
@@ -229,22 +229,22 @@ export const OrderCallModal: React.FC = () => {
                 value={callNotes}
                 onChange={e => setCallNotes(e.target.value)}
                 placeholder="যেমন: গ্রাহক বিকাল ৪টার পর ডেলিভারি দিতে বলেছেন। সাইজ L কনফার্ম করেছেন।"
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs focus:border-rose-500"
+                className="w-full bg-[#faf9f7] border border-[#e6e3dd] rounded-xl p-2.5 text-xs focus:border-[#881337]"
               />
             </div>
 
-            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-gray-100">
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-[#e6e3dd]">
               <button
                 type="button"
                 onClick={() => setOrderForCall(null)}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-4 py-2.5 rounded-xl text-xs cursor-pointer transition-colors"
+                className="bg-[#faf9f7] hover:bg-gray-100 border border-[#e6e3dd] text-gray-700 font-bold px-4 py-2.5 min-h-[40px] rounded-xl text-xs cursor-pointer transition-colors"
               >
                 {t('বন্ধ করুন', 'Cancel')}
               </button>
 
               <button
                 type="submit"
-                className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs flex items-center space-x-1.5 shadow-md cursor-pointer transition-colors"
+                className="bg-[#881337] hover:bg-[#6d0f2c] text-white font-bold px-5 py-2.5 min-h-[40px] rounded-xl text-xs flex items-center space-x-1.5 cursor-pointer transition-colors"
               >
                 <CheckCircle className="w-4 h-4" />
                 <span>{t('কল লগ সেভ ও স্ট্যাটাস আপডেট করুন', 'Save Call Log & Update')}</span>
@@ -254,19 +254,19 @@ export const OrderCallModal: React.FC = () => {
 
           {/* Past Call History */}
           {order.callLogs && order.callLogs.length > 0 && (
-            <div className="pt-3 border-t border-gray-200 space-y-2">
+            <div className="pt-3 border-t border-[#e6e3dd] space-y-2">
               <span className="font-bold text-gray-700 block text-[11px]">
                 {t('পূর্ববর্তী কলের ইতিহাস (Previous Call Logs):', 'Previous Call History:')}
               </span>
               <div className="space-y-1.5">
                 {order.callLogs.map(log => (
-                  <div key={log.id} className="bg-gray-50 p-2.5 rounded-xl border border-gray-200 text-[11px]">
+                  <div key={log.id} className="bg-[#faf9f7] p-2.5 rounded-xl border border-[#e6e3dd] text-[11px]">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-bold text-gray-900">{log.caller}</span>
-                      <span className="font-mono text-gray-400 text-[10px]">{log.timestamp}</span>
+                      <span className="font-bold text-[#111827]">{log.caller}</span>
+                      <span className="font-mono text-gray-400 text-[10px] tabular-nums">{log.timestamp}</span>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <span className="bg-rose-100 text-rose-800 font-semibold px-2 py-0.5 rounded text-[10px]">
+                      <span className="bg-white border border-[#e6e3dd] text-[#881337] font-semibold px-2 py-0.5 rounded text-[10px]">
                         {log.callOutcome}
                       </span>
                       <p className="text-gray-600 flex-1">{log.notes}</p>

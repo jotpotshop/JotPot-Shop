@@ -1,5 +1,5 @@
 import React from 'react';
-import { Phone, Mail, MapPin, Heart, Zap } from 'lucide-react';
+import { Phone, Mail, MapPin, Store } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 
 export const Footer: React.FC = () => {
@@ -11,74 +11,75 @@ export const Footer: React.FC = () => {
   }, [websiteSettings.logoUrl]);
 
   return (
-    <footer className="bg-gray-950 text-white pt-12 pb-24 md:pb-12 border-t border-gray-800 text-xs">
+    <footer className="bg-[#0f172a] text-white pt-12 pb-24 md:pb-12 border-t border-gray-800 text-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 pb-12 border-b border-gray-800">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 pb-10 border-b border-gray-800">
           {/* Col 1: Brand Info & Tagline */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center space-x-2.5">
+            <div className="flex items-center space-x-3">
               {websiteSettings.logoUrl && !logoErr ? (
-                <div className="h-10 max-w-[140px] flex items-center justify-center p-1 rounded-xl bg-white/10 border border-white/20 overflow-hidden">
+                <div className="h-10 max-w-[140px] flex items-center justify-center p-1 rounded-lg bg-white overflow-hidden">
                   <img
                     src={websiteSettings.logoUrl}
                     alt={websiteSettings.storeName || 'JotPotShop'}
-                    className="h-8 w-auto max-w-[120px] object-contain"
+                    referrerPolicy="no-referrer"
+                    className="h-8 w-auto max-w-[125px] object-contain"
                     onError={() => setLogoErr(true)}
                   />
                 </div>
               ) : (
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-600 to-amber-500 flex items-center justify-center text-white shadow-md">
-                  <Zap className="w-6 h-6 fill-white stroke-white" />
+                <div className="w-10 h-10 rounded-xl bg-[#881337] flex items-center justify-center text-white">
+                  <Store className="w-5 h-5" />
                 </div>
               )}
               <div>
-                <span className="text-2xl font-black tracking-tight text-white">
+                <span className="text-xl font-bold tracking-tight text-white block leading-none">
                   {websiteSettings.storeName ? (
                     websiteSettings.storeName.includes('JotPot') ? (
                       <>
-                        JotPot<span className="text-rose-500">{websiteSettings.storeName.replace('JotPot', '') || 'Shop'}</span>
+                        JotPot<span className="text-rose-300">{websiteSettings.storeName.replace('JotPot', '') || 'Shop'}</span>
                       </>
                     ) : (
                       websiteSettings.storeName
                     )
                   ) : (
                     <>
-                      JotPot<span className="text-rose-500">Shop</span>
+                      JotPot<span className="text-rose-300">Shop</span>
                     </>
                   )}
                 </span>
-                <span className="text-gray-400 text-xs block -mt-1 font-medium">
+                <span className="text-gray-400 text-[11px] block mt-1 font-normal">
                   {websiteSettings.domain || 'jotpotshop.com'}
                 </span>
               </div>
             </div>
 
-            <p className="text-gray-400 text-xs leading-relaxed max-w-sm">
+            <p className="text-gray-300 text-xs leading-[1.7] max-w-sm">
               {language === 'bn'
                 ? websiteSettings.taglineBn
-                  ? `“${websiteSettings.taglineBn}” — বাংলাদেশের দ্রুততম ও সবচেয়ে আধুনিক মোবাইল-ফার্স্ট ই-কমার্স প্ল্যাটফর্ম।`
-                  : '“যা দরকার, এক জায়গায়” — বাংলাদেশের দ্রুততম ও সবচেয়ে আধুনিক মোবাইল-ফার্স্ট ই-কমার্স প্ল্যাটফর্ম।'
+                  ? `“${websiteSettings.taglineBn}” — মানসম্মত পণ্য, স্বচ্ছ মূল্য ও নির্ভরযোগ্য ডেলিভারির একটি বিশ্বস্ত বাংলাদেশি অনলাইন স্টোর।`
+                  : '“যা দরকার, এক জায়গায়” — মানসম্মত পণ্য, স্বচ্ছ মূল্য ও নির্ভরযোগ্য ডেলিভারির একটি বিশ্বস্ত বাংলাদেশি অনলাইন স্টোর।'
                 : websiteSettings.tagline
-                ? `“${websiteSettings.tagline}” — Bangladesh’s fastest mobile-first e-commerce store.`
-                : '“Everything you need, in one place” — Bangladesh’s fastest mobile-first e-commerce store.'}
+                ? `“${websiteSettings.tagline}” — A trusted Bangladeshi online store for curated everyday quality.`
+                : '“Everything you need, in one place” — A trusted Bangladeshi online store for curated everyday quality.'}
             </p>
 
-            <div className="space-y-1.5 text-gray-300">
-              <div className="flex items-center space-x-2">
-                <Phone className="w-4 h-4 text-rose-500" />
+            <div className="space-y-2 text-gray-300 pt-1">
+              <div className="flex items-center space-x-2.5 tabular-nums">
+                <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                 <span>
-                  হেল্পলাইন: <strong>{websiteSettings.hotline || '01800-JOTPOT'}</strong> (9 AM - 11 PM)
+                  {t('হেল্পলাইন:', 'Helpline:')} <strong className="text-white">{websiteSettings.hotline || '01800-JOTPOT'}</strong> (৯টা – রাত ১১টা)
                 </span>
               </div>
-              <div className="flex items-center space-x-2">
-                <Mail className="w-4 h-4 text-rose-500" />
-                <span>ইমেইল: {websiteSettings.supportEmail || 'support@jotpotshop.com'}</span>
+              <div className="flex items-center space-x-2.5">
+                <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                <span>{t('ইমেইল:', 'Email:')} {websiteSettings.supportEmail || 'support@jotpotshop.com'}</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <MapPin className="w-4 h-4 text-rose-500" />
-                <span>
+              <div className="flex items-start space-x-2.5">
+                <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
+                <span className="leading-relaxed">
                   {language === 'bn'
-                    ? websiteSettings.officeAddressBn || websiteSettings.officeAddress || 'লেভেল ৫, কনকর্ড টাওয়ার, রোড ১১, বনানী, ঢাকা-১২১৩'
+                    ? websiteSettings.officeAddressBn || websiteSettings.officeAddress || 'লেভেল ৫, কনকর্ড টাওয়ার, রোড ১১, বনানী, ঢাকা-১২১৩'
                     : websiteSettings.officeAddress || 'Level 5, Concord Tower, Road 11, Banani, Dhaka-1213'}
                 </span>
               </div>
@@ -87,10 +88,10 @@ export const Footer: React.FC = () => {
 
           {/* Col 2: Categories */}
           <div>
-            <h4 className="font-bold text-white uppercase tracking-wider text-xs mb-3 text-rose-400">
-              {t('জনপ্রিয় ক্যাটাগরি', 'Top Categories')}
+            <h4 className="font-semibold text-white text-xs tracking-wide mb-3.5">
+              {t('ক্যাটাগরিসমূহ', 'Categories')}
             </h4>
-            <ul className="space-y-2 text-gray-400">
+            <ul className="space-y-2.5 text-gray-400">
               {categories.slice(0, 6).map(c => (
                 <li key={c.id}>
                   <button
@@ -109,68 +110,66 @@ export const Footer: React.FC = () => {
 
           {/* Col 3: Customer Care & Policy */}
           <div>
-            <h4 className="font-bold text-white uppercase tracking-wider text-xs mb-3 text-rose-400">
-              {t('গ্রাহক সহায়তা', 'Customer Care')}
+            <h4 className="font-semibold text-white text-xs tracking-wide mb-3.5">
+              {t('গ্রাহক সহায়তা', 'Customer Service')}
             </h4>
-            <ul className="space-y-2 text-gray-400">
+            <ul className="space-y-2.5 text-gray-400">
               <li>
-                <button onClick={() => setActiveModal('tracking')} className="hover:text-white cursor-pointer">
+                <button onClick={() => setActiveModal('tracking')} className="hover:text-white cursor-pointer text-left">
                   {t('অর্ডার ট্র্যাক করুন', 'Track Order')}
                 </button>
               </li>
               <li>
-                <button onClick={() => setActiveModal('support')} className="hover:text-white cursor-pointer">
-                  {t('রিটার্ন ও রিফান্ড পলিসি', 'Return & Refund Policy')}
+                <button onClick={() => setActiveModal('support')} className="hover:text-white cursor-pointer text-left">
+                  {t('রিটার্ন ও রিফান্ড নীতিমালা', 'Return & Refund Policy')}
                 </button>
               </li>
               <li>
-                <button onClick={() => setActiveModal('support')} className="hover:text-white cursor-pointer">
-                  {t('ডেলিভারি চার্জ ও সময়', 'Delivery Info')}
+                <button onClick={() => setActiveModal('support')} className="hover:text-white cursor-pointer text-left">
+                  {t('ডেলিভারি চার্জ ও সময়সীমা', 'Delivery Info')}
                 </button>
               </li>
               <li>
-                <button onClick={() => setActiveModal('support')} className="hover:text-white cursor-pointer">
-                  {t('সচরাচর জিজ্ঞাসিত প্রশ্ন (FAQ)', 'FAQ')}
+                <button onClick={() => setActiveModal('support')} className="hover:text-white cursor-pointer text-left">
+                  {t('সচরাচর জিজ্ঞাসিত প্রশ্ন', 'FAQ')}
                 </button>
               </li>
               <li>
-                <button onClick={() => setActiveModal('account')} className="hover:text-white cursor-pointer">
-                  {t('আমার প্রোফাইল ও উইশলিস্ট', 'My Account & Wishlist')}
+                <button onClick={() => setActiveModal('account')} className="hover:text-white cursor-pointer text-left">
+                  {t('আমার অ্যাকাউন্ট ও পছন্দের তালিকা', 'My Account & Wishlist')}
                 </button>
               </li>
             </ul>
           </div>
 
-          {/* Col 4: Payment Partners & Security */}
+          {/* Col 4: Payment & Delivery */}
           <div>
-            <h4 className="font-bold text-white uppercase tracking-wider text-xs mb-3 text-rose-400">
-              {t('নিরাপদ পেমেন্ট পার্টনার', 'Payment Partners')}
+            <h4 className="font-semibold text-white text-xs tracking-wide mb-3.5">
+              {t('পেমেন্ট মাধ্যম', 'Payment Methods')}
             </h4>
-            <p className="text-gray-400 text-xs mb-3">
-              {t('সারা বাংলাদেশে ক্যাশ অন ডেলিভারি ও সুরক্ষিত মোবাইল ব্যাংকিং সুবিধা।', 'Cash on Delivery and 100% secure payment gateways.')}
+            <p className="text-gray-400 text-xs leading-relaxed mb-3.5">
+              {t('সারা বাংলাদেশে ক্যাশ অন ডেলিভারি এবং নিরাপদ মোবাইল ব্যাংকিং সুবিধা।', 'Nationwide Cash on Delivery and verified mobile banking.')}
             </p>
 
             <div className="flex flex-wrap gap-2">
-              <span className="bg-pink-900/40 text-pink-300 border border-pink-700/50 px-2.5 py-1 rounded-md font-bold text-[10px]">
-                bKash বিকাশ
+              <span className="bg-white/5 text-gray-200 border border-white/15 px-2.5 py-1 rounded-md font-medium text-[11px]">
+                বিকাশ (bKash)
               </span>
-              <span className="bg-amber-900/40 text-amber-300 border border-amber-700/50 px-2.5 py-1 rounded-md font-bold text-[10px]">
-                Nagad নগদ
+              <span className="bg-white/5 text-gray-200 border border-white/15 px-2.5 py-1 rounded-md font-medium text-[11px]">
+                নগদ (Nagad)
               </span>
-              <span className="bg-emerald-900/40 text-emerald-300 border border-emerald-700/50 px-2.5 py-1 rounded-md font-bold text-[10px]">
-                Cash On Delivery ক্যাশ অন ডেলিভারি
+              <span className="bg-white/5 text-gray-200 border border-white/15 px-2.5 py-1 rounded-md font-medium text-[11px]">
+                ক্যাশ অন ডেলিভারি
               </span>
             </div>
           </div>
         </div>
 
-        {/* Bottom copyright row */}
-        <div className="pt-6 flex flex-col sm:flex-row items-center justify-between text-gray-500 text-[11px] gap-2">
-          <p>© {new Date().getFullYear()} JotPotShop (jotpotshop.com). {t('সর্বস্বত্ব সংরক্ষিত।', 'All Rights Reserved.')}</p>
-          <p className="flex items-center space-x-1">
-            <span>{t('বাংলাদেশে তৈরি', 'Crafted with')}</span>
-            <Heart className="w-3 h-3 text-rose-500 fill-rose-500" />
-            <span>{t('ঝটপট কেনাকাটার বিশ্বস্ত ঠিকানা', 'for Bangladesh')}</span>
+        {/* Bottom row */}
+        <div className="pt-6 flex flex-col sm:flex-row items-center justify-between text-gray-400 text-[11px] gap-2 tabular-nums">
+          <p>© {new Date().getFullYear()} {websiteSettings.storeName || 'JotPotShop'} ({websiteSettings.domain || 'jotpotshop.com'}). {t('সর্বস্বত্ব সংরক্ষিত।', 'All Rights Reserved.')}</p>
+          <p className="text-gray-500">
+            {t('নিরাপদ ও নির্ভরযোগ্য বাংলাদেশি অনলাইন শপিং প্ল্যাটফর্ম', 'Trusted Bangladeshi Online Storefront')}
           </p>
         </div>
       </div>

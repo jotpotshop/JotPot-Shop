@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, Truck, Printer, ArrowRight, ShieldCheck, ShoppingBag } from 'lucide-react';
+import { CheckCircle2, Truck, Printer, ShoppingBag } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 
 export const OrderConfirmationModal: React.FC = () => {
@@ -10,7 +10,6 @@ export const OrderConfirmationModal: React.FC = () => {
     setTrackingOrderId,
     t,
     formatPrice,
-    language,
   } = useShop();
 
   if (activeModal !== 'orderConfirmation' || !selectedOrderForInvoice) return null;
@@ -27,65 +26,65 @@ export const OrderConfirmationModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden my-auto border border-gray-100 text-center p-6 sm:p-8 animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden my-auto border border-[#e6e3dd] text-center p-6 sm:p-8">
         {/* Success Icon */}
-        <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4">
-          <CheckCircle2 className="w-10 h-10" />
+        <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-200 text-[#15803d] flex items-center justify-center mx-auto mb-4">
+          <CheckCircle2 className="w-8 h-8" />
         </div>
 
-        <h3 className="text-xl sm:text-2xl font-black text-gray-900">
-          {t('আপনার অর্ডার সফলভাবে সম্পন্ন হয়েছে!', 'Order Placed Successfully!')}
+        <h3 className="font-editorial text-xl sm:text-2xl font-bold text-[#111827]">
+          {t('আপনার অর্ডার সফলভাবে সম্পন্ন হয়েছে', 'Order Placed Successfully')}
         </h3>
-        <p className="text-xs sm:text-sm text-gray-600 mt-1 max-w-sm mx-auto">
+        <p className="text-xs sm:text-sm text-gray-600 mt-1.5 max-w-sm mx-auto leading-relaxed">
           {t(
-            'ঝটপটশপ-এ কেনাকাটা করার জন্য ধন্যবাদ! আপনার পার্সেলটি দ্রুত ডেলিভারির জন্য প্রস্তুত করা হচ্ছে।',
-            'Thank you for shopping at JotPotShop! We are preparing your order for fast dispatch.'
+            'ঝটপটশপ-এ কেনাকাটা করার জন্য ধন্যবাদ। আপনার পার্সেলটি দ্রুত ডেলিভারির জন্য প্রস্তুত করা হচ্ছে।',
+            'Thank you for shopping at JotPotShop. Your order is now being prepared for dispatch.'
           )}
         </p>
 
         {/* Order Details Card */}
-        <div className="bg-gray-50 rounded-2xl p-4 my-5 border border-gray-200 text-left space-y-2.5 text-xs">
-          <div className="flex justify-between items-center pb-2 border-b border-gray-200">
-            <span className="text-gray-500 font-semibold">{t('অর্ডার আইডি:', 'Order ID:')}</span>
-            <span className="font-mono font-black text-rose-600 text-sm">{order.id}</span>
+        <div className="bg-[#faf9f7] rounded-xl p-4 my-5 border border-[#e6e3dd] text-left space-y-2.5 text-xs tabular-nums">
+          <div className="flex justify-between items-center pb-2.5 border-b border-[#e6e3dd]">
+            <span className="text-gray-500 font-medium">{t('অর্ডার আইডি:', 'Order ID:')}</span>
+            <span className="font-mono font-bold text-[#881337] text-sm">{order.id}</span>
           </div>
 
           <div className="flex justify-between">
             <span className="text-gray-500">{t('গ্রাহকের নাম:', 'Customer:')}</span>
-            <span className="font-bold text-gray-900">{order.customerName}</span>
+            <span className="font-semibold text-[#111827]">{order.customerName}</span>
           </div>
 
           <div className="flex justify-between">
             <span className="text-gray-500">{t('মোবাইল নম্বর:', 'Phone:')}</span>
-            <span className="font-mono text-gray-900">{order.phone}</span>
+            <span className="font-mono text-[#111827]">{order.phone}</span>
           </div>
 
-          <div className="flex justify-between">
-            <span className="text-gray-500">{t('ডেলিভারি ঠিকানা:', 'Address:')}</span>
-            <span className="font-medium text-gray-900 text-right max-w-[200px] truncate">
+          <div className="flex justify-between gap-4">
+            <span className="text-gray-500 shrink-0">{t('ডেলিভারি ঠিকানা:', 'Address:')}</span>
+            <span className="font-medium text-[#111827] text-right truncate">
               {order.address.area}, {order.address.district}
             </span>
           </div>
 
           <div className="flex justify-between">
             <span className="text-gray-500">{t('পেমেন্ট মাধ্যম:', 'Payment:')}</span>
-            <span className="font-bold uppercase text-gray-900">{order.paymentMethod}</span>
+            <span className="font-semibold uppercase text-[#111827]">{order.paymentMethod}</span>
           </div>
 
-          <div className="flex justify-between pt-2 border-t border-gray-200 text-sm font-extrabold">
+          <div className="flex justify-between pt-2.5 border-t border-[#e6e3dd] text-sm font-bold text-[#111827]">
             <span>{t('সর্বমোট মূল্য:', 'Total Amount:')}</span>
-            <span className="text-rose-600">{formatPrice(order.totalAmount)}</span>
+            <span className="text-[#881337]">{formatPrice(order.totalAmount)}</span>
           </div>
         </div>
 
         {/* Delivery Estimate */}
-        <div className="bg-emerald-50 text-emerald-800 p-3 rounded-xl text-xs flex items-center justify-center space-x-2 mb-5">
-          <Truck className="w-4 h-4 text-emerald-600" />
+        <div className="bg-white border border-[#e6e3dd] text-[#111827] p-3 rounded-xl text-xs flex items-center justify-center gap-2 mb-5">
+          <Truck className="w-4 h-4 text-[#15803d] shrink-0" />
           <span>
             {t(
               'আনুমানিক ডেলিভারি: আগামী ২৪-৪৮ ঘণ্টার মধ্যে',
-              'Estimated Delivery: Within 24-48 hours'
+              'Estimated delivery: within 24-48 hours'
             )}
           </span>
         </div>
@@ -94,16 +93,16 @@ export const OrderConfirmationModal: React.FC = () => {
         <div className="space-y-2.5">
           <button
             onClick={handleTrackNow}
-            className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm py-3 rounded-xl flex items-center justify-center space-x-2 shadow-md cursor-pointer transition-colors"
+            className="w-full bg-[#881337] hover:bg-[#6d0f2c] text-white font-semibold text-sm py-3 min-h-[44px] rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-colors"
           >
             <Truck className="w-4 h-4" />
             <span>{t('অর্ডার ট্র্যাক করুন', 'Track Order Status')}</span>
           </button>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2.5">
             <button
               onClick={handleOpenInvoice}
-              className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold text-xs py-2.5 rounded-xl flex items-center justify-center space-x-1.5 cursor-pointer transition-colors"
+              className="bg-[#faf9f7] hover:bg-white border border-[#e6e3dd] hover:border-[#111827] text-[#111827] font-semibold text-xs py-2.5 min-h-[40px] rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
             >
               <Printer className="w-3.5 h-3.5" />
               <span>{t('ইনভয়েস দেখুন', 'View Invoice')}</span>
@@ -111,7 +110,7 @@ export const OrderConfirmationModal: React.FC = () => {
 
             <button
               onClick={() => setActiveModal(null)}
-              className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold text-xs py-2.5 rounded-xl flex items-center justify-center space-x-1.5 cursor-pointer transition-colors"
+              className="bg-[#faf9f7] hover:bg-white border border-[#e6e3dd] hover:border-[#111827] text-[#111827] font-semibold text-xs py-2.5 min-h-[40px] rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
             >
               <ShoppingBag className="w-3.5 h-3.5" />
               <span>{t('আরো কিনুন', 'Keep Shopping')}</span>

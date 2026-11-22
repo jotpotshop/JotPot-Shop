@@ -2,7 +2,7 @@
   "entities": {
     "BrandingSettings": {
       "title": "BrandingSettings",
-      "description": "Website logo, branding assets and store identity settings",
+      "description": "Website logo, branding assets, contact details and store identity settings",
       "type": "object",
       "properties": {
         "storeName": { "type": "string" },
@@ -33,12 +33,24 @@
       },
       "required": ["title", "titleBn", "supportPhone"]
     },
+    "TrustSectionSettings": {
+      "title": "TrustSectionSettings",
+      "description": "Editable trust section headings, cards and badges displayed on storefront",
+      "type": "object",
+      "properties": {
+        "sectionTitleBn": { "type": "string" },
+        "sectionSubtitleBn": { "type": "string" },
+        "items": { "type": "array" },
+        "updatedAt": { "type": "string" }
+      }
+    },
     "UnifiedConversation": {
       "title": "UnifiedConversation",
       "description": "Customer live chat and omnichannel support conversation thread",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
+        "customerUid": { "type": "string" },
         "channel": { "type": "string" },
         "customerName": { "type": "string" },
         "customerPhone": { "type": "string" },
@@ -49,12 +61,14 @@
     },
     "Order": {
       "title": "Order",
-      "description": "Customer order details and timeline tracking",
+      "description": "Customer order details, items, delivery address, and lifecycle tracking",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
+        "customerUid": { "type": "string" },
         "customerName": { "type": "string" },
         "phone": { "type": "string" },
+        "items": { "type": "array" },
         "totalAmount": { "type": "number" },
         "status": { "type": "string" },
         "orderDate": { "type": "string" }
@@ -63,16 +77,69 @@
     },
     "Product": {
       "title": "Product",
-      "description": "E-commerce product catalog item",
+      "description": "E-commerce product catalog item with rich description, variants and visibility flag",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "nameBn": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string" },
+        "stock": { "type": "number" },
+        "isPublished": { "type": "boolean" }
+      },
+      "required": ["id", "name", "price", "stock"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Registered customer profile (no plaintext passwords stored)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Staff": {
+      "title": "Staff",
+      "description": "Staff RBAC record synced from Firebase Auth UID (no plaintext passwords stored)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "email", "role"]
+    },
+    "Coupon": {
+      "title": "Coupon",
+      "description": "Promotional discount coupon configuration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "discountValue": { "type": "number" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "code"]
+    },
+    "Bundle": {
+      "title": "Bundle",
+      "description": "Combo bundle offer configuration",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
         "title": { "type": "string" },
-        "price": { "type": "number" },
-        "category": { "type": "string" },
-        "stock": { "type": "number" }
+        "bundlePrice": { "type": "number" }
       },
-      "required": ["id", "title", "price", "stock"]
+      "required": ["id", "title"]
     },
     "ConnectionTest": {
       "title": "ConnectionTest",
@@ -87,19 +154,35 @@
   "firestore": {
     "/settings/{settingId}": {
       "schema": "BrandingSettings",
-      "description": "Global website configuration, logos, help center, and branding"
+      "description": "Storefront configuration (public non-PII allowlist) and staff-restricted operational ledgers"
     },
     "/conversations/{convId}": {
       "schema": "UnifiedConversation",
-      "description": "Customer live chat and omnichannel messages"
+      "description": "Customer live chat and omnichannel messages isolated per customerUid"
     },
     "/orders/{orderId}": {
       "schema": "Order",
-      "description": "Store orders and lifecycle states"
+      "description": "Store orders isolated per customerUid with staff-only status management"
     },
     "/products/{productId}": {
       "schema": "Product",
-      "description": "Store inventory and catalog"
+      "description": "Store inventory and catalog items"
+    },
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Registered customer profiles isolated per Firebase Auth UID"
+    },
+    "/staff/{staffId}": {
+      "schema": "Staff",
+      "description": "Staff RBAC directory keyed by Firebase Auth UID"
+    },
+    "/coupons/{couponId}": {
+      "schema": "Coupon",
+      "description": "Storefront discount coupons"
+    },
+    "/bundles/{bundleId}": {
+      "schema": "Bundle",
+      "description": "Combo bundle product offers"
     },
     "/test/{docId}": {
       "schema": "ConnectionTest",

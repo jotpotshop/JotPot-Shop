@@ -29,19 +29,19 @@ import { FloatingContactWidget } from './components/FloatingContactWidget';
 import { BondhameLoginPortal } from './components/admin/BondhameLoginPortal';
 
 import {
-  Sparkles,
   ArrowRight,
-  TrendingUp,
-  Star,
-  CheckCircle,
   Clock,
   SlidersHorizontal,
+  AlertCircle,
+  CheckCircle2,
+  Info,
+  X,
 } from 'lucide-react';
-import { CATEGORIES } from './data/mockData';
 
 const MainContent: React.FC = () => {
   const {
     products,
+    categories,
     selectedCategory,
     setSelectedCategory,
     selectedNeed,
@@ -147,14 +147,14 @@ const MainContent: React.FC = () => {
   // Obsolete /admin entry route: Render standard 404 directly at /admin without redirecting or exposing admin panel
   if (currentRoute === '/admin') {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 text-center">
-        <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-gray-200 shadow-xl">
-          <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-4 font-black text-2xl border border-rose-100">
+      <div className="min-h-screen bg-[#faf9f7] flex flex-col items-center justify-center p-4 text-center">
+        <div className="max-w-md w-full bg-white rounded-2xl p-8 border border-[#e6e3dd]">
+          <div className="w-16 h-16 rounded-2xl bg-[#faf9f7] text-[#111827] flex items-center justify-center mx-auto mb-4 font-bold text-2xl border border-[#e6e3dd] tabular-nums">
             404
           </div>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">পৃষ্ঠাটি পাওয়া যায়নি</h1>
-          <p className="text-xs text-gray-500 mb-6 leading-relaxed">
-            আপনি যে ঠিকানায় প্রবেশ করতে চেয়েছেন তা কার্যকর নয়।
+          <h1 className="text-xl font-semibold text-[#111827] mb-2">পৃষ্ঠাটি পাওয়া যায়নি</h1>
+          <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+            আপনি যে ঠিকানায় প্রবেশ করতে চেয়েছেন তা কার্যকর নয়।
           </p>
           <button
             onClick={() => {
@@ -163,7 +163,7 @@ const MainContent: React.FC = () => {
                 window.dispatchEvent(new PopStateEvent('popstate'));
               }
             }}
-            className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer shadow-md"
+            className="w-full py-3 min-h-[44px] bg-[#111827] hover:bg-[#1f2937] text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
           >
             হোমপেজে ফিরে যান
           </button>
@@ -180,10 +180,11 @@ const MainContent: React.FC = () => {
     return <BondhameLoginPortal />;
   }
 
-  // Filter products for category view
-  const currentCategoryObj = CATEGORIES.find(c => c.id === selectedCategory);
+  // Filter products for category view (exclude unpublished/hidden products from storefront)
+  const publishedProducts = products.filter(p => p.isPublished !== false);
+  const currentCategoryObj = categories.find(c => c.id === selectedCategory);
 
-  let displayedProducts = [...products];
+  let displayedProducts = [...publishedProducts];
 
   if (selectedCategory) {
     if (selectedCategory === 'deals-offers') {
@@ -214,39 +215,14 @@ const MainContent: React.FC = () => {
     displayedProducts.sort((a, b) => b.rating - a.rating);
   }
 
-  // Homepage sections collections
-  const trendingProducts = products.filter(p => p.isTrending).slice(0, 4);
-  const newArrivals = products.filter(p => p.isNewArrival).slice(0, 4);
-  const bestSellers = products.filter(p => p.isBestSeller).slice(0, 4);
-  const recentlyViewedProducts = products.filter(p => recentlyViewed.includes(p.id)).slice(0, 4);
-
-  // Customer Reviews
-  const verifiedReviews = [
-    {
-      name: 'তানভীর আহমেদ',
-      city: 'ধানমন্ডি, ঢাকা',
-      rating: 5,
-      comment: 'জেট ব্ল্যাক অক্সফোর্ড শার্টটি নিয়েছি। কাপড়ের কোয়ালিটি ও ফিটিং অসাধারণ! ২৪ ঘণ্টার মধ্যে ডেলিভারি পেয়েছি।',
-      productName: 'Premium Oxford Cotton Shirt',
-    },
-    {
-      name: 'নুসরাত জাহান',
-      city: 'হালিশহর, চট্টগ্রাম',
-      rating: 5,
-      comment: 'জামদানি সিল্ক শাড়ির কালার ছবির চেয়েও সুন্দর বাস্তবে। প্যাকেজিং চমৎকার ছিল, সম্পূর্ণ অক্ষত অবস্থায় পেয়েছি।',
-      productName: 'Traditional Jamdani Silk Saree',
-    },
-    {
-      name: 'মাহফুজুর রহমান',
-      city: 'উপশহর, সিলেট',
-      rating: 5,
-      comment: 'AMOLED স্মার্টওয়াচটিতে সুন্দর বাংলা ফন্ট সাপোর্ট করে, নোটিফিকেশন পড়তে কোনো সমস্যা হয় না। ব্যাটারি ব্যাকআপ দারুণ!',
-      productName: 'Smart Ultra AMOLED Watch',
-    },
-  ];
+  // Homepage sections collections (only published products)
+  const trendingProducts = publishedProducts.filter(p => p.isTrending).slice(0, 4);
+  const newArrivals = publishedProducts.filter(p => p.isNewArrival).slice(0, 4);
+  const bestSellers = publishedProducts.filter(p => p.isBestSeller).slice(0, 4);
+  const recentlyViewedProducts = publishedProducts.filter(p => recentlyViewed.includes(p.id)).slice(0, 4);
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50/60 font-sans max-w-full overflow-x-hidden">
+    <div className="min-h-screen flex flex-col bg-[#faf9f7] text-[#111827] font-sans max-w-full overflow-x-hidden">
       <Header />
 
       <main className="flex-1 max-w-7xl mx-auto px-3 sm:px-6 w-full">
@@ -254,7 +230,7 @@ const MainContent: React.FC = () => {
         {selectedCategory || selectedNeed ? (
           <div className="my-6">
             {/* Breadcrumb & Title */}
-            <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-xs mb-6">
+            <div className="bg-white p-5 rounded-2xl border border-[#e6e3dd] mb-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center space-x-2 text-xs text-gray-500 mb-1">
@@ -264,19 +240,19 @@ const MainContent: React.FC = () => {
                         setSelectedNeed(null);
                         setSelectedMaxBudget(null);
                       }}
-                      className="hover:text-rose-600 font-medium cursor-pointer"
+                      className="hover:text-[#881337] font-medium cursor-pointer"
                     >
                       {t('হোম', 'Home')}
                     </button>
                     <span>/</span>
-                    <span className="text-gray-900 font-bold">
+                    <span className="text-[#111827] font-semibold">
                       {currentCategoryObj
                         ? (language === 'bn' ? currentCategoryObj.nameBn : currentCategoryObj.name)
                         : (selectedNeed?.toUpperCase() || 'Filter')}
                     </span>
                   </div>
 
-                  <h1 className="text-xl sm:text-2xl font-black text-gray-900">
+                  <h1 className="font-editorial text-xl sm:text-2xl font-semibold text-[#111827]">
                     {currentCategoryObj
                       ? `${language === 'bn' ? currentCategoryObj.nameBn : currentCategoryObj.name} কালেকশন`
                       : t('নির্বাচিত পণ্যসমূহ', 'Selected Products')}
@@ -285,12 +261,12 @@ const MainContent: React.FC = () => {
 
                 {/* Sort selector */}
                 <div className="flex items-center space-x-2 self-start sm:self-auto text-xs">
-                  <SlidersHorizontal className="w-4 h-4 text-gray-400" />
-                  <span className="font-semibold text-gray-600">{t('সর্ট করুন:', 'Sort By:')}</span>
+                  <SlidersHorizontal className="w-4 h-4 text-gray-500" />
+                  <span className="font-medium text-gray-600">{t('সাজান:', 'Sort By:')}</span>
                   <select
                     value={sortOption}
                     onChange={e => setSortOption(e.target.value as any)}
-                    className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 font-semibold text-gray-800 cursor-pointer focus:border-rose-500"
+                    className="bg-[#faf9f7] border border-[#e6e3dd] rounded-xl px-3 py-2 min-h-[38px] font-medium text-[#111827] cursor-pointer focus:border-[#111827] focus:outline-hidden"
                   >
                     <option value="featured">{t('জনপ্রিয়তা', 'Featured')}</option>
                     <option value="price-asc">{t('দাম: কম থেকে বেশি', 'Price: Low to High')}</option>
@@ -305,22 +281,22 @@ const MainContent: React.FC = () => {
                 <div className="mt-4 pt-4 border-t border-gray-100 flex items-center space-x-2 overflow-x-auto pb-1">
                   <button
                     onClick={() => setActiveSubcategory(null)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer shrink-0 ${
+                    className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer shrink-0 ${
                       activeSubcategory === null
-                        ? 'bg-rose-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        ? 'bg-[#111827] text-white'
+                        : 'bg-[#faf9f7] border border-[#e6e3dd] text-gray-700 hover:border-gray-400'
                     }`}
                   >
-                    {t('সকল সাব-ক্যাটাগরি', 'All')}
+                    {t('সব সাব-ক্যাটাগরি', 'All')}
                   </button>
                   {currentCategoryObj.subcategories.map((sub, i) => (
                     <button
                       key={sub}
                       onClick={() => setActiveSubcategory(sub)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
+                      className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer shrink-0 ${
                         activeSubcategory === sub
-                          ? 'bg-rose-600 text-white font-bold'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          ? 'bg-[#111827] text-white'
+                          : 'bg-[#faf9f7] border border-[#e6e3dd] text-gray-700 hover:border-gray-400'
                       }`}
                     >
                       {language === 'bn' ? currentCategoryObj.subcategoriesBn[i] || sub : sub}
@@ -367,25 +343,20 @@ const MainContent: React.FC = () => {
             <FlashSaleSection />
 
             {/* 4. Trending Products */}
-            <section className="my-8">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center font-bold">
-                    <TrendingUp className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-base sm:text-xl font-black text-gray-900">
-                      {t('ট্রেন্ডিং পণ্যসমূহ', 'Trending Products')}
-                    </h2>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {t('এই সপ্তাহে সবচেয়ে বেশি দেখা ও চাহিদাসম্পন্ন পণ্য', 'Most viewed and demanded this week')}
-                    </p>
-                  </div>
+            <section className="my-10">
+              <div className="flex items-end justify-between mb-5 border-b border-[#e6e3dd] pb-3">
+                <div>
+                  <h2 className="text-lg sm:text-xl font-semibold text-[#111827]">
+                    {t('জনপ্রিয় কালেকশন', 'Trending Collection')}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+                    {t('এই সপ্তাহে ক্রেতাদের সবচেয়ে পছন্দের পণ্যসমূহ', 'Most explored products this week')}
+                  </p>
                 </div>
 
                 <button
                   onClick={() => setSelectedCategory('men-fashion')}
-                  className="text-xs font-bold text-rose-600 hover:underline flex items-center space-x-1 cursor-pointer"
+                  className="text-xs font-semibold text-[#881337] hover:underline flex items-center space-x-1 cursor-pointer shrink-0"
                 >
                   <span>{t('সব দেখুন', 'View All')}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -399,32 +370,27 @@ const MainContent: React.FC = () => {
               </div>
             </section>
 
-            {/* 5. Shop by Need (“আপনার কী প্রয়োজন?”) */}
+            {/* 5. Shop by Need */}
             <ShopByNeedSection />
 
-            {/* 6. Complete The Look (Smart Bundle Builder) */}
+            {/* 6. Complete The Look */}
             <CompleteTheLookSection />
 
             {/* 7. New Arrivals */}
-            <section className="my-8">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center font-bold">
-                    <Sparkles className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-base sm:text-xl font-black text-gray-900">
-                      {t('নতুন আগমন (New Arrivals)', 'New Arrivals')}
-                    </h2>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {t('সদ্য যুক্ত হওয়া লেটেস্ট ফ্যাশন ও গ্যাজেট কালেকশন', 'Freshly curated collection just in stock')}
-                    </p>
-                  </div>
+            <section className="my-10">
+              <div className="flex items-end justify-between mb-5 border-b border-[#e6e3dd] pb-3">
+                <div>
+                  <h2 className="text-lg sm:text-xl font-semibold text-[#111827]">
+                    {t('নতুন কালেকশন', 'New Arrivals')}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+                    {t('সদ্য যুক্ত হওয়া ফ্যাশন, গ্যাজেট ও নিত্যপ্রয়োজনীয় পণ্য', 'Freshly added fashion, gadgets and essentials')}
+                  </p>
                 </div>
 
                 <button
                   onClick={() => setSelectedCategory('gadgets')}
-                  className="text-xs font-bold text-rose-600 hover:underline flex items-center space-x-1 cursor-pointer"
+                  className="text-xs font-semibold text-[#881337] hover:underline flex items-center space-x-1 cursor-pointer shrink-0"
                 >
                   <span>{t('সব দেখুন', 'View All')}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -442,20 +408,15 @@ const MainContent: React.FC = () => {
             <ShopByBudgetSection />
 
             {/* 9. Best Sellers */}
-            <section className="my-8">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold">
-                    <CheckCircle className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-base sm:text-xl font-black text-gray-900">
-                      {t('বেস্ট সেলার (গ্রাহকদের সেরা পছন্দ)', 'Best Sellers')}
-                    </h2>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {t('হাজারো সন্তুষ্ট গ্রাহকের সর্বাধিক অর্ডারকৃত আইটেম', 'Most ordered items with highest customer ratings')}
-                    </p>
-                  </div>
+            <section className="my-10">
+              <div className="flex items-end justify-between mb-5 border-b border-[#e6e3dd] pb-3">
+                <div>
+                  <h2 className="text-lg sm:text-xl font-semibold text-[#111827]">
+                    {t('গ্রাহকদের সেরা পছন্দ', 'Customer Favorites')}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+                    {t('সর্বাধিক অর্ডারকৃত ও পরীক্ষিত মানের পণ্যসমূহ', 'Top ordered essentials across Bangladesh')}
+                  </p>
                 </div>
               </div>
 
@@ -468,11 +429,11 @@ const MainContent: React.FC = () => {
 
             {/* 10. Recently Viewed Section */}
             {recentlyViewedProducts.length > 0 && (
-              <section className="my-8 bg-white p-5 rounded-3xl border border-gray-100 shadow-xs">
+              <section className="my-10 bg-white p-5 rounded-2xl border border-[#e6e3dd]">
                 <div className="flex items-center space-x-2 mb-4">
-                  <Clock className="w-4 h-4 text-gray-400" />
-                  <h3 className="text-sm sm:text-base font-extrabold text-gray-900">
-                    {t('সম্প্রতি দেখা পণ্য (Recently Viewed)', 'Recently Viewed')}
+                  <Clock className="w-4 h-4 text-gray-500" />
+                  <h3 className="text-sm sm:text-base font-semibold text-[#111827]">
+                    {t('সম্প্রতি দেখা পণ্য', 'Recently Viewed')}
                   </h3>
                 </div>
 
@@ -484,49 +445,7 @@ const MainContent: React.FC = () => {
               </section>
             )}
 
-            {/* 11. Customer Reviews Testimonial Section */}
-            <section className="my-10">
-              <div className="text-center max-w-lg mx-auto mb-6">
-                <span className="text-[11px] font-bold text-rose-600 bg-rose-50 px-3 py-1 rounded-full uppercase tracking-wider">
-                  {t('গ্রাহকের মন্তব্য', 'CUSTOMER REVIEWS')}
-                </span>
-                <h2 className="text-lg sm:text-2xl font-black text-gray-900 mt-2">
-                  {t('গ্রাহকরা ঝটপটশপ সম্পর্কে কী বলছেন?', 'What Customers Say About Us')}
-                </h2>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {verifiedReviews.map((rev, idx) => (
-                  <div
-                    key={idx}
-                    className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between space-y-3"
-                  >
-                    <div>
-                      <div className="flex items-center text-amber-400 mb-2">
-                        {[...Array(rev.rating)].map((_, i) => (
-                          <Star key={i} className="w-4 h-4 fill-amber-400" />
-                        ))}
-                      </div>
-                      <p className="text-xs text-gray-700 leading-relaxed italic">
-                        "{rev.comment}"
-                      </p>
-                    </div>
-
-                    <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
-                      <div>
-                        <strong className="text-xs font-bold text-gray-900 block">{rev.name}</strong>
-                        <span className="text-[10px] text-gray-400">{rev.city}</span>
-                      </div>
-                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-semibold">
-                        ✓ {t('ভেরিফাইড ক্রেতা', 'Verified Buyer')}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* 12. Trust & Service Section */}
+            {/* 11. Trust & Service Section */}
             <TrustSection />
           </>
         )}
@@ -556,19 +475,20 @@ const MainContent: React.FC = () => {
 
       {/* Global Shop Notification Toast */}
       {shopToast && (
-        <div className="fixed top-5 right-5 z-[9999] max-w-sm w-full mx-4 sm:mx-0 bg-slate-900/95 text-white p-4 rounded-2xl shadow-2xl border border-slate-700/80 backdrop-blur-md flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4 duration-200">
-          <div className="flex items-center space-x-2.5 text-xs font-bold">
-            {shopToast.type === 'error' && <span className="text-rose-400 text-base">⚠️</span>}
-            {shopToast.type === 'warning' && <span className="text-amber-400 text-base">⚠️</span>}
-            {shopToast.type === 'success' && <span className="text-emerald-400 text-base">✅</span>}
-            {shopToast.type === 'info' && <span className="text-blue-400 text-base">ℹ️</span>}
+        <div className="fixed top-5 right-5 z-[9999] max-w-sm w-full mx-4 sm:mx-0 bg-[#111827] text-white p-4 rounded-xl shadow-xl border border-gray-800 flex items-center justify-between gap-3">
+          <div className="flex items-center space-x-2.5 text-xs font-medium leading-relaxed">
+            {shopToast.type === 'error' && <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />}
+            {shopToast.type === 'warning' && <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />}
+            {shopToast.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+            {shopToast.type === 'info' && <Info className="w-4 h-4 text-sky-400 shrink-0" />}
             <span>{shopToast.message}</span>
           </div>
           <button
             onClick={() => setShopToast(null)}
-            className="text-gray-400 hover:text-white p-1 rounded-lg cursor-pointer"
+            className="text-gray-400 hover:text-white p-1 rounded-lg cursor-pointer shrink-0"
+            aria-label="Close"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
       )}

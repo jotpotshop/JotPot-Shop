@@ -21,9 +21,9 @@ import {
   FileText,
 } from 'lucide-react';
 import { Product, NeedTag } from '../../types';
-import { CATEGORIES } from '../../data/mockData';
 import { OCCASIONS_LIST, detectProductOccasions } from '../../data/occasionsData';
-import { uploadAsset, compressImage } from '../../lib/firebase';
+import { uploadProductImage, compressImage, cleanupUnusedStorageAsset } from '../../lib/firebase';
+import { useShop } from '../../context/ShopContext';
 import { RichTextEditor } from './RichTextEditor';
 
 // -------------------------------------------------------------
@@ -61,11 +61,14 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
     '<h2>পণ্যের মূল বৈশিষ্ট্য</h2><p>১০০% প্রিমিয়াম সুতি ও আরামদায়ক টেক্সচার দিয়ে তৈরি। দৈনন্দিন অফিস, ক্যাজুয়াল কিংবা বিশেষ অনুষ্ঠানে পরার জন্য উপযুক্ত। সহজে ধোয়া যায় এবং দীর্ঘস্থায়ী রং গ্যারান্টি।</p><h3>কেন এটি কিনবেন?</h3><ul><li>উন্নত ফিনিশিং ও নিখুঁত সেলাই</li><li>সারাদিনের সর্বোচ্চ আরাম ও স্বস্তি</li><li>প্রি-ওয়াশড থাকায় ধোয়ার পর সংকুচিত হবে না</li></ul>'
   );
   const [descLangTab, setDescLangTab] = useState<'bn' | 'en'>('bn');
+  const { categories: storeCategories } = useShop();
   const [isFlashSale, setIsFlashSale] = useState(false);
   const [isBestSeller, setIsBestSeller] = useState(true);
   const [isTrending, setIsTrending] = useState(false);
+  const [isPublished, setIsPublished] = useState(true);
   const [needTags, setNeedTags] = useState<NeedTag[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [variantStocks, setVariantStocks] = useState<Record<string, number>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -76,8 +79,10 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setSku(`JPS-${Math.floor(100000 + Math.random() * 900000)}`);
+      setIsPublished(true);
       setSaveError(null);
       setUploadError(null);
+      setUploadProgress(null);
       setValidationErrors({});
     }
   }, [isOpen]);
@@ -87,11 +92,20 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      const previousUrl = imageUrl;
       setIsUploading(true);
+      setUploadProgress(5);
       setUploadError(null);
       try {
-        const uploadResult = await uploadAsset(file, 'products', `prod_${Date.now()}`, 800);
+        const uploadResult = await uploadProductImage(
+          file,
+          `${Date.now()}`,
+          pct => setUploadProgress(pct)
+        );
         setImageUrl(uploadResult.downloadUrl);
+        if (previousUrl && previousUrl !== uploadResult.downloadUrl) {
+          cleanupUnusedStorageAsset(previousUrl, [uploadResult.downloadUrl]).catch(() => {});
+        }
       } catch (err: any) {
         console.warn('Storage direct upload note:', err);
         try {
@@ -106,6 +120,7 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
         }
       } finally {
         setIsUploading(false);
+        setUploadProgress(null);
       }
     }
   };
@@ -144,7 +159,7 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
         ? Math.round(((numOldPrice - numPrice) / numOldPrice) * 100)
         : 0;
 
-    const catObj = CATEGORIES.find(c => c.id === category);
+    const catObj = storeCategories.find(c => c.id === category);
 
     const newProd: Product = {
       id: `jps-prod-${Date.now()}`,
@@ -191,6 +206,7 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
       isFlashSale,
       isBestSeller,
       isTrending,
+      isPublished,
       needTags:
         needTags.length > 0
           ? needTags
@@ -213,26 +229,27 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fade-in">
-      <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden my-auto border border-gray-100 flex flex-col max-h-[94vh]">
+    <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+      <div className="bg-white rounded-2xl w-full max-w-3xl shadow-xl overflow-hidden my-auto border border-[#e6e3dd] flex flex-col max-h-[94vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-950 via-slate-900 to-rose-950 text-white shrink-0">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-9 h-9 rounded-xl bg-rose-600 flex items-center justify-center shadow-xs">
+        <div className="px-6 py-4 border-b border-[#1f2937] flex items-center justify-between bg-[#111827] text-white shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-[#881337] flex items-center justify-center">
               <Package className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-white">
-                নতুন পণ্য যোগ করুন (Add New Product)
+              <h3 className="font-bold text-base text-white">
+                নতুন পণ্য যোগ করুন
               </h3>
-              <p className="text-[11px] text-gray-300">
+              <p className="text-xs text-[#d1d5db]">
                 ক্যাটালগ ও বিস্তারিত রিচ-টেক্সট বিবরণ সহ পণ্য তৈরি
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-white rounded-xl hover:bg-white/10 cursor-pointer transition-colors"
+            className="p-1.5 text-[#9ca3af] hover:text-white rounded-xl hover:bg-white/10 cursor-pointer transition-colors"
+            aria-label="বন্ধ করুন"
           >
             <X className="w-5 h-5" />
           </button>
@@ -307,7 +324,7 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
                 onChange={e => setCategory(e.target.value)}
                 className="w-full bg-gray-50 border border-gray-200 focus:border-rose-500 focus:bg-white rounded-xl p-2.5 text-xs transition-colors cursor-pointer"
               >
-                {CATEGORIES.map(c => (
+                {storeCategories.map(c => (
                   <option key={c.id} value={c.id}>
                     {c.nameBn} ({c.name})
                   </option>
@@ -435,8 +452,9 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
             </div>
 
             {uploadError && (
-              <p className="text-rose-600 text-[11px] font-bold bg-rose-50 p-2 rounded-xl border border-rose-100">
-                ⚠️ {uploadError}
+              <p className="text-[#991b1b] text-xs font-medium bg-[#fef2f2] p-2.5 rounded-xl border border-[#fecaca] flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>{uploadError}</span>
               </p>
             )}
 
@@ -446,12 +464,16 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
                   <img
                     src={imageUrl}
                     alt="Product preview"
-                    className="w-20 h-20 object-cover rounded-2xl border border-gray-200 shadow-xs"
+                    referrerPolicy="no-referrer"
+                    className="w-20 h-20 object-cover rounded-xl border border-[#e6e3dd] bg-[#faf9f7]"
                   />
                   <button
                     type="button"
-                    onClick={() => setImageUrl('')}
-                    className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white rounded-full p-1 shadow-md hover:bg-rose-700 cursor-pointer"
+                    onClick={() => {
+                      cleanupUnusedStorageAsset(imageUrl, []).catch(() => {});
+                      setImageUrl('');
+                    }}
+                    className="absolute -top-1.5 -right-1.5 bg-[#881337] text-white rounded-full p-1 shadow-sm hover:bg-[#6d0f2c] cursor-pointer"
                     title="ছবি মুছুন"
                   >
                     <X className="w-3 h-3" />
@@ -460,11 +482,23 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
               )}
 
               <div className="flex-1 w-full space-y-2">
-                <label className="border-2 border-dashed border-gray-300 hover:border-rose-500 hover:bg-rose-50/20 rounded-2xl p-3 flex items-center justify-center space-x-2 cursor-pointer transition-all">
-                  <Upload className="w-4 h-4 text-gray-500" />
-                  <span className="text-xs font-bold text-gray-700">
-                    {isUploading ? 'ছবি অপ্টিমাইজ ও আপলোড হচ্ছে...' : 'ডিভাইস থেকে পণ্যের ছবি আপলোড করুন'}
-                  </span>
+                <label className="border border-dashed border-[#d1d5db] hover:border-[#881337] hover:bg-[#faf9f7] rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-colors">
+                  <div className="flex items-center gap-2">
+                    <Upload className="w-4 h-4 text-[#6b7280]" />
+                    <span className="text-xs font-semibold text-[#374151]">
+                      {isUploading
+                        ? `ছবি আপলোড হচ্ছে (${uploadProgress ?? 0}%)...`
+                        : 'ডিভাইস থেকে পণ্যের ছবি আপলোড করুন'}
+                    </span>
+                  </div>
+                  {isUploading && uploadProgress !== null && (
+                    <div className="w-full max-w-xs h-1.5 bg-[#e6e3dd] rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[#881337] transition-all duration-150"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  )}
                   <input
                     type="file"
                     accept="image/*"
@@ -474,7 +508,7 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
                   />
                 </label>
 
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center gap-2">
                   <input
                     type="text"
                     value={imageUrl}
@@ -482,38 +516,38 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
                       setImageUrl(e.target.value);
                       if (validationErrors.imageUrl) setValidationErrors(prev => ({ ...prev, imageUrl: '' }));
                     }}
-                    placeholder="অথবা সরাসরি ওয়েব ইমেজ লিংক দিন (https://images.unsplash.com/...)"
-                    className="w-full bg-gray-50 border border-gray-200 focus:border-rose-500 focus:bg-white rounded-xl px-3 py-1.5 text-xs font-mono"
+                    placeholder="অথবা সরাসরি ওয়েব ইমেজ লিংক দিন (https://...)"
+                    className="w-full bg-[#faf9f7] border border-[#e6e3dd] focus:border-[#881337] focus:bg-white rounded-xl px-3 py-2 text-xs font-mono focus:outline-hidden"
                   />
                 </div>
               </div>
             </div>
             {validationErrors.imageUrl && (
-              <p className="text-rose-600 text-[10px] font-bold">{validationErrors.imageUrl}</p>
+              <p className="text-[#991b1b] text-xs font-semibold">{validationErrors.imageUrl}</p>
             )}
           </div>
 
           {/* DETAILED RICH-TEXT PRODUCT DESCRIPTION */}
-          <div className="space-y-2 pt-2 border-t border-gray-100">
+          <div className="space-y-2 pt-2 border-t border-[#f3f1ed]">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <label className="font-bold text-gray-800 text-xs block">
-                  পণ্যের বিস্তারিত রিচ-টেক্সট বিবরণ (Rich-Text Product Description)
+                <label className="font-bold text-[#111827] text-xs block">
+                  পণ্যের বিস্তারিত রিচ-টেক্সট বিবরণ
                 </label>
-                <p className="text-[11px] text-gray-500">
+                <p className="text-xs text-[#6b7280]">
                   হেডিং, বুলেট পয়েন্ট, বোল্ড টেক্সট ও প্যারাগ্রাফ সমর্থন করে
                 </p>
               </div>
 
               {/* Language Switcher Tabs */}
-              <div className="flex items-center space-x-1 bg-gray-100 p-0.5 rounded-xl border border-gray-200">
+              <div className="flex items-center gap-1 bg-[#faf9f7] p-1 rounded-xl border border-[#e6e3dd]">
                 <button
                   type="button"
                   onClick={() => setDescLangTab('bn')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
                     descLangTab === 'bn'
-                      ? 'bg-rose-600 text-white shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-[#111827] text-white'
+                      : 'text-[#6b7280] hover:text-[#111827]'
                   }`}
                 >
                   বাংলা বিবরণ
@@ -521,10 +555,10 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setDescLangTab('en')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
                     descLangTab === 'en'
-                      ? 'bg-rose-600 text-white shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-[#111827] text-white'
+                      : 'text-[#6b7280] hover:text-[#111827]'
                   }`}
                 >
                   English Description
@@ -664,13 +698,22 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
               />
               <span>ট্রেন্ডিং পণ্য (Trending)</span>
             </label>
+            <label className="flex items-center space-x-2 cursor-pointer text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200">
+              <input
+                type="checkbox"
+                checked={isPublished}
+                onChange={e => setIsPublished(e.target.checked)}
+                className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+              />
+              <span>স্টোরে প্রকাশিত (Published / Live)</span>
+            </label>
           </div>
 
           {/* Occasion / Shop by Need Badges */}
-          <div className="space-y-2 pt-3 border-t border-gray-100">
+          <div className="space-y-2 pt-3 border-t border-[#f3f1ed]">
             <div className="flex items-center justify-between">
-              <label className="font-bold text-gray-800 flex items-center space-x-1.5 text-xs">
-                <span>🎯 উপলক্ষ ও প্রয়োজন নির্বাচন (আপনার কী প্রয়োজন?)</span>
+              <label className="font-bold text-[#111827] flex items-center gap-1.5 text-xs">
+                <span>উপলক্ষ ও প্রয়োজন নির্বাচন (আপনার কী প্রয়োজন?)</span>
               </label>
               <button
                 type="button"
@@ -679,10 +722,10 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
                     detectProductOccasions({ name, nameBn, category, subcategory, description })
                   )
                 }
-                className="text-[11px] font-bold text-rose-600 hover:text-rose-700 cursor-pointer flex items-center space-x-1 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-100"
+                className="text-xs font-semibold text-[#881337] hover:text-[#6d0f2c] cursor-pointer flex items-center gap-1 bg-[#faf9f7] px-2.5 py-1 rounded-lg border border-[#e6e3dd]"
               >
-                <Sparkles className="w-3 h-3 text-amber-500" />
-                <span>⚡ স্মার্ট অটো-ডিটেক্ট</span>
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>স্মার্ট অটো-ডিটেক্ট</span>
               </button>
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -699,15 +742,14 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
                         setNeedTags([...needTags, occ.id]);
                       }
                     }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center space-x-1.5 ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer border flex items-center gap-1.5 ${
                       isSelected
-                        ? 'bg-gray-900 text-white border-gray-900 shadow-xs'
-                        : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                        ? 'bg-[#111827] text-white border-[#111827]'
+                        : 'bg-[#faf9f7] text-[#374151] border-[#e6e3dd] hover:bg-white'
                     }`}
                   >
-                    <span>{occ.icon}</span>
                     <span>{occ.titleBn}</span>
-                    {isSelected && <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />}
+                    {isSelected && <CheckCircle className="w-3.5 h-3.5 text-[#34d399]" />}
                   </button>
                 );
               })}
@@ -715,24 +757,24 @@ export const ProductAddModal: React.FC<ProductAddModalProps> = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="pt-4 border-t border-gray-100 flex items-center justify-end space-x-3">
+          <div className="pt-4 border-t border-[#f3f1ed] flex items-center justify-end gap-3">
             <button
               type="button"
               disabled={isSaving}
               onClick={onClose}
-              className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-bold hover:bg-gray-50 cursor-pointer transition-colors"
+              className="min-h-[40px] px-4 py-2 rounded-xl border border-[#e6e3dd] text-[#374151] font-semibold hover:bg-[#faf9f7] cursor-pointer transition-colors"
             >
               বাতিল করুন
             </button>
             <button
               type="submit"
               disabled={isSaving || isUploading}
-              className="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold cursor-pointer transition-colors shadow-md shadow-rose-600/25 flex items-center space-x-2"
+              className="min-h-[40px] px-6 py-2 rounded-xl bg-[#881337] hover:bg-[#6d0f2c] disabled:opacity-50 text-white font-semibold cursor-pointer transition-colors flex items-center gap-2"
             >
               {isSaving ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                  <span>Firebase-এ সংরক্ষণ হচ্ছে...</span>
+                  <span>সংরক্ষণ হচ্ছে...</span>
                 </>
               ) : (
                 <>
@@ -755,7 +797,7 @@ interface ProductEditModalProps {
   product: Product | null;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (updated: Product) => Promise<boolean | void> | void;
+  onSave: (updated: Product) => Promise<boolean | { success: boolean; error?: string } | void> | void;
 }
 
 export const ProductEditModal: React.FC<ProductEditModalProps> = ({
@@ -764,6 +806,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
   onClose,
   onSave,
 }) => {
+  const { categories: storeCategories } = useShop();
   const [name, setName] = useState('');
   const [nameBn, setNameBn] = useState('');
   const [category, setCategory] = useState('men-fashion');
@@ -784,8 +827,10 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
   const [isFlashSale, setIsFlashSale] = useState(false);
   const [isBestSeller, setIsBestSeller] = useState(false);
   const [isTrending, setIsTrending] = useState(false);
+  const [isPublished, setIsPublished] = useState(true);
   const [needTags, setNeedTags] = useState<NeedTag[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [variantStocks, setVariantStocks] = useState<Record<string, number>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -813,6 +858,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
       setIsFlashSale(Boolean(product.isFlashSale));
       setIsBestSeller(Boolean(product.isBestSeller));
       setIsTrending(Boolean(product.isTrending));
+      setIsPublished(product.isPublished !== false);
       setNeedTags(
         product.needTags && product.needTags.length > 0
           ? product.needTags
@@ -820,6 +866,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
       );
       setSaveError(null);
       setUploadError(null);
+      setUploadProgress(null);
     }
   }, [product]);
 
@@ -828,11 +875,20 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      const previousUrl = imageUrl;
       setIsUploading(true);
+      setUploadProgress(5);
       setUploadError(null);
       try {
-        const uploadResult = await uploadAsset(file, 'products', `prod_${product.id}`, 800);
+        const uploadResult = await uploadProductImage(
+          file,
+          product.id,
+          pct => setUploadProgress(pct)
+        );
         setImageUrl(uploadResult.downloadUrl);
+        if (previousUrl && previousUrl !== uploadResult.downloadUrl) {
+          cleanupUnusedStorageAsset(previousUrl, [uploadResult.downloadUrl]).catch(() => {});
+        }
       } catch (err: any) {
         console.warn('Storage direct upload note:', err);
         try {
@@ -847,6 +903,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
         }
       } finally {
         setIsUploading(false);
+        setUploadProgress(null);
       }
     }
   };
@@ -863,7 +920,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
         ? Math.round(((oldPrice - price) / oldPrice) * 100)
         : 0;
 
-    const catObj = CATEGORIES.find(c => c.id === category);
+    const catObj = storeCategories.find(c => c.id === category);
 
     const updatedProduct: Product = {
       ...product,
@@ -896,6 +953,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
       isFlashSale,
       isBestSeller,
       isTrending,
+      isPublished,
       needTags:
         needTags.length > 0
           ? needTags
@@ -903,7 +961,14 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
     };
 
     try {
-      await onSave(updatedProduct);
+      const res = await onSave(updatedProduct);
+      if (res === false || (typeof res === 'object' && res !== null && 'success' in res && !res.success)) {
+        const errText =
+          typeof res === 'object' && res !== null && 'error' in res && res.error
+            ? res.error
+            : 'Firebase-এ পরিবর্তন সংরক্ষণ করা যায়নি।';
+        setSaveError(errText);
+      }
     } catch (err: any) {
       setSaveError(err?.message || 'পণ্য আপডেট করতে সমস্যা হয়েছে।');
     } finally {
@@ -912,24 +977,25 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fade-in">
-      <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden my-auto border border-gray-100 flex flex-col max-h-[94vh]">
+    <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+      <div className="bg-white rounded-2xl w-full max-w-3xl shadow-xl overflow-hidden my-auto border border-[#e6e3dd] flex flex-col max-h-[94vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-slate-900 text-white shrink-0">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-xl bg-rose-600 flex items-center justify-center">
+        <div className="px-6 py-4 border-b border-[#1f2937] flex items-center justify-between bg-[#111827] text-white shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-[#881337] flex items-center justify-center">
               <Package className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h3 className="font-extrabold text-sm sm:text-base text-white">
+              <h3 className="font-bold text-sm sm:text-base text-white">
                 পণ্য সম্পাদনা (Edit Product)
               </h3>
-              <p className="text-[10px] text-gray-300 font-mono">SKU: {product.sku}</p>
+              <p className="text-[11px] text-[#9ca3af] font-mono tabular-nums">SKU: {product.sku}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-white rounded-xl hover:bg-white/10 cursor-pointer transition-colors"
+            className="p-1.5 text-[#9ca3af] hover:text-white rounded-xl hover:bg-white/10 cursor-pointer transition-colors"
+            aria-label="বন্ধ করুন"
           >
             <X className="w-5 h-5" />
           </button>
@@ -985,7 +1051,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                 onChange={e => setCategory(e.target.value)}
                 className="w-full bg-gray-50 border border-gray-200 focus:border-rose-500 focus:bg-white rounded-xl p-2.5 text-xs transition-colors cursor-pointer"
               >
-                {CATEGORIES.map(c => (
+                {storeCategories.map(c => (
                   <option key={c.id} value={c.id}>
                     {c.nameBn} ({c.name})
                   </option>
@@ -1078,8 +1144,9 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               পণ্যের ছবি পরিবর্তন (Image Upload / URL)
             </label>
             {uploadError && (
-              <p className="text-rose-600 text-[11px] font-bold bg-rose-50 p-2 rounded-xl">
-                ⚠️ {uploadError}
+              <p className="text-[#991b1b] text-xs font-medium bg-[#fef2f2] p-2.5 rounded-xl border border-[#fecaca] flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>{uploadError}</span>
               </p>
             )}
             <div className="flex flex-col sm:flex-row items-center gap-3">
@@ -1088,12 +1155,16 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                   <img
                     src={imageUrl}
                     alt="Product preview"
-                    className="w-20 h-20 object-cover rounded-2xl border border-gray-200 shadow-xs"
+                    referrerPolicy="no-referrer"
+                    className="w-20 h-20 object-cover rounded-xl border border-[#e6e3dd] bg-[#faf9f7]"
                   />
                   <button
                     type="button"
-                    onClick={() => setImageUrl('')}
-                    className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white rounded-full p-1 shadow-md hover:bg-rose-700 cursor-pointer"
+                    onClick={() => {
+                      cleanupUnusedStorageAsset(imageUrl, []).catch(() => {});
+                      setImageUrl('');
+                    }}
+                    className="absolute -top-1.5 -right-1.5 bg-[#881337] text-white rounded-full p-1 shadow-sm hover:bg-[#6d0f2c] cursor-pointer"
                     title="ছবি মুছুন"
                   >
                     <X className="w-3 h-3" />
@@ -1102,11 +1173,23 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               )}
 
               <div className="flex-1 w-full space-y-2">
-                <label className="border-2 border-dashed border-gray-300 hover:border-rose-500 hover:bg-rose-50/20 rounded-2xl p-3 flex items-center justify-center space-x-2 cursor-pointer transition-all">
-                  <Upload className="w-4 h-4 text-gray-500" />
-                  <span className="text-xs font-bold text-gray-700">
-                    {isUploading ? 'ছবি আপলোড ও অপ্টিমাইজ হচ্ছে...' : 'ডিভাইস থেকে নতুন ছবি আপলোড করুন'}
-                  </span>
+                <label className="border border-dashed border-[#d1d5db] hover:border-[#881337] hover:bg-[#faf9f7] rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-colors">
+                  <div className="flex items-center gap-2">
+                    <Upload className="w-4 h-4 text-[#6b7280]" />
+                    <span className="text-xs font-semibold text-[#374151]">
+                      {isUploading
+                        ? `ছবি আপলোড হচ্ছে (${uploadProgress ?? 0}%)...`
+                        : 'ডিভাইস থেকে নতুন ছবি আপলোড করুন'}
+                    </span>
+                  </div>
+                  {isUploading && uploadProgress !== null && (
+                    <div className="w-full max-w-xs h-1.5 bg-[#e6e3dd] rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[#881337] transition-all duration-150"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  )}
                   <input
                     type="file"
                     accept="image/*"
@@ -1116,13 +1199,13 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                   />
                 </label>
 
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center gap-2">
                   <input
                     type="text"
                     value={imageUrl}
                     onChange={e => setImageUrl(e.target.value)}
                     placeholder="অথবা সরাসরি ইমেজ লিংক (https://...)"
-                    className="w-full bg-gray-50 border border-gray-200 focus:border-rose-500 focus:bg-white rounded-xl px-3 py-1.5 text-xs font-mono"
+                    className="w-full bg-[#faf9f7] border border-[#e6e3dd] focus:border-[#881337] focus:bg-white rounded-xl px-3 py-2 text-xs font-mono focus:outline-hidden"
                   />
                 </div>
               </div>
@@ -1130,26 +1213,26 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
           </div>
 
           {/* DETAILED RICH-TEXT PRODUCT DESCRIPTION */}
-          <div className="space-y-2 pt-2 border-t border-gray-100">
+          <div className="space-y-2 pt-2 border-t border-[#f3f1ed]">
             <div className="flex items-center justify-between">
               <div>
-                <label className="font-bold text-gray-800 text-xs block">
-                  পণ্যের বিস্তারিত রিচ-টেক্সট বিবরণ (Rich-Text Description)
+                <label className="font-bold text-[#111827] text-xs block">
+                  পণ্যের বিস্তারিত রিচ-টেক্সট বিবরণ
                 </label>
-                <p className="text-[11px] text-gray-500">
+                <p className="text-xs text-[#6b7280]">
                   প্যারাগ্রাফ, হেডিং ও বুলেট পয়েন্ট সহ কাস্টমারদের জন্য সুন্দর বিবরণ
                 </p>
               </div>
 
               {/* Language Switcher Tabs */}
-              <div className="flex items-center space-x-1 bg-gray-100 p-0.5 rounded-xl border border-gray-200">
+              <div className="flex items-center gap-1 bg-[#faf9f7] p-1 rounded-xl border border-[#e6e3dd]">
                 <button
                   type="button"
                   onClick={() => setDescLangTab('bn')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
                     descLangTab === 'bn'
-                      ? 'bg-rose-600 text-white shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-[#111827] text-white'
+                      : 'text-[#6b7280] hover:text-[#111827]'
                   }`}
                 >
                   বাংলা বিবরণ
@@ -1157,10 +1240,10 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setDescLangTab('en')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
                     descLangTab === 'en'
-                      ? 'bg-rose-600 text-white shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-[#111827] text-white'
+                      : 'text-[#6b7280] hover:text-[#111827]'
                   }`}
                 >
                   English Description
@@ -1292,13 +1375,22 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               />
               <span>ট্রেন্ডিং পণ্য (Trending)</span>
             </label>
+            <label className="flex items-center space-x-2 cursor-pointer text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200">
+              <input
+                type="checkbox"
+                checked={isPublished}
+                onChange={e => setIsPublished(e.target.checked)}
+                className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+              />
+              <span>স্টোরে প্রকাশিত (Published / Live)</span>
+            </label>
           </div>
 
           {/* Occasion / Shop by Need Badges */}
-          <div className="space-y-2 pt-3 border-t border-gray-100">
+          <div className="space-y-2 pt-3 border-t border-[#f3f1ed]">
             <div className="flex items-center justify-between">
-              <label className="font-bold text-gray-800 flex items-center space-x-1.5 text-xs">
-                <span>🎯 উপলক্ষ ও প্রয়োজন নির্বাচন (আপনার কী প্রয়োজন?)</span>
+              <label className="font-bold text-[#111827] flex items-center gap-1.5 text-xs">
+                <span>উপলক্ষ ও প্রয়োজন নির্বাচন (আপনার কী প্রয়োজন?)</span>
               </label>
               <button
                 type="button"
@@ -1307,14 +1399,14 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                     detectProductOccasions({ name, nameBn, category, subcategory, description })
                   )
                 }
-                className="text-[11px] font-bold text-rose-600 hover:text-rose-700 cursor-pointer flex items-center space-x-1 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-100"
+                className="text-xs font-semibold text-[#881337] hover:text-[#6d0f2c] cursor-pointer flex items-center gap-1 bg-[#faf9f7] px-2.5 py-1 rounded-lg border border-[#e6e3dd]"
               >
-                <Sparkles className="w-3 h-3 text-amber-500" />
-                <span>⚡ স্মার্ট অটো-ডিটেক্ট</span>
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>স্মার্ট অটো-ডিটেক্ট</span>
               </button>
             </div>
-            <p className="text-[11px] text-gray-500">
-              যেসব উপলক্ষ টিক দেবেন, স্টোরফ্রন্টে "আপনার কী প্রয়োজন?" ট্যাবে পণ্যটি স্বয়ংক্রিয়ভাবে ভেসে উঠবে:
+            <p className="text-xs text-[#6b7280]">
+              যেসব উপলক্ষ টিক দেবেন, স্টোরফ্রন্টে "আপনার কী প্রয়োজন?" ট্যাবে পণ্যটি স্বয়ংক্রিয়ভাবে প্রদর্শিত হবে:
             </p>
             <div className="flex flex-wrap gap-1.5">
               {OCCASIONS_LIST.map(occ => {
@@ -1330,15 +1422,14 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                         setNeedTags([...needTags, occ.id]);
                       }
                     }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center space-x-1.5 ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer border flex items-center gap-1.5 ${
                       isSelected
-                        ? 'bg-gray-900 text-white border-gray-900 shadow-xs'
-                        : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                        ? 'bg-[#111827] text-white border-[#111827]'
+                        : 'bg-[#faf9f7] text-[#374151] border-[#e6e3dd] hover:bg-white'
                     }`}
                   >
-                    <span>{occ.icon}</span>
                     <span>{occ.titleBn}</span>
-                    {isSelected && <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />}
+                    {isSelected && <CheckCircle className="w-3.5 h-3.5 text-[#34d399]" />}
                   </button>
                 );
               })}
@@ -1346,19 +1437,19 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="pt-4 border-t border-gray-100 flex items-center justify-end space-x-3">
+          <div className="pt-4 border-t border-[#f3f1ed] flex items-center justify-end gap-3">
             <button
               type="button"
               disabled={isSaving}
               onClick={onClose}
-              className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-bold hover:bg-gray-50 cursor-pointer transition-colors"
+              className="min-h-[40px] px-4 py-2 rounded-xl border border-[#e6e3dd] text-[#374151] font-semibold hover:bg-[#faf9f7] cursor-pointer transition-colors"
             >
               বাতিল করুন
             </button>
             <button
               type="submit"
               disabled={isSaving || isUploading}
-              className="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold cursor-pointer transition-colors shadow-md shadow-rose-600/25 flex items-center space-x-2"
+              className="min-h-[40px] px-6 py-2 rounded-xl bg-[#881337] hover:bg-[#6d0f2c] disabled:opacity-50 text-white font-semibold cursor-pointer transition-colors flex items-center gap-2"
             >
               {isSaving ? (
                 <>
@@ -1398,56 +1489,59 @@ export const ProductDeleteModal: React.FC<ProductDeleteModalProps> = ({
   if (!isOpen || !product) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-gray-100 p-6 space-y-5 text-center">
-        {/* Warning Icon */}
-        <div className="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto shadow-inner">
-          <Trash2 className="w-7 h-7" />
+    <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden border border-[#e6e3dd] p-6 space-y-5 text-center">
+        <div className="w-12 h-12 rounded-xl bg-[#fef2f2] border border-[#fecaca] text-[#991b1b] flex items-center justify-center mx-auto">
+          <Trash2 className="w-6 h-6" />
         </div>
 
-        {/* Title & Warning */}
-        <div className="space-y-2">
-          <h3 className="text-lg font-black text-gray-900">
+        <div className="space-y-1.5">
+          <h3 className="text-lg font-bold text-[#111827]">
             পণ্য মুছে ফেলতে চান?
           </h3>
-          <p className="text-xs text-gray-600 leading-relaxed">
+          <p className="text-xs text-[#6b7280] leading-relaxed">
             আপনি কি নিশ্চিতভাবে এই পণ্যটি মুছে ফেলতে চান? এটি মুছে ফেললে গ্রাহক ক্যাটালগ এবং ইনভেন্টরি থেকে স্থায়ীভাবে অপসারিত হবে।
           </p>
         </div>
 
-        {/* Product Summary Card */}
-        <div className="p-3 bg-gray-50 rounded-2xl border border-gray-200 flex items-center space-x-3 text-left">
-          <img
-            src={product.images?.[0] || ''}
-            alt={product.name}
-            className="w-12 h-12 object-cover rounded-xl border border-gray-200 shrink-0"
-          />
-          <div className="min-w-0 flex-1">
-            <h4 className="font-bold text-xs text-gray-900 truncate">
+        <div className="p-3 bg-[#faf9f7] rounded-xl border border-[#e6e3dd] flex items-center gap-3 text-left">
+          {product.images?.[0] ? (
+            <img
+              src={product.images[0]}
+              alt={product.name}
+              referrerPolicy="no-referrer"
+              className="w-12 h-12 object-cover rounded-xl border border-[#e6e3dd] shrink-0 bg-white"
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-xl bg-white border border-[#e6e3dd] flex items-center justify-center text-[#9ca3af] shrink-0">
+              <Package className="w-5 h-5" />
+            </div>
+          )}
+          <div className="min-w-0 flex-1 tabular-nums">
+            <h4 className="font-bold text-xs text-[#111827] truncate">
               {product.nameBn || product.name}
             </h4>
-            <p className="text-[10px] text-gray-500 font-mono">
-              SKU: {product.sku} • স্টক: {product.stock} pcs
+            <p className="text-[11px] text-[#6b7280] font-mono">
+              SKU: {product.sku} · স্টক: {product.stock} পিস
             </p>
-            <p className="text-xs font-black text-rose-600">
+            <p className="text-xs font-bold text-[#881337]">
               ৳{product.price}
             </p>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center space-x-3 pt-2">
+        <div className="flex items-center gap-3 pt-1">
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-bold hover:bg-gray-50 cursor-pointer transition-colors text-xs"
+            className="flex-1 min-h-[40px] py-2 rounded-xl border border-[#e6e3dd] text-[#374151] font-semibold hover:bg-[#faf9f7] cursor-pointer transition-colors text-xs"
           >
             বাতিল করুন
           </button>
           <button
             type="button"
             onClick={() => onConfirm(product.id)}
-            className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer transition-colors shadow-md shadow-rose-600/25 text-xs flex items-center justify-center space-x-1.5"
+            className="flex-1 min-h-[40px] py-2 rounded-xl bg-[#991b1b] hover:bg-[#7f1d1d] text-white font-semibold cursor-pointer transition-colors text-xs flex items-center justify-center gap-1.5"
           >
             <Trash2 className="w-4 h-4" />
             <span>হ্যাঁ, মুছে ফেলুন</span>
@@ -1477,64 +1571,67 @@ export const BulkProductDeleteModal: React.FC<BulkProductDeleteModalProps> = ({
   if (!isOpen || products.length === 0) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border border-gray-100 p-6 space-y-5 text-center">
-        {/* Warning Icon */}
-        <div className="w-16 h-16 rounded-3xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto shadow-inner">
-          <Trash2 className="w-8 h-8" />
+    <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl overflow-hidden border border-[#e6e3dd] p-6 space-y-5 text-center">
+        <div className="w-12 h-12 rounded-xl bg-[#fef2f2] border border-[#fecaca] text-[#991b1b] flex items-center justify-center mx-auto">
+          <Trash2 className="w-6 h-6" />
         </div>
 
-        {/* Title & Warning */}
         <div className="space-y-1.5">
-          <div className="inline-block bg-rose-50 text-rose-700 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider mb-1">
-            বাল্ক ডিলিট সতর্কতা (Bulk Action)
-          </div>
-          <h3 className="text-xl font-black text-gray-900">
+          <span className="text-xs font-semibold text-[#991b1b] block">
+            বাল্ক ডিলিট সতর্কতা
+          </span>
+          <h3 className="text-lg font-bold text-[#111827] tabular-nums">
             {products.length}টি পণ্য একসাথে মুছে ফেলতে চান?
           </h3>
-          <p className="text-xs text-gray-600 leading-relaxed max-w-md mx-auto">
+          <p className="text-xs text-[#6b7280] leading-relaxed max-w-md mx-auto">
             নির্বাচিত <strong>{products.length}টি পণ্য</strong> স্থায়ীভাবে দোকান ও ইনভেন্টরি ক্যাটালগ থেকে মুছে যাবে। এই কাজটি আর ফিরিয়ে আনা যাবে না।
           </p>
         </div>
 
-        {/* Scrollable Products List */}
-        <div className="max-h-60 overflow-y-auto space-y-2 p-3 bg-gray-50 rounded-2xl border border-gray-200 text-left">
+        <div className="max-h-60 overflow-y-auto space-y-2 p-3 bg-[#faf9f7] rounded-xl border border-[#e6e3dd] text-left">
           {products.map(p => (
-            <div key={p.id} className="p-2 bg-white rounded-xl border border-gray-200 flex items-center space-x-3 text-xs">
-              <img
-                src={p.images?.[0] || ''}
-                alt={p.name}
-                className="w-10 h-10 object-cover rounded-lg border border-gray-100 shrink-0"
-              />
+            <div key={p.id} className="p-2 bg-white rounded-xl border border-[#e6e3dd] flex items-center gap-3 text-xs">
+              {p.images?.[0] ? (
+                <img
+                  src={p.images[0]}
+                  alt={p.name}
+                  referrerPolicy="no-referrer"
+                  className="w-10 h-10 object-cover rounded-lg border border-[#e6e3dd] shrink-0 bg-[#faf9f7]"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-lg bg-[#faf9f7] border border-[#e6e3dd] flex items-center justify-center text-[#9ca3af] shrink-0">
+                  <Package className="w-4 h-4" />
+                </div>
+              )}
               <div className="min-w-0 flex-1">
-                <h4 className="font-bold text-gray-900 truncate">
+                <h4 className="font-semibold text-[#111827] truncate">
                   {p.nameBn || p.name}
                 </h4>
-                <div className="flex items-center space-x-2 text-[10px] text-gray-500 font-mono mt-0.5">
+                <div className="flex items-center gap-2 text-[11px] text-[#6b7280] font-mono mt-0.5 tabular-nums">
                   <span>SKU: {p.sku}</span>
-                  <span>•</span>
-                  <span>স্টক: {p.stock} pcs</span>
-                  <span>•</span>
-                  <span className="font-bold text-rose-600">৳{p.price}</span>
+                  <span>·</span>
+                  <span>স্টক: {p.stock} পিস</span>
+                  <span>·</span>
+                  <span className="font-bold text-[#881337]">৳{p.price}</span>
                 </div>
               </div>
             </div>
           ))}
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center space-x-3 pt-2">
+        <div className="flex items-center gap-3 pt-1">
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-700 font-bold hover:bg-gray-100 cursor-pointer transition-colors text-xs"
+            className="flex-1 min-h-[40px] py-2.5 rounded-xl border border-[#e6e3dd] text-[#374151] font-semibold hover:bg-[#faf9f7] cursor-pointer transition-colors text-xs"
           >
             বাতিল করুন
           </button>
           <button
             type="button"
             onClick={() => onConfirm(products.map(p => p.id))}
-            className="flex-1 py-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer transition-colors shadow-lg shadow-rose-600/30 text-xs flex items-center justify-center space-x-2"
+            className="flex-1 min-h-[40px] py-2.5 rounded-xl bg-[#991b1b] hover:bg-[#7f1d1d] text-white font-semibold cursor-pointer transition-colors text-xs flex items-center justify-center gap-2 tabular-nums"
           >
             <Trash2 className="w-4 h-4" />
             <span>হ্যাঁ, {products.length}টি পণ্য মুছে ফেলুন</span>
@@ -1552,7 +1649,11 @@ interface BulkProductEditModalProps {
   products: Product[];
   isOpen: boolean;
   onClose: () => void;
-  onSave: (productIds: string[], updates: Partial<Product>) => void;
+  onSave: (
+    productIds: string[],
+    updates: Partial<Product>,
+    perProductUpdates?: Record<string, Partial<Product>>
+  ) => Promise<{ success: boolean; error?: string } | void> | void;
 }
 
 export const BulkProductEditModal: React.FC<BulkProductEditModalProps> = ({
@@ -1561,6 +1662,8 @@ export const BulkProductEditModal: React.FC<BulkProductEditModalProps> = ({
   onClose,
   onSave,
 }) => {
+  const { categories: storeCategories } = useShop();
+
   // Field activation toggles
   const [updateCategory, setUpdateCategory] = useState(false);
   const [targetCategory, setTargetCategory] = useState('men-fashion');
@@ -1582,10 +1685,14 @@ export const BulkProductEditModal: React.FC<BulkProductEditModalProps> = ({
   const [isTrending, setIsTrending] = useState<boolean | null>(null);
   const [isNewArrival, setIsNewArrival] = useState<boolean | null>(null);
   const [isBestSeller, setIsBestSeller] = useState<boolean | null>(null);
+  const [isPublishedFlag, setIsPublishedFlag] = useState<boolean | null>(null);
+
+  const [isApplying, setIsApplying] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
 
   if (!isOpen || products.length === 0) return null;
 
-  const currentCatObj = CATEGORIES.find(c => c.id === targetCategory);
+  const currentCatObj = storeCategories.find(c => c.id === targetCategory);
 
   const handleToggleOccasion = (tag: NeedTag) => {
     setSelectedOccasions(prev =>
@@ -1593,10 +1700,11 @@ export const BulkProductEditModal: React.FC<BulkProductEditModalProps> = ({
     );
   };
 
-  const handleApply = (e: React.FormEvent) => {
+  const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
+    setBulkError(null);
+    setIsApplying(true);
 
-    // Collect updates
     const updates: Partial<Product> = {};
 
     if (updateCategory) {
@@ -1611,9 +1719,10 @@ export const BulkProductEditModal: React.FC<BulkProductEditModalProps> = ({
       if (isTrending !== null) updates.isTrending = isTrending;
       if (isNewArrival !== null) updates.isNewArrival = isNewArrival;
       if (isBestSeller !== null) updates.isBestSeller = isBestSeller;
+      if (isPublishedFlag !== null) updates.isPublished = isPublishedFlag;
     }
 
-    // Apply per-product custom logic in onSave
+    const perProductMap: Record<string, Partial<Product>> = {};
     products.forEach(p => {
       const singleUpdate: Partial<Product> = { ...updates };
 
@@ -1651,31 +1760,41 @@ export const BulkProductEditModal: React.FC<BulkProductEditModalProps> = ({
         }
       }
 
-      onSave([p.id], singleUpdate);
+      perProductMap[p.id] = singleUpdate;
     });
 
-    onClose();
+    try {
+      const res = await onSave(
+        products.map(p => p.id),
+        updates,
+        perProductMap
+      );
+      if (res && typeof res === 'object' && 'success' in res && !res.success) {
+        setBulkError(res.error || 'বাল্ক আপডেট Firebase-এ সংরক্ষণ করা যায়নি।');
+      } else {
+        onClose();
+      }
+    } catch (err: any) {
+      setBulkError(err?.message || 'বাল্ক আপডেট সম্পন্ন করা যায়নি।');
+    } finally {
+      setIsApplying(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fade-in">
-      <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden my-auto border border-gray-100 flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+      <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl overflow-hidden my-auto border border-[#e6e3dd] flex flex-col max-h-[92vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-blue-50/70 to-indigo-50/70">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
-              <Sliders className="w-5 h-5" />
+        <div className="px-6 py-4 border-b border-[#1f2937] flex items-center justify-between bg-[#111827] text-white shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[#881337] text-white flex items-center justify-center">
+              <Sliders className="w-4 h-4" />
             </div>
             <div>
-              <div className="flex items-center space-x-2">
-                <h3 className="font-extrabold text-base text-gray-900">
-                  বাল্ক প্রোডাক্ট এডিটর (Bulk Product Editor)
-                </h3>
-                <span className="font-mono text-xs bg-blue-100 text-blue-800 font-black px-2.5 py-0.5 rounded-full">
-                  {products.length}টি পণ্য নির্বাচিত
-                </span>
-              </div>
-              <p className="text-xs text-gray-500">
+              <h3 className="font-bold text-base text-white tabular-nums">
+                বাল্ক প্রোডাক্ট এডিটর · {products.length}টি পণ্য নির্বাচিত
+              </h3>
+              <p className="text-xs text-[#d1d5db]">
                 একসাথে একাধিক পণ্যের মূল্য, স্টক, ক্যাটাগরি, উপলক্ষ ও ব্যাজ পরিবর্তন করুন
               </p>
             </div>
@@ -1683,7 +1802,8 @@ export const BulkProductEditModal: React.FC<BulkProductEditModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+            className="p-1.5 text-[#9ca3af] hover:text-white rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+            aria-label="বন্ধ করুন"
           >
             <X className="w-5 h-5" />
           </button>
@@ -1818,7 +1938,7 @@ export const BulkProductEditModal: React.FC<BulkProductEditModalProps> = ({
                     onChange={e => setTargetCategory(e.target.value)}
                     className="w-full bg-white border border-gray-200 rounded-xl p-2.5 text-xs font-bold"
                   >
-                    {CATEGORIES.map(c => (
+                    {storeCategories.map(c => (
                       <option key={c.id} value={c.id}>
                         {c.icon} {c.nameBn} ({c.name})
                       </option>
@@ -1988,26 +2108,53 @@ export const BulkProductEditModal: React.FC<BulkProductEditModalProps> = ({
                     </button>
                   </div>
                 </div>
+                <div className="p-2.5 bg-white rounded-xl border border-gray-200 space-y-1 sm:col-span-3">
+                  <span className="font-bold text-gray-800 block text-xs">স্টোর ভিজিবিলিটি (Publish Status):</span>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsPublishedFlag(isPublishedFlag === true ? null : true)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold cursor-pointer ${isPublishedFlag === true ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600'}`}
+                    >
+                      প্রকাশিত (Published)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsPublishedFlag(isPublishedFlag === false ? null : false)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold cursor-pointer ${isPublishedFlag === false ? 'bg-slate-700 text-white' : 'bg-gray-100 text-gray-600'}`}
+                    >
+                      লুকানো (Hidden / Draft)
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
 
+          {bulkError && (
+            <div className="p-3 bg-[#fef2f2] border border-[#fecaca] rounded-xl text-xs text-[#991b1b] font-semibold flex items-center gap-1.5">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{bulkError}</span>
+            </div>
+          )}
+
           {/* Bottom Action Buttons */}
-          <div className="flex items-center justify-end space-x-3 pt-3 border-t border-gray-100">
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#f3f1ed]">
             <button
               type="button"
+              disabled={isApplying}
               onClick={onClose}
-              className="py-2.5 px-4 rounded-xl border border-gray-200 text-gray-700 font-bold hover:bg-gray-50 cursor-pointer transition-colors text-xs"
+              className="min-h-[40px] py-2 px-4 rounded-xl border border-[#e6e3dd] text-[#374151] font-semibold hover:bg-[#faf9f7] cursor-pointer transition-colors text-xs"
             >
               বাতিল
             </button>
             <button
               type="submit"
-              disabled={!updatePrice && !updateStock && !updateCategory && !updateOccasions && !updateBadges}
-              className="py-2.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold cursor-pointer transition-colors shadow-lg shadow-blue-600/25 text-xs flex items-center space-x-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+              disabled={isApplying || (!updatePrice && !updateStock && !updateCategory && !updateOccasions && !updateBadges)}
+              className="min-h-[40px] py-2 px-6 rounded-xl bg-[#881337] hover:bg-[#6d0f2c] text-white font-semibold cursor-pointer transition-colors text-xs flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed tabular-nums"
             >
               <Save className="w-4 h-4" />
-              <span>{products.length}টি পণ্যে পরিবর্তন প্রয়োগ করুন (Apply Changes)</span>
+              <span>{isApplying ? 'সংরক্ষণ হচ্ছে...' : `${products.length}টি পণ্যে পরিবর্তন প্রয়োগ করুন`}</span>
             </button>
           </div>
         </form>

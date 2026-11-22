@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useShop } from '../../context/ShopContext';
 import { Category } from '../../types';
-import { uploadCategoryIcon } from '../../lib/firebase';
+import { uploadCategoryIcon, uploadHeroBannerImage, cleanupUnusedStorageAsset } from '../../lib/firebase';
 
 const PRESET_EMOJIS = ['👨', '👩', '📱', '💍', '👟', '👜', '🕶️', '🏠', '💄', '🎁', '⚡', '👕', '👗', '🎮', '🎧', '⌚', '🧸', '📚'];
 
@@ -37,6 +37,8 @@ export const CategoryManager: React.FC = () => {
   const [catSubcategoriesBn, setCatSubcategoriesBn] = useState('');
   const [catBannerImage, setCatBannerImage] = useState('');
   const [isUploadingIcon, setIsUploadingIcon] = useState(false);
+  const [bannerUploadProgress, setBannerUploadProgress] = useState<number | null>(null);
+  const [isSavingCat, setIsSavingCat] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -78,21 +80,33 @@ export const CategoryManager: React.FC = () => {
 
     setIsUploadingIcon(true);
     try {
-      const res = await uploadCategoryIcon(file, editingCategory?.id || 'new');
+      const res = await uploadCategoryIcon(file, (isQuickUpload ? quickUploadTargetId : editingCategory?.id) || 'new');
       if (isQuickUpload && quickUploadTargetId) {
         const target = categories.find(c => c.id === quickUploadTargetId);
         if (target) {
-          updateCategory({ ...target, icon: res.downloadUrl });
-          setStatusMessage({
-            type: 'success',
-            text: `"${target.name}" ক্যাটাগরি আইকন সফলভাবে আপলোড ও আপডেট হয়েছে!`,
-          });
+          const prevIcon = target.icon;
+          const saveRes = await updateCategory({ ...target, icon: res.downloadUrl });
+          if (saveRes.success) {
+            cleanupUnusedStorageAsset(prevIcon, [res.downloadUrl]).catch(() => {});
+            setStatusMessage({
+              type: 'success',
+              text: `"${target.name}" ক্যাটাগরি আইকন সফলভাবে আপলোড ও আপডেট হয়েছে!`,
+            });
+          } else {
+            setStatusMessage({
+              type: 'error',
+              text: saveRes.error || 'ক্যাটাগরি আইকন সেভ করা যায়নি।',
+            });
+          }
         }
       } else {
+        if (catIcon && catIcon !== res.downloadUrl) {
+          cleanupUnusedStorageAsset(catIcon, [res.downloadUrl]).catch(() => {});
+        }
         setCatIcon(res.downloadUrl);
         setStatusMessage({
           type: 'success',
-          text: `আইকন ইমেজ সফলভাবে তৈরি হয়েছে! (${file.name})`,
+          text: `আইকন ইমেজ সফলভাবে আপলোড হয়েছে! (${file.name})`,
         });
       }
     } catch (err) {
@@ -107,7 +121,7 @@ export const CategoryManager: React.FC = () => {
     }
   };
 
-  const handleSaveForm = (e: React.FormEvent) => {
+  const handleSaveForm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!catName.trim() || !catNameBn.trim()) {
       setStatusMessage({ type: 'error', text: 'দয়া করে ইংরেজি ও বাংলা ক্যাটাগরি নাম লিখুন।' });
@@ -124,42 +138,67 @@ export const CategoryManager: React.FC = () => {
       .map(s => s.trim())
       .filter(Boolean);
 
-    if (editingCategory) {
-      const updated: Category = {
-        ...editingCategory,
-        name: catName.trim(),
-        nameBn: catNameBn.trim(),
-        icon: catIcon,
-        subcategories: subList.length > 0 ? subList : editingCategory.subcategories,
-        subcategoriesBn: subListBn.length > 0 ? subListBn : (editingCategory.subcategoriesBn || subList),
-        bannerImage: catBannerImage || editingCategory.bannerImage,
-      };
-      updateCategory(updated);
-      setStatusMessage({ type: 'success', text: `"${updated.name}" ক্যাটাগরি সফলভাবে আপডেট করা হয়েছে!` });
-      setShowAddModal(false);
-    } else {
-      const slug = catName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `cat-${Date.now()}`;
-      const newCat: Category = {
-        id: slug,
-        name: catName.trim(),
-        nameBn: catNameBn.trim(),
-        icon: catIcon || '🛍️',
-        subcategories: subList.length > 0 ? subList : ['General'],
-        subcategoriesBn: subListBn.length > 0 ? subListBn : ['সাধারণ'],
-        bannerImage: catBannerImage || 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=1200&q=80',
-      };
-      addCategory(newCat);
-      setStatusMessage({ type: 'success', text: `নতুন ক্যাটাগরি "${newCat.name}" সফলভাবে যুক্ত হয়েছে!` });
-      setShowAddModal(false);
+    setIsSavingCat(true);
+    try {
+      if (editingCategory) {
+        const updated: Category = {
+          ...editingCategory,
+          name: catName.trim(),
+          nameBn: catNameBn.trim(),
+          icon: catIcon,
+          subcategories: subList.length > 0 ? subList : editingCategory.subcategories,
+          subcategoriesBn: subListBn.length > 0 ? subListBn : (editingCategory.subcategoriesBn || subList),
+          bannerImage: catBannerImage || editingCategory.bannerImage,
+        };
+        const res = await updateCategory(updated);
+        if (res.success) {
+          setStatusMessage({ type: 'success', text: `"${updated.name}" ক্যাটাগরি সফলভাবে আপডেট করা হয়েছে!` });
+          setShowAddModal(false);
+        } else {
+          setStatusMessage({ type: 'error', text: res.error || 'ক্যাটাগরি আপডেট ব্যর্থ হয়েছে।' });
+        }
+      } else {
+        const slug = catName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `cat-${Date.now()}`;
+        const newCat: Category = {
+          id: slug,
+          name: catName.trim(),
+          nameBn: catNameBn.trim(),
+          icon: catIcon || '🛍️',
+          subcategories: subList.length > 0 ? subList : ['General'],
+          subcategoriesBn: subListBn.length > 0 ? subListBn : ['সাধারণ'],
+          bannerImage: catBannerImage || '',
+        };
+        const res = await addCategory(newCat);
+        if (res.success) {
+          setStatusMessage({ type: 'success', text: `নতুন ক্যাটাগরি "${newCat.name}" সফলভাবে যুক্ত হয়েছে!` });
+          setShowAddModal(false);
+        } else {
+          setStatusMessage({ type: 'error', text: res.error || 'নতুন ক্যাটাগরি সেভ ব্যর্থ হয়েছে।' });
+        }
+      }
+    } finally {
+      setIsSavingCat(false);
     }
   };
 
-  const handleDeleteConfirm = (id: string) => {
+  const handleDeleteConfirm = async (id: string) => {
     const cat = categories.find(c => c.id === id);
     if (!cat) return;
-    deleteCategory(id);
-    setDeletingCatId(null);
-    setStatusMessage({ type: 'success', text: `ক্যাটাগরি "${cat.name}" মুছে ফেলা হয়েছে।` });
+    setIsSavingCat(true);
+    try {
+      const res = await deleteCategory(id);
+      if (res.success) {
+        cleanupUnusedStorageAsset(cat.icon, []).catch(() => {});
+        cleanupUnusedStorageAsset(cat.bannerImage, []).catch(() => {});
+        setDeletingCatId(null);
+        setStatusMessage({ type: 'success', text: `ক্যাটাগরি "${cat.name}" মুছে ফেলা হয়েছে।` });
+      } else {
+        setDeletingCatId(null);
+        setStatusMessage({ type: 'error', text: res.error || 'ক্যাটাগরি ডিলিট ব্যর্থ হয়েছে।' });
+      }
+    } finally {
+      setIsSavingCat(false);
+    }
   };
 
   const filteredCategories = categories.filter(c =>
@@ -180,15 +219,15 @@ export const CategoryManager: React.FC = () => {
       />
 
       {/* Header & Controls */}
-      <div className="bg-white rounded-3xl p-6 border border-gray-200 shadow-xs space-y-4">
+      <div className="bg-white rounded-2xl p-6 border border-[#e6e3dd] space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <div className="flex items-center space-x-2">
-              <span className="p-2 bg-rose-50 text-rose-600 rounded-xl">
+            <div className="flex items-center space-x-2.5">
+              <span className="p-2 bg-[#faf9f7] border border-[#e6e3dd] text-[#111827] rounded-xl">
                 <Layers className="w-5 h-5" />
               </span>
               <div>
-                <h3 className="font-extrabold text-base text-gray-900">
+                <h3 className="font-bold text-base text-[#111827]">
                   {t('ক্যাটাগরি ও আইকন ম্যানেজমেন্ট', 'Category & Icon Management')}
                 </h3>
                 <p className="text-gray-500 text-xs">
@@ -206,14 +245,14 @@ export const CategoryManager: React.FC = () => {
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="ক্যাটাগরি খুঁজুন..."
-                className="bg-gray-50 border border-gray-200 rounded-xl pl-8 pr-3 py-1.5 text-xs w-48 focus:bg-white focus:border-rose-500 transition-colors"
+                className="bg-[#faf9f7] border border-[#e6e3dd] rounded-xl pl-8 pr-3 py-2 text-xs w-48 focus:bg-white focus:border-[#881337] focus:outline-hidden transition-colors min-h-[38px]"
               />
             </div>
 
             {hasPermission('categories', 'create') && (
               <button
                 onClick={handleOpenAdd}
-                className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl flex items-center space-x-1.5 cursor-pointer shadow-md shadow-rose-600/20 transition-all text-xs"
+                className="bg-[#881337] hover:bg-[#6d0f2c] text-white font-semibold px-4 py-2 rounded-xl flex items-center space-x-1.5 cursor-pointer transition-colors text-xs min-h-[38px]"
               >
                 <Plus className="w-4 h-4" />
                 <span>{t('নতুন ক্যাটাগরি', 'Add Category')}</span>
@@ -224,34 +263,35 @@ export const CategoryManager: React.FC = () => {
 
         {/* Manager Read-only Banner */}
         {currentRole === 'MANAGER' && (
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl text-xs text-blue-900 flex items-center space-x-2">
-            <Layers className="w-4 h-4 text-blue-600 shrink-0" />
-            <span><strong>📋 ম্যানেজার মোড (রিড-অনলি):</strong> ওয়্যারহাউজ স্টক ও পণ্য শ্রেণিবিন্যাস দেখতে পারবেন। নতুন ক্যাটাগরি তৈরি, এডিট বা ডিলিট করার অনুমতি নেই।</span>
+          <div className="p-3.5 bg-[#faf9f7] border border-[#e6e3dd] rounded-xl text-xs text-gray-700 flex items-center space-x-2">
+            <Layers className="w-4 h-4 text-[#111827] shrink-0" />
+            <span><strong className="text-[#111827]">ম্যানেজার মোড (রিড-অনলি):</strong> ওয়্যারহাউজ স্টক ও পণ্য শ্রেণিবিন্যাস দেখতে পারবেন। নতুন ক্যাটাগরি তৈরি, এডিট বা ডিলিট করার অনুমতি নেই।</span>
           </div>
         )}
 
         {/* Status notification */}
         {statusMessage && (
           <div
-            className={`p-3.5 rounded-2xl border text-xs flex items-center justify-between shadow-xs ${
+            className={`p-3.5 rounded-xl border text-xs flex items-center justify-between ${
               statusMessage.type === 'success'
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-800 font-bold'
-                : 'bg-rose-50 border-rose-200 text-rose-800 font-bold'
+                ? 'bg-[#f0fdf4] border-[#bbf7d0] text-[#15803d] font-semibold'
+                : 'bg-[#fef2f2] border-[#fecaca] text-[#991b1b] font-semibold'
             }`}
           >
             <div className="flex items-center space-x-2">
               {statusMessage.type === 'success' ? (
-                <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                <Check className="w-4 h-4 text-[#15803d] shrink-0" />
               ) : (
-                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <AlertCircle className="w-4 h-4 text-[#b91c1c] shrink-0" />
               )}
               <span>{statusMessage.text}</span>
             </div>
             <button
               onClick={() => setStatusMessage(null)}
-              className="text-gray-400 hover:text-gray-700 cursor-pointer font-bold px-1"
+              className="text-gray-500 hover:text-[#111827] cursor-pointer p-1"
+              aria-label="বন্ধ করুন"
             >
-              ✕
+              <X className="w-4 h-4" />
             </button>
           </div>
         )}
@@ -265,7 +305,7 @@ export const CategoryManager: React.FC = () => {
             return (
               <div
                 key={c.id}
-                className="p-4 bg-gray-50/80 hover:bg-white rounded-2xl border border-gray-200 hover:border-rose-200 hover:shadow-md transition-all space-y-3 flex flex-col justify-between group"
+                className="p-4 bg-[#faf9f7] hover:bg-white rounded-2xl border border-[#e6e3dd] hover:border-[#111827]/30 transition-colors space-y-3 flex flex-col justify-between group"
               >
                 <div>
                   {/* Category Top Row: Icon + Name */}
@@ -277,29 +317,29 @@ export const CategoryManager: React.FC = () => {
                           setQuickUploadTargetId(c.id);
                           quickIconUploadRef.current?.click();
                         }}
-                        className="w-12 h-12 rounded-2xl bg-white border border-gray-200 shadow-2xs flex items-center justify-center shrink-0 overflow-hidden cursor-pointer hover:border-rose-500 hover:shadow-xs transition-all relative group/icon"
+                        className="w-12 h-12 rounded-xl bg-white border border-[#e6e3dd] flex items-center justify-center shrink-0 overflow-hidden cursor-pointer hover:border-[#881337] transition-colors relative group/icon"
                         title="আইকন পরিবর্তন করতে ক্লিক করুন"
                       >
                         {hasImage ? (
-                          <img src={c.icon} alt={c.name} className="w-8 h-8 object-contain" />
+                          <img src={c.icon} alt={c.name} referrerPolicy="no-referrer" className="w-8 h-8 object-contain" />
                         ) : (
                           <span className="text-2xl">{c.icon || '🛍️'}</span>
                         )}
-                        <div className="absolute inset-0 bg-black/40 text-white opacity-0 group-hover/icon:opacity-100 flex items-center justify-center rounded-2xl transition-opacity">
+                        <div className="absolute inset-0 bg-black/40 text-white opacity-0 group-hover/icon:opacity-100 flex items-center justify-center rounded-xl transition-opacity">
                           <Upload className="w-3.5 h-3.5" />
                         </div>
                       </div>
 
                       <div className="min-w-0">
                         <div className="flex items-center space-x-1.5">
-                          <span className="font-extrabold text-sm text-gray-900 truncate">{c.name}</span>
-                          <span className="text-gray-400 text-[10px]">({c.nameBn})</span>
+                          <span className="font-bold text-sm text-[#111827] truncate">{c.name}</span>
+                          <span className="text-gray-500 text-[10px]">({c.nameBn})</span>
                         </div>
-                        <div className="flex items-center space-x-2 text-[10px] text-gray-500 mt-0.5">
-                          <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-gray-200 font-bold">
+                        <div className="flex items-center space-x-2 text-[10px] text-gray-500 mt-0.5 tabular-nums">
+                          <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-[#e6e3dd] font-semibold">
                             {c.id}
                           </span>
-                          <span className="flex items-center space-x-1 font-semibold text-rose-600">
+                          <span className="flex items-center space-x-1 font-semibold text-[#881337]">
                             <Package className="w-3 h-3" />
                             <span>{productCount} টি পণ্য</span>
                           </span>
@@ -312,7 +352,7 @@ export const CategoryManager: React.FC = () => {
                       {hasPermission('categories', 'edit') && (
                         <button
                           onClick={() => handleOpenEdit(c)}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg cursor-pointer transition-colors"
+                          className="p-1.5 text-gray-500 hover:text-[#111827] hover:bg-white rounded-lg cursor-pointer transition-colors"
                           title="ক্যাটাগরি ইডিট করুন"
                         >
                           <Edit className="w-4 h-4" />
@@ -322,7 +362,7 @@ export const CategoryManager: React.FC = () => {
                       {hasPermission('categories', 'delete') && (
                         <button
                           onClick={() => setDeletingCatId(c.id)}
-                          className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
+                          className="p-1.5 text-gray-500 hover:text-[#b91c1c] hover:bg-[#fef2f2] rounded-lg cursor-pointer transition-colors"
                           title="ক্যাটাগরি ডিলিট করুন"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -336,13 +376,13 @@ export const CategoryManager: React.FC = () => {
                     {c.subcategories.slice(0, 5).map(sub => (
                       <span
                         key={sub}
-                        className="bg-white border border-gray-200 px-2 py-0.5 rounded-lg text-[10px] font-semibold text-gray-600"
+                        className="bg-white border border-[#e6e3dd] px-2 py-0.5 rounded-lg text-[10px] font-medium text-gray-700"
                       >
                         {sub}
                       </span>
                     ))}
                     {c.subcategories.length > 5 && (
-                      <span className="text-[10px] text-gray-400 px-1 py-0.5 font-bold">
+                      <span className="text-[10px] text-gray-500 px-1 py-0.5 font-semibold tabular-nums">
                         +{c.subcategories.length - 5} আরও
                       </span>
                     )}
@@ -350,14 +390,14 @@ export const CategoryManager: React.FC = () => {
                 </div>
 
                 {/* Card footer: Quick Icon Upload Action */}
-                <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-[10px] text-gray-500">
+                <div className="pt-2 border-t border-[#e6e3dd] flex items-center justify-between text-[10px] text-gray-500">
                   {hasPermission('categories', 'edit') ? (
                     <button
                       onClick={() => {
                         setQuickUploadTargetId(c.id);
                         quickIconUploadRef.current?.click();
                       }}
-                      className="text-rose-600 hover:text-rose-700 font-bold flex items-center space-x-1 cursor-pointer"
+                      className="text-[#881337] hover:text-[#6d0f2c] font-semibold flex items-center space-x-1 cursor-pointer"
                     >
                       <Upload className="w-3 h-3" />
                       <span>আইকন আপলোড / পরিবর্তন</span>
@@ -366,7 +406,7 @@ export const CategoryManager: React.FC = () => {
                     <span className="text-gray-400">ক্যাটাগরি ব্যাজ</span>
                   )}
 
-                  <span className="text-gray-400">
+                  <span className="text-gray-500">
                     {hasImage ? 'কাস্টম ইমেজ' : 'ইমোজি আইকন'}
                   </span>
                 </div>
@@ -378,21 +418,21 @@ export const CategoryManager: React.FC = () => {
 
       {/* Add / Edit Category Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 space-y-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-[#e6e3dd] space-y-4">
             {/* Modal Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+            <div className="flex items-center justify-between pb-3 border-b border-[#e6e3dd]">
               <div className="flex items-center space-x-2">
-                <span className="p-2 bg-rose-50 text-rose-600 rounded-xl">
+                <span className="p-2 bg-[#faf9f7] border border-[#e6e3dd] text-[#111827] rounded-xl">
                   {editingCategory ? <Edit className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                 </span>
-                <h4 className="font-extrabold text-base text-gray-900">
+                <h4 className="font-bold text-base text-[#111827]">
                   {editingCategory ? `ক্যাটাগরি ইডিট: ${editingCategory.name}` : 'নতুন ক্যাটাগরি যুক্ত করুন'}
                 </h4>
               </div>
               <button
                 onClick={() => setShowAddModal(false)}
-                className="text-gray-400 hover:text-gray-700 cursor-pointer p-1 rounded-lg hover:bg-gray-100"
+                className="text-gray-500 hover:text-[#111827] cursor-pointer p-1.5 rounded-lg hover:bg-[#faf9f7]"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -441,9 +481,9 @@ export const CategoryManager: React.FC = () => {
 
                 <div className="flex items-center space-x-3">
                   {/* Current Icon Preview */}
-                  <div className="w-14 h-14 rounded-2xl bg-white border-2 border-dashed border-gray-300 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                  <div className="w-14 h-14 rounded-xl bg-white border-2 border-dashed border-[#e6e3dd] flex items-center justify-center shrink-0 overflow-hidden">
                     {isImageIcon(catIcon) ? (
-                      <img src={catIcon} alt="Icon Preview" className="w-9 h-9 object-contain" />
+                      <img src={catIcon} alt="Icon Preview" referrerPolicy="no-referrer" className="w-9 h-9 object-contain" />
                     ) : (
                       <span className="text-3xl">{catIcon || '🛍️'}</span>
                     )}
@@ -464,9 +504,9 @@ export const CategoryManager: React.FC = () => {
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isUploadingIcon}
-                        className="bg-white hover:bg-gray-100 border border-gray-300 text-gray-800 font-bold px-3 py-1.5 rounded-xl flex items-center space-x-1.5 cursor-pointer text-[11px]"
+                        className="bg-white hover:bg-[#faf9f7] border border-[#e6e3dd] text-[#111827] font-semibold px-3 py-1.5 rounded-xl flex items-center space-x-1.5 cursor-pointer text-[11px] min-h-[34px]"
                       >
-                        <Upload className="w-3.5 h-3.5 text-rose-600" />
+                        <Upload className="w-3.5 h-3.5 text-[#881337]" />
                         <span>{isUploadingIcon ? 'আপলোড হচ্ছে...' : 'কাস্টম আইকন ইমেজ আপলোড (PNG/SVG)'}</span>
                       </button>
 
@@ -474,7 +514,7 @@ export const CategoryManager: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setCatIcon('🛍️')}
-                          className="text-rose-600 text-[10px] font-bold hover:underline cursor-pointer"
+                          className="text-[#b91c1c] text-[10px] font-semibold hover:underline cursor-pointer"
                         >
                           রিমুভ আইকন
                         </button>
@@ -487,22 +527,22 @@ export const CategoryManager: React.FC = () => {
                       value={catIcon}
                       onChange={e => setCatIcon(e.target.value)}
                       placeholder="ইমোজি (👨) অথবা ইমেজ লিংক পেস্ট করুন"
-                      className="w-full bg-white border border-gray-200 rounded-xl p-2 text-xs font-mono"
+                      className="w-full bg-white border border-[#e6e3dd] rounded-xl p-2 text-xs font-mono"
                     />
                   </div>
                 </div>
 
                 {/* Preset Emoji Picker */}
                 <div>
-                  <span className="text-[10px] font-bold text-gray-500 block mb-1">কুইক ইমোজি সিলেক্টর:</span>
+                  <span className="text-[10px] font-semibold text-gray-500 block mb-1">কুইক ইমোজি সিলেক্টর:</span>
                   <div className="flex flex-wrap gap-1.5">
                     {PRESET_EMOJIS.map(em => (
                       <button
                         key={em}
                         type="button"
                         onClick={() => setCatIcon(em)}
-                        className={`w-7 h-7 rounded-lg flex items-center justify-center text-base hover:bg-rose-100 cursor-pointer transition-colors ${
-                          catIcon === em ? 'bg-rose-500 text-white' : 'bg-white border border-gray-200'
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center text-base hover:bg-[#faf9f7] cursor-pointer transition-colors ${
+                          catIcon === em ? 'bg-[#111827] text-white' : 'bg-white border border-[#e6e3dd]'
                         }`}
                       >
                         {em}
@@ -515,7 +555,7 @@ export const CategoryManager: React.FC = () => {
               {/* Subcategories (English & Bengali) */}
               <div className="space-y-3">
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">
+                  <label className="block font-semibold text-[#111827] mb-1">
                     Subcategories (English - কমা দিয়ে লিখুন)
                   </label>
                   <input
@@ -523,12 +563,12 @@ export const CategoryManager: React.FC = () => {
                     value={catSubcategories}
                     onChange={e => setCatSubcategories(e.target.value)}
                     placeholder="Shirts, T-Shirts, Panjabi, Pants"
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs focus:border-rose-500 focus:bg-white"
+                    className="w-full bg-[#faf9f7] border border-[#e6e3dd] rounded-xl p-2.5 text-xs focus:border-[#881337] focus:bg-white focus:outline-hidden"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">
+                  <label className="block font-semibold text-[#111827] mb-1">
                     সাব-ক্যাটাগরি তালিকা (বাংলা - কমা দিয়ে লিখুন)
                   </label>
                   <input
@@ -536,51 +576,71 @@ export const CategoryManager: React.FC = () => {
                     value={catSubcategoriesBn}
                     onChange={e => setCatSubcategoriesBn(e.target.value)}
                     placeholder="শার্ট, টি-শার্ট, পাঞ্জাবি, প্যান্ট"
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs focus:border-rose-500 focus:bg-white"
+                    className="w-full bg-[#faf9f7] border border-[#e6e3dd] rounded-xl p-2.5 text-xs focus:border-[#881337] focus:bg-white focus:outline-hidden"
                   />
                 </div>
               </div>
 
               {/* Direct Category Banner Image Upload (No URL) */}
               <div className="space-y-1.5">
-                <label className="block font-bold text-gray-700 text-xs">
+                <label className="block font-semibold text-[#111827] text-xs">
                   ক্যাটাগরি ব্যানার ছবি আপলোড (Direct File Upload)
                 </label>
                 {catBannerImage ? (
-                  <div className="flex items-center space-x-3 p-2 bg-gray-50 border border-gray-200 rounded-xl">
+                  <div className="flex items-center space-x-3 p-2 bg-[#faf9f7] border border-[#e6e3dd] rounded-xl">
                     <img
                       src={catBannerImage}
                       alt="Banner Preview"
-                      className="w-16 h-10 object-cover rounded-lg border border-gray-200"
+                      referrerPolicy="no-referrer"
+                      className="w-16 h-10 object-cover rounded-lg border border-[#e6e3dd]"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-bold text-gray-800 truncate">ব্যানার ছবি যুক্ত হয়েছে</p>
+                      <p className="text-[11px] font-semibold text-[#111827] truncate">ব্যানার ছবি যুক্ত হয়েছে</p>
                       <button
                         type="button"
                         onClick={() => setCatBannerImage('')}
-                        className="text-[10px] text-rose-600 hover:text-rose-800 font-bold mt-0.5 cursor-pointer"
+                        className="text-[10px] text-[#b91c1c] hover:underline font-semibold mt-0.5 cursor-pointer"
                       >
                         ছবি সরান বা পরিবর্তন করুন
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <label className="border-2 border-dashed border-gray-300 hover:border-rose-500 hover:bg-rose-50/20 rounded-xl p-3 flex flex-col items-center justify-center cursor-pointer transition-all">
+                  <label className="border-2 border-dashed border-[#e6e3dd] hover:border-[#881337] hover:bg-[#faf9f7] rounded-xl p-3 flex flex-col items-center justify-center cursor-pointer transition-colors">
                     <Upload className="w-5 h-5 text-gray-400 mb-1" />
-                    <span className="text-xs font-bold text-gray-700">ডিভাইস থেকে ব্যানার নির্বাচন করুন</span>
-                    <span className="text-[10px] text-gray-400 mt-0.5">PNG, JPG, WEBP (সরাসরি আপলোড)</span>
+                    <span className="text-xs font-semibold text-gray-700 tabular-nums">
+                      {bannerUploadProgress !== null
+                        ? `ব্যানার আপলোড হচ্ছে (${bannerUploadProgress}%)...`
+                        : 'ডিভাইস থেকে ব্যানার নির্বাচন করুন'}
+                    </span>
+                    <span className="text-[10px] text-gray-400 mt-0.5">PNG, JPG, WEBP (Firebase Storage)</span>
                     <input
                       type="file"
                       accept="image/*"
                       className="hidden"
-                      onChange={e => {
+                      disabled={bannerUploadProgress !== null}
+                      onChange={async e => {
                         const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            setCatBannerImage(reader.result as string);
-                          };
-                          reader.readAsDataURL(file);
+                        if (!file) return;
+                        const prevBanner = catBannerImage;
+                        setBannerUploadProgress(10);
+                        try {
+                          const uploadRes = await uploadHeroBannerImage(
+                            file,
+                            editingCategory?.id || `cat_${Date.now()}`,
+                            pct => setBannerUploadProgress(pct)
+                          );
+                          setCatBannerImage(uploadRes.downloadUrl);
+                          if (prevBanner && prevBanner !== uploadRes.downloadUrl) {
+                            cleanupUnusedStorageAsset(prevBanner, [uploadRes.downloadUrl]).catch(() => {});
+                          }
+                        } catch (err: any) {
+                          setStatusMessage({
+                            type: 'error',
+                            text: err?.message || 'ব্যানার ছবি আপলোড ব্যর্থ হয়েছে।',
+                          });
+                        } finally {
+                          setBannerUploadProgress(null);
                         }
                       }}
                     />
@@ -589,19 +649,21 @@ export const CategoryManager: React.FC = () => {
               </div>
 
               {/* Submit / Cancel Buttons */}
-              <div className="flex items-center justify-end space-x-2 pt-2 border-t border-gray-100">
+              <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#e6e3dd]">
                 <button
                   type="button"
+                  disabled={isSavingCat}
                   onClick={() => setShowAddModal(false)}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-4 py-2 rounded-xl cursor-pointer"
+                  className="bg-[#faf9f7] hover:bg-gray-100 border border-[#e6e3dd] text-gray-700 font-semibold px-4 py-2 rounded-xl cursor-pointer min-h-[38px]"
                 >
                   বাতিল
                 </button>
                 <button
                   type="submit"
-                  className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-5 py-2 rounded-xl cursor-pointer shadow-md shadow-rose-600/20"
+                  disabled={isSavingCat || bannerUploadProgress !== null || isUploadingIcon}
+                  className="bg-[#881337] hover:bg-[#6d0f2c] disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl cursor-pointer min-h-[38px]"
                 >
-                  {editingCategory ? 'পরিবর্তন সেভ করুন' : 'ক্যাটাগরি তৈরি করুন'}
+                  {isSavingCat ? 'Firebase-এ সংরক্ষণ হচ্ছে...' : editingCategory ? 'পরিবর্তন সেভ করুন' : 'ক্যাটাগরি তৈরি করুন'}
                 </button>
               </div>
             </form>
@@ -611,27 +673,27 @@ export const CategoryManager: React.FC = () => {
 
       {/* Delete Confirmation Modal */}
       {deletingCatId && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-gray-200 space-y-4 text-center animate-in zoom-in-95 duration-150">
-            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 mx-auto flex items-center justify-center">
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-[#e6e3dd] space-y-4 text-center">
+            <div className="w-12 h-12 rounded-xl bg-[#fef2f2] border border-[#fecaca] text-[#b91c1c] mx-auto flex items-center justify-center">
               <Trash2 className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="font-extrabold text-base text-gray-900">ক্যাটাগরি মুছে ফেলতে চান?</h4>
-              <p className="text-gray-500 text-xs mt-1">
+              <h4 className="font-bold text-base text-[#111827]">ক্যাটাগরি মুছে ফেলতে চান?</h4>
+              <p className="text-gray-500 text-xs mt-1 leading-relaxed">
                 এই ক্যাটাগরিটি ওয়েবসাইট এবং নেভিগেশন মেনু থেকে স্থায়ীভাবে মুছে যাবে।
               </p>
             </div>
             <div className="flex items-center justify-center space-x-2 pt-2">
               <button
                 onClick={() => setDeletingCatId(null)}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-4 py-2 rounded-xl cursor-pointer"
+                className="bg-[#faf9f7] hover:bg-gray-100 border border-[#e6e3dd] text-gray-700 font-semibold px-4 py-2 rounded-xl cursor-pointer min-h-[38px]"
               >
                 না, ফিরে যান
               </button>
               <button
                 onClick={() => handleDeleteConfirm(deletingCatId)}
-                className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-5 py-2 rounded-xl cursor-pointer shadow-md shadow-rose-600/20"
+                className="bg-[#b91c1c] hover:bg-[#991b1b] text-white font-semibold px-5 py-2 rounded-xl cursor-pointer min-h-[38px]"
               >
                 হ্যাঁ, নিশ্চিত ডিলিট
               </button>

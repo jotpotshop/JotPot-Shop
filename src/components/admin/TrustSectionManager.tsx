@@ -61,6 +61,8 @@ export const TrustSectionManager: React.FC = () => {
 
   // Live preview device switcher
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [modalError, setModalError] = useState('');
 
   // Filtered features
   const filteredFeatures = (draftSettings.features || [])
@@ -80,7 +82,8 @@ export const TrustSectionManager: React.FC = () => {
   // Save changes to Firestore
   const handleSaveToFirestore = async () => {
     if (!isSuperAdmin) {
-      alert('শুধুমাত্র সুপার এডমিন নিশ্চিন্ত কেনাকাটা (Trust Section) কনফিগারেশন সেভ করতে পারেন।');
+      setSaveStatus('error');
+      setErrorMessage('শুধুমাত্র সুপার এডমিন নিশ্চিন্ত কেনাকাটা (Trust Section) কনফিগারেশন সেভ করতে পারেন।');
       return;
     }
 
@@ -107,13 +110,12 @@ export const TrustSectionManager: React.FC = () => {
 
   // Reset to currently saved version
   const handleResetToSaved = () => {
-    if (window.confirm('আপনি কি ড্রাফট বাতিল করে সংরক্ষিত সংস্করণে ফিরে যেতে চান?')) {
-      setDraftSettings({
-        ...trustSectionSettings,
-        features: [...(trustSectionSettings.features || [])],
-      });
-      setSaveStatus('idle');
-    }
+    setDraftSettings({
+      ...trustSectionSettings,
+      features: [...(trustSectionSettings.features || [])],
+    });
+    setSaveStatus('idle');
+    setConfirmReset(false);
   };
 
   // Toggle Section Enabled
@@ -171,6 +173,7 @@ export const TrustSectionManager: React.FC = () => {
       isActive: true,
     });
     setIconPickerSearch('');
+    setModalError('');
     setIsFeatureModalOpen(true);
   };
 
@@ -178,6 +181,7 @@ export const TrustSectionManager: React.FC = () => {
   const handleOpenEditFeature = (feature: TrustFeatureItem) => {
     setEditingFeature({ ...feature });
     setIconPickerSearch('');
+    setModalError('');
     setIsFeatureModalOpen(true);
   };
 
@@ -187,9 +191,10 @@ export const TrustSectionManager: React.FC = () => {
     if (!editingFeature) return;
 
     if (!editingFeature.titleBn.trim() && !editingFeature.titleEn.trim()) {
-      alert('অনুগ্রহ করে ফিচারের শিরোনাম (Title) পূরণ করুন।');
+      setModalError('অনুগ্রহ করে ফিচারের শিরোনাম (Title) পূরণ করুন।');
       return;
     }
+    setModalError('');
 
     setDraftSettings(prev => {
       const exists = prev.features.some(f => f.id === editingFeature.id);
@@ -275,73 +280,88 @@ export const TrustSectionManager: React.FC = () => {
   });
 
   return (
-    <div className="space-y-6 text-xs text-gray-800">
+    <div className="space-y-6 text-xs text-[#111827]">
       {/* Top Banner & Super Admin Header */}
-      <div className="bg-gradient-to-r from-slate-900 via-gray-900 to-rose-950 text-white p-5 sm:p-6 rounded-3xl shadow-sm border border-gray-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-[#111827] text-white p-5 sm:p-6 rounded-2xl border border-[#1f2937] flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1.5">
-          <div className="flex items-center space-x-2">
-            <span className="p-2 bg-rose-500/20 text-rose-400 rounded-xl border border-rose-500/30">
+          <div className="flex items-center gap-2.5">
+            <span className="p-2 bg-[#881337] text-white rounded-xl">
               <ShieldCheck className="w-5 h-5" />
             </span>
             <div>
-              <span className="text-[10px] font-black uppercase tracking-wider text-rose-300 font-mono">
-                SECTION MANAGEMENT • সেকশন কন্ট্রোল
+              <span className="text-[11px] font-medium text-[#d1d5db] block">
+                সেকশন ম্যানেজমেন্ট
               </span>
-              <h2 className="text-base sm:text-lg font-black text-white">
+              <h2 className="text-base sm:text-lg font-bold text-white">
                 নিশ্চিন্ত কেনাকাটা ও বিশ্বস্ত ডেলিভারি সেবা
               </h2>
             </div>
           </div>
-          <p className="text-gray-300 text-xs max-w-2xl leading-relaxed">
-            গ্রাহকের মূল হোমপেজে প্রদর্শিত ট্রাস্ট ব্যাজ, ডেলিভারি গ্যারান্টি, ক্যাশ অন ডেলিভারি, ৭ দিনের রিটার্ন পলিসি ও কাস্টমার কেয়ার নির্দেশনাসমূহ পরিবর্তন, যোগ ও সাজান।
+          <p className="text-[#d1d5db] text-xs max-w-2xl leading-relaxed">
+            গ্রাহকের মূল হোমপেজে প্রদর্শিত ট্রাস্ট ব্যাজ, ডেলিভারি গ্যারান্টি, ক্যাশ অন ডেলিভারি, ৭ দিনের রিটার্ন পলিসি ও কাস্টমার কেয়ার নির্দেশনাসমূহ পরিবর্তন ও সাজান।
           </p>
         </div>
 
         {/* Global Action Bar */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Section Visibility Switch */}
           <button
             onClick={handleToggleSectionEnabled}
-            className={`px-3 py-2 rounded-xl font-bold flex items-center space-x-2 border transition-all cursor-pointer ${
+            className={`min-h-[38px] px-3 py-2 rounded-xl font-semibold flex items-center gap-2 border transition-colors cursor-pointer ${
               draftSettings.isEnabled
-                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
-                : 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30'
+                ? 'bg-[#15803d]/20 text-[#86efac] border-[#15803d]/40'
+                : 'bg-[#881337]/25 text-[#fda4af] border-[#881337]/50'
             }`}
             title="হোমপেজে এই সেকশন দেখানো বা লুকানো"
           >
             {draftSettings.isEnabled ? (
               <>
-                <Eye className="w-4 h-4 text-emerald-400" />
-                <span>সেকশন চালু (Visible)</span>
+                <Eye className="w-4 h-4" />
+                <span>সেকশন চালু</span>
               </>
             ) : (
               <>
-                <EyeOff className="w-4 h-4 text-rose-400" />
-                <span>সেকশন বন্ধ (Hidden)</span>
+                <EyeOff className="w-4 h-4" />
+                <span>সেকশন বন্ধ</span>
               </>
             )}
           </button>
 
-          {/* Reset to saved */}
-          <button
-            onClick={handleResetToSaved}
-            className="px-3 py-2 rounded-xl font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center space-x-1.5 cursor-pointer transition-colors"
-            title="পরিবর্তন বাতিল করে পুনরায় লোড করুন"
-          >
-            <RotateCcw className="w-4 h-4" />
-            <span>রিসেট</span>
-          </button>
+          {!confirmReset ? (
+            <button
+              onClick={() => setConfirmReset(true)}
+              className="min-h-[38px] px-3 py-2 rounded-xl font-semibold bg-white/10 hover:bg-white/15 text-white border border-white/15 flex items-center gap-1.5 cursor-pointer transition-colors"
+              title="পরিবর্তন বাতিল করে পুনরায় লোড করুন"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>রিসেট</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-1.5 bg-white/10 border border-white/20 rounded-xl px-2.5 py-1.5">
+              <span className="text-xs text-white">রিসেট করবেন?</span>
+              <button
+                type="button"
+                onClick={handleResetToSaved}
+                className="bg-[#881337] text-white px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer"
+              >
+                হ্যাঁ
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmReset(false)}
+                className="bg-white/15 text-white px-2 py-1 rounded-lg text-xs cursor-pointer"
+              >
+                না
+              </button>
+            </div>
+          )}
 
-          {/* Save to Firestore */}
           <button
             onClick={handleSaveToFirestore}
             disabled={isSaving || !isSuperAdmin}
-            className={`px-4 py-2 rounded-xl font-black flex items-center space-x-2 shadow-md transition-all cursor-pointer ${
-              isSaving
-                ? 'bg-gray-700 text-gray-300 cursor-not-allowed'
-                : !isSuperAdmin
-                ? 'bg-gray-800 text-gray-400 cursor-not-allowed'
-                : 'bg-rose-600 hover:bg-rose-700 text-white'
+            className={`min-h-[38px] px-4 py-2 rounded-xl font-semibold flex items-center gap-2 transition-colors cursor-pointer ${
+              isSaving || !isSuperAdmin
+                ? 'bg-[#374151] text-[#9ca3af] cursor-not-allowed'
+                : 'bg-[#881337] hover:bg-[#6d0f2c] text-white'
             }`}
           >
             <Save className="w-4 h-4" />
@@ -352,11 +372,11 @@ export const TrustSectionManager: React.FC = () => {
 
       {/* Security notice if non-Super Admin */}
       {!isSuperAdmin && (
-        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start space-x-3 text-amber-800">
-          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+        <div className="p-4 bg-[#faf9f7] border border-[#e6e3dd] rounded-2xl flex items-start gap-3 text-[#374151]">
+          <AlertCircle className="w-5 h-5 text-[#881337] shrink-0 mt-0.5" />
           <div>
-            <p className="font-bold text-xs">সীমাবদ্ধ এক্সেস (Super Admin Restricted)</p>
-            <p className="text-[11px] text-amber-700 mt-0.5">
+            <p className="font-bold text-xs text-[#111827]">সীমাবদ্ধ এক্সেস (Super Admin Restricted)</p>
+            <p className="text-xs text-[#6b7280] mt-0.5">
               নিরাপত্তা নীতি অনুযায়ী শুধুমাত্র সুপার এডমিন ট্রাস্ট সেকশনের টেক্সট, আইকন ও ডাটা পরিবর্তন করে ক্লাউড ফায়ারবেসে পাবলিশ করতে পারেন।
             </p>
           </div>
@@ -365,30 +385,30 @@ export const TrustSectionManager: React.FC = () => {
 
       {/* Success / Error Toast notification banner */}
       {saveStatus === 'success' && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center space-x-2.5 text-emerald-800 animate-in fade-in">
-          <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
-          <span className="font-bold text-xs">
-            ✓ "নিশ্চিন্ত কেনাকাটা" সেকশন সেটিংস ক্লাউড ফায়ারবেসে সফলভাবে সেভ হয়েছে এবং গ্রাহক সাইটে আপডেট হয়েছে!
+        <div className="p-4 bg-[#f0fdf4] border border-[#bbf7d0] rounded-2xl flex items-center gap-2.5 text-[#15803d]">
+          <CheckCircle className="w-5 h-5 shrink-0" />
+          <span className="font-semibold text-xs">
+            "নিশ্চিন্ত কেনাকাটা" সেকশন সেটিংস ক্লাউড ফায়ারবেসে সফলভাবে সেভ হয়েছে এবং গ্রাহক সাইটে আপডেট হয়েছে।
           </span>
         </div>
       )}
       {saveStatus === 'error' && (
-        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center space-x-2.5 text-rose-800 animate-in fade-in">
-          <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
-          <span className="font-bold text-xs">
+        <div className="p-4 bg-[#fef2f2] border border-[#fecaca] rounded-2xl flex items-center gap-2.5 text-[#991b1b]">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <span className="font-semibold text-xs">
             ত্রুটি: {errorMessage || 'ক্লাউডে সেভ করতে ব্যর্থ হয়েছে। অনুগ্রহ করে ইন্টারনেট ও অনুমতি যাচাই করুন।'}
           </span>
         </div>
       )}
 
       {/* Sub-Tabs Navigation */}
-      <div className="flex border-b border-gray-200 space-x-1 sm:space-x-3 overflow-x-auto pb-1 text-xs">
+      <div className="flex border-b border-[#e6e3dd] gap-2 overflow-x-auto pb-2 text-xs">
         <button
           onClick={() => setActiveTab('features')}
-          className={`px-4 py-2.5 font-bold rounded-xl flex items-center space-x-2 cursor-pointer transition-colors ${
+          className={`px-4 py-2 font-semibold rounded-xl flex items-center gap-2 cursor-pointer transition-colors whitespace-nowrap shrink-0 tabular-nums ${
             activeTab === 'features'
-              ? 'bg-rose-600 text-white shadow-xs'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              ? 'bg-[#111827] text-white'
+              : 'text-[#6b7280] hover:text-[#111827] hover:bg-white border border-transparent'
           }`}
         >
           <Layers className="w-4 h-4" />
@@ -397,10 +417,10 @@ export const TrustSectionManager: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('content')}
-          className={`px-4 py-2.5 font-bold rounded-xl flex items-center space-x-2 cursor-pointer transition-colors ${
+          className={`px-4 py-2 font-semibold rounded-xl flex items-center gap-2 cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
             activeTab === 'content'
-              ? 'bg-rose-600 text-white shadow-xs'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              ? 'bg-[#111827] text-white'
+              : 'text-[#6b7280] hover:text-[#111827] hover:bg-white border border-transparent'
           }`}
         >
           <Layout className="w-4 h-4" />
@@ -409,10 +429,10 @@ export const TrustSectionManager: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('appearance')}
-          className={`px-4 py-2.5 font-bold rounded-xl flex items-center space-x-2 cursor-pointer transition-colors ${
+          className={`px-4 py-2 font-semibold rounded-xl flex items-center gap-2 cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
             activeTab === 'appearance'
-              ? 'bg-rose-600 text-white shadow-xs'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              ? 'bg-[#111827] text-white'
+              : 'text-[#6b7280] hover:text-[#111827] hover:bg-white border border-transparent'
           }`}
         >
           <Palette className="w-4 h-4" />
@@ -421,14 +441,14 @@ export const TrustSectionManager: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('preview')}
-          className={`px-4 py-2.5 font-bold rounded-xl flex items-center space-x-2 cursor-pointer transition-colors ${
+          className={`px-4 py-2 font-semibold rounded-xl flex items-center gap-2 cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
             activeTab === 'preview'
-              ? 'bg-rose-600 text-white shadow-xs'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              ? 'bg-[#111827] text-white'
+              : 'text-[#6b7280] hover:text-[#111827] hover:bg-white border border-transparent'
           }`}
         >
           <Eye className="w-4 h-4" />
-          <span>লাইভ প্রিভিউ (Live Preview)</span>
+          <span>লাইভ প্রিভিউ</span>
         </button>
       </div>
 
@@ -856,26 +876,32 @@ export const TrustSectionManager: React.FC = () => {
 
       {/* MODAL: Add / Edit Feature */}
       {isFeatureModalOpen && editingFeature && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl p-6 border border-gray-100 space-y-4 text-xs animate-in zoom-in-95">
-            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-              <div className="flex items-center space-x-2">
-                <span className="p-1.5 bg-rose-50 text-rose-600 rounded-lg">
+        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl p-6 border border-[#e6e3dd] space-y-4 text-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-[#e6e3dd]">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 bg-[#faf9f7] border border-[#e6e3dd] text-[#881337] rounded-lg">
                   <ShieldCheck className="w-4 h-4" />
                 </span>
-                <h3 className="font-extrabold text-base text-gray-900">
+                <h3 className="font-bold text-base text-[#111827]">
                   {editingFeature.id.startsWith('trust-') && draftSettings.features.some(f => f.id === editingFeature.id)
-                    ? 'ফিচার সম্পাদনা (Edit Feature)'
-                    : 'নতুন ফিচার যোগ করুন (Add Feature)'}
+                    ? 'ফিচার সম্পাদনা'
+                    : 'নতুন ফিচার যোগ করুন'}
                 </h3>
               </div>
               <button
                 onClick={() => setIsFeatureModalOpen(false)}
-                className="text-gray-400 hover:text-gray-900 p-1 cursor-pointer"
+                className="text-[#6b7280] hover:text-[#111827] p-1 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {modalError && (
+              <div className="p-2.5 bg-[#fef2f2] border border-[#fecaca] rounded-xl text-xs text-[#991b1b] font-medium">
+                {modalError}
+              </div>
+            )}
 
             <form onSubmit={handleSaveFeatureModal} className="space-y-4">
               {/* Feature Title Bangla & English */}
@@ -1015,17 +1041,17 @@ export const TrustSectionManager: React.FC = () => {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center space-x-2 pt-3">
+              <div className="flex items-center gap-2 pt-3">
                 <button
                   type="button"
                   onClick={() => setIsFeatureModalOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-gray-200 font-bold hover:bg-gray-100 cursor-pointer"
+                  className="flex-1 min-h-[38px] py-2 rounded-xl border border-[#e6e3dd] font-semibold text-[#374151] hover:bg-[#faf9f7] cursor-pointer"
                 >
                   বাতিল
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-md cursor-pointer"
+                  className="flex-1 min-h-[38px] py-2 rounded-xl bg-[#881337] hover:bg-[#6d0f2c] text-white font-semibold cursor-pointer"
                 >
                   সংরক্ষণ করুন
                 </button>
@@ -1037,27 +1063,27 @@ export const TrustSectionManager: React.FC = () => {
 
       {/* MODAL: Delete Confirmation */}
       {featureToDelete && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 space-y-4 text-center animate-in zoom-in-95">
-            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 border border-[#e6e3dd] space-y-4 text-center">
+            <div className="w-12 h-12 rounded-xl bg-[#fef2f2] border border-[#fecaca] text-[#991b1b] flex items-center justify-center mx-auto">
               <Trash2 className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="font-extrabold text-base text-gray-900">ফিচারটি ডিলিট করতে চান?</h4>
-              <p className="text-gray-500 text-xs mt-1">
+              <h4 className="font-bold text-base text-[#111827]">ফিচারটি ডিলিট করতে চান?</h4>
+              <p className="text-[#6b7280] text-xs mt-1">
                 "{featureToDelete.titleBn || featureToDelete.titleEn}" ফিচারটি ট্রাস্ট সেকশন থেকে স্থায়ীভাবে মুছে যাবে।
               </p>
             </div>
-            <div className="flex space-x-2">
+            <div className="flex gap-2">
               <button
                 onClick={() => setFeatureToDelete(null)}
-                className="flex-1 py-2.5 rounded-xl border border-gray-200 font-bold hover:bg-gray-100 cursor-pointer"
+                className="flex-1 min-h-[38px] py-2 rounded-xl border border-[#e6e3dd] font-semibold text-[#374151] hover:bg-[#faf9f7] cursor-pointer"
               >
                 বাতিল
               </button>
               <button
                 onClick={handleConfirmDeleteFeature}
-                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer"
+                className="flex-1 min-h-[38px] py-2 rounded-xl bg-[#991b1b] hover:bg-[#7f1d1d] text-white font-semibold cursor-pointer"
               >
                 ডিলিট করুন
               </button>

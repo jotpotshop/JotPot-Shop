@@ -151,10 +151,11 @@ export function parseSmartSearchQuery(query: string): ParsedSearchQuery {
 }
 
 export function filterProductsBySmartSearch(products: Product[], parsed: ParsedSearchQuery): Product[] {
+  const publishedProducts = products.filter(p => p.isPublished !== false);
   const queryLower = parsed.originalQuery.toLowerCase().trim();
-  if (!queryLower) return products;
+  if (!queryLower) return publishedProducts;
 
-  return products.filter(product => {
+  return publishedProducts.filter(product => {
     // 1. Max price check
     if (parsed.maxPrice && product.price > parsed.maxPrice) {
       return false;

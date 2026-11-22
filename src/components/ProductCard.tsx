@@ -1,5 +1,5 @@
-import React from 'react';
-import { Heart, Star, ShoppingBag, Eye, Zap, Scale, Check } from 'lucide-react';
+import React, { useState } from 'react';
+import { Heart, Star, ShoppingBag, Eye, Scale, Check, Package } from 'lucide-react';
 import { Product } from '../types';
 import { useShop } from '../context/ShopContext';
 import { getAvailableStock, getStockStatusInfo } from '../utils/inventory';
@@ -24,15 +24,28 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     setActiveModal,
   } = useShop();
 
+  const [imageError, setImageError] = useState(false);
+
   const liveProduct = products.find(p => p.id === product.id) || product;
   const isWished = isInWishlist(liveProduct.id);
   const isCompared = comparisonList.includes(liveProduct.id);
-  const saveAmount = liveProduct.oldPrice ? liveProduct.oldPrice - liveProduct.price : 0;
+  const saveAmount = liveProduct.oldPrice && liveProduct.oldPrice > liveProduct.price
+    ? liveProduct.oldPrice - liveProduct.price
+    : 0;
 
   const availableStock = getAvailableStock(liveProduct);
   const stockInfo = getStockStatusInfo(liveProduct, undefined, undefined, language);
   const isOutOfStock = stockInfo.isOutOfStock;
   const isLowStock = stockInfo.isLowStock;
+
+  // Show rating only when real customer reviews exist
+  const hasRealReviews = Array.isArray(liveProduct.reviews) && liveProduct.reviews.length > 0;
+  const computedRating = hasRealReviews
+    ? (
+        liveProduct.reviews!.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) /
+        liveProduct.reviews!.length
+      ).toFixed(1)
+    : null;
 
   const handleQuickBuy = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -58,37 +71,42 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     }
   };
 
+  const primaryImage = liveProduct.images?.[0];
+
   return (
     <div
       onClick={() => {
-        setQuickViewProduct(product);
+        setQuickViewProduct(liveProduct);
         setActiveModal('quickView');
       }}
-      className="group bg-white rounded-2xl border border-gray-100/90 hover:border-rose-200 overflow-hidden shadow-xs hover:shadow-xl transition-all duration-200 flex flex-col justify-between cursor-pointer relative"
+      className="group bg-white rounded-2xl border border-[#e6e3dd] hover:border-gray-400 overflow-hidden transition-all duration-200 flex flex-col justify-between cursor-pointer relative"
     >
-      {/* Image Container with Badges */}
-      <div className="relative aspect-square w-full bg-gray-50 overflow-hidden">
-        <img
-          src={product.images[0]}
-          alt={product.name}
-          loading="lazy"
-          className="w-full h-full object-cover object-center group-hover:scale-106 transition-transform duration-500"
-        />
+      {/* Image Container */}
+      <div className="relative aspect-[4/4] w-full bg-[#faf9f7] overflow-hidden">
+        {primaryImage && !imageError ? (
+          <img
+            src={primaryImage}
+            alt={language === 'bn' ? liveProduct.nameBn : liveProduct.name}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={() => setImageError(true)}
+            className="w-full h-full object-cover object-center transition-opacity duration-300 group-hover:opacity-95"
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center text-gray-300 bg-[#faf9f7]">
+            <Package className="w-10 h-10 stroke-[1.5]" />
+          </div>
+        )}
 
-        {/* Badges: Out of Stock, Discount, Flash */}
+        {/* Single Restrained Badge */}
         {isOutOfStock ? (
-          <div className="absolute top-2.5 left-2.5 bg-gray-950/90 text-rose-300 border border-rose-500/40 text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md shadow-md uppercase tracking-wide backdrop-blur-xs">
-            {t('স্টক আউট', 'OUT OF STOCK')}
-          </div>
-        ) : product.discountPercent ? (
-          <div className="absolute top-2.5 left-2.5 bg-rose-600 text-white text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md shadow-xs uppercase tracking-wide">
-            {product.discountPercent}% OFF
-          </div>
-        ) : product.isFlashSale ? (
-          <div className="absolute top-2.5 left-2.5 bg-amber-500 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-xs flex items-center space-x-1">
-            <Zap className="w-3 h-3 fill-white" />
-            <span>FLASH</span>
-          </div>
+          <span className="absolute top-2.5 left-2.5 bg-[#111827] text-white text-[10px] font-semibold px-2.5 py-1 rounded-md tracking-wide uppercase">
+            {t('স্টক শেষ', 'Out of Stock')}
+          </span>
+        ) : liveProduct.discountPercent && liveProduct.discountPercent > 0 ? (
+          <span className="absolute top-2.5 left-2.5 bg-[#881337] text-white text-[11px] font-semibold px-2 py-0.5 rounded-md tabular-nums">
+            -{liveProduct.discountPercent}%
+          </span>
         ) : null}
 
         {/* Top Right Actions: Wishlist & Compare */}
@@ -96,127 +114,127 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           <button
             onClick={e => {
               e.stopPropagation();
-              toggleWishlist(product.id);
+              toggleWishlist(liveProduct.id);
             }}
-            title={t('উইশলিস্ট', 'Wishlist')}
-            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all backdrop-blur-md shadow-xs cursor-pointer ${
+            title={t('পছন্দের তালিকায় রাখুন', 'Save to Wishlist')}
+            className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors cursor-pointer ${
               isWished
-                ? 'bg-rose-50 text-rose-600'
-                : 'bg-white/80 hover:bg-white text-gray-600 hover:text-rose-600'
+                ? 'bg-[#881337] border-[#881337] text-white'
+                : 'bg-white/95 border-[#e6e3dd] text-gray-600 hover:text-[#881337]'
             }`}
           >
-            <Heart className={`w-4 h-4 ${isWished ? 'fill-rose-600 text-rose-600' : ''}`} />
+            <Heart className={`w-3.5 h-3.5 ${isWished ? 'fill-white text-white' : ''}`} />
           </button>
 
           <button
             onClick={handleToggleCompare}
             title={t('তুলনা করুন', 'Compare')}
-            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all backdrop-blur-md shadow-xs cursor-pointer ${
+            className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors cursor-pointer ${
               isCompared
-                ? 'bg-amber-50 text-amber-600'
-                : 'bg-white/80 hover:bg-white text-gray-600 hover:text-amber-600'
+                ? 'bg-[#111827] border-[#111827] text-white'
+                : 'bg-white/95 border-[#e6e3dd] text-gray-600 hover:text-[#111827]'
             }`}
           >
-            {isCompared ? <Check className="w-4 h-4 text-amber-600" /> : <Scale className="w-3.5 h-3.5" />}
+            {isCompared ? <Check className="w-3.5 h-3.5" /> : <Scale className="w-3.5 h-3.5" />}
           </button>
         </div>
 
-        {/* Quick View Button on Image hover (Desktop) */}
-        <div className="absolute inset-x-2 bottom-2 hidden sm:flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Quick View on Desktop Hover */}
+        <div className="absolute inset-x-2.5 bottom-2.5 hidden sm:flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={e => {
               e.stopPropagation();
-              setQuickViewProduct(product);
+              setQuickViewProduct(liveProduct);
               setActiveModal('quickView');
             }}
-            className="w-full bg-white/95 hover:bg-white text-gray-900 text-xs font-bold py-2 rounded-xl shadow-md flex items-center justify-center space-x-1.5 transition-all cursor-pointer backdrop-blur-xs"
+            className="w-full bg-white hover:bg-[#faf9f7] text-[#111827] border border-[#e6e3dd] text-xs font-medium py-2 rounded-lg shadow-xs flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
           >
-            <Eye className="w-3.5 h-3.5 text-rose-600" />
-            <span>{t('কুইক ভিউ', 'Quick View')}</span>
+            <Eye className="w-3.5 h-3.5 text-gray-600" />
+            <span>{t('বিস্তারিত দেখুন', 'Quick View')}</span>
           </button>
         </div>
       </div>
 
-      {/* Product Content Details */}
+      {/* Product Details */}
       <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between">
         <div>
-          {/* Category & Rating */}
+          {/* Category & Genuine Rating */}
           <div className="flex items-center justify-between text-[11px] text-gray-500 mb-1">
-            <span className="font-semibold text-gray-400 uppercase tracking-wider text-[10px] truncate max-w-[120px]">
-              {language === 'bn' ? product.categoryBn : product.category}
+            <span className="font-medium text-gray-500 truncate max-w-[130px]">
+              {language === 'bn' ? liveProduct.categoryBn : liveProduct.category}
             </span>
-            <div className="flex items-center space-x-1 text-amber-500 shrink-0 font-bold">
-              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-              <span>{product.rating}</span>
-              <span className="text-gray-400 font-normal">({product.reviewsCount})</span>
-            </div>
+            {hasRealReviews && computedRating && (
+              <div className="flex items-center space-x-1 text-gray-700 shrink-0 font-medium tabular-nums">
+                <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                <span>{computedRating}</span>
+                <span className="text-gray-400 font-normal">({liveProduct.reviews!.length})</span>
+              </div>
+            )}
           </div>
 
           {/* Product Title */}
-          <h3 className="text-xs sm:text-sm font-bold text-gray-900 line-clamp-2 hover:text-rose-600 transition-colors mb-1.5">
-            {language === 'bn' ? product.nameBn : product.name}
+          <h3 className="text-[13px] sm:text-sm font-medium text-[#111827] line-clamp-2 leading-[1.45] group-hover:text-[#881337] transition-colors mb-1.5 min-h-[2.6em]">
+            {language === 'bn' ? liveProduct.nameBn : liveProduct.name}
           </h3>
 
-          {/* Live Stock Availability Tag */}
+          {/* Clean Unboxed Stock Status */}
           {isOutOfStock ? (
-            <div className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md inline-block mb-2">
-              ⚠️ {t('স্টক আউট', 'Out of Stock')}
-            </div>
+            <p className="text-[11px] font-medium text-[#b91c1c] mb-2">
+              {t('বর্তমানে স্টক নেই', 'Currently out of stock')}
+            </p>
           ) : isLowStock ? (
-            <div className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md inline-block mb-2">
-              {t(`⚠️ মাত্র ${availableStock}টি বাকি আছে!`, `⚠️ Only ${availableStock} left in stock!`)}
-            </div>
+            <p className="text-[11px] font-medium text-amber-700 mb-2 tabular-nums">
+              {t(`মাত্র ${availableStock}টি স্টকে আছে`, `Only ${availableStock} left`)}
+            </p>
           ) : (
-            <div className="text-[10px] font-medium text-emerald-600 inline-block mb-2">
-              ✓ {t('ইন স্টক • দ্রুত ডেলিভারি', 'In Stock • Fast Delivery')} ({availableStock}টি)
-            </div>
+            <p className="text-[11px] font-normal text-[#15803d] mb-2 tabular-nums">
+              {t(`স্টকে আছে (${availableStock}টি)`, `In stock (${availableStock})`)}
+            </p>
           )}
         </div>
 
-        {/* Pricing & CTA Buttons */}
-        <div className="pt-2 border-t border-gray-100">
-          <div className="flex items-baseline space-x-2 mb-2">
-            <span className="text-sm sm:text-base font-extrabold text-gray-900">
+        {/* Pricing & Action Buttons */}
+        <div className="pt-2.5 border-t border-gray-100">
+          <div className="flex items-baseline flex-wrap gap-x-2 gap-y-0.5 mb-2.5">
+            <span className="text-sm sm:text-base font-bold text-[#111827] tabular-nums">
               {formatPrice(liveProduct.price)}
             </span>
-            {liveProduct.oldPrice && (
-              <span className="text-xs text-gray-400 line-through">
+            {liveProduct.oldPrice && liveProduct.oldPrice > liveProduct.price && (
+              <span className="text-xs text-gray-400 line-through tabular-nums">
                 {formatPrice(liveProduct.oldPrice)}
               </span>
             )}
             {saveAmount > 0 && (
-              <span className="hidden sm:inline-block text-[10px] font-semibold text-rose-600 bg-rose-50 px-1 rounded">
+              <span className="hidden sm:inline text-[11px] font-medium text-[#881337] tabular-nums">
                 {t(`সাশ্রয় ${formatPrice(saveAmount)}`, `Save ${formatPrice(saveAmount)}`)}
               </span>
             )}
           </div>
 
-          {/* Action Buttons: Add to Cart & Buy Now */}
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className="grid grid-cols-2 gap-2">
             <button
               disabled={isOutOfStock}
               onClick={handleAddToCart}
-              className={`w-full text-[11px] sm:text-xs font-bold py-2 rounded-xl flex items-center justify-center space-x-1 transition-colors ${
+              className={`w-full text-[11px] sm:text-xs font-medium py-2 min-h-[38px] rounded-xl flex items-center justify-center space-x-1 transition-colors border ${
                 isOutOfStock
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
-                  : 'bg-gray-100 hover:bg-rose-50 hover:text-rose-700 text-gray-800 cursor-pointer'
+                  ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-[#faf9f7] hover:bg-gray-100 border-[#e6e3dd] text-[#111827] cursor-pointer'
               }`}
             >
               <ShoppingBag className="w-3.5 h-3.5" />
-              <span>{isOutOfStock ? t('স্টক নেই', 'No Stock') : t('ব্যাগ', 'Cart')}</span>
+              <span>{isOutOfStock ? t('স্টক নেই', 'Out') : t('ব্যাগ', 'Cart')}</span>
             </button>
 
             <button
               disabled={isOutOfStock}
               onClick={handleQuickBuy}
-              className={`w-full text-[11px] sm:text-xs font-bold py-2 rounded-xl flex items-center justify-center space-x-1 shadow-xs transition-all ${
+              className={`w-full text-[11px] sm:text-xs font-semibold py-2 min-h-[38px] rounded-xl flex items-center justify-center transition-colors ${
                 isOutOfStock
-                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60 shadow-none'
-                  : 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20 cursor-pointer'
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-[#881337] hover:bg-[#9f1239] text-white cursor-pointer'
               }`}
             >
-              <Zap className={`w-3 h-3 ${isOutOfStock ? 'fill-gray-400' : 'fill-white'} stroke-none`} />
-              <span>{isOutOfStock ? t('স্টক আউট', 'Stock Out') : t('অর্ডার করুন', 'Buy Now')}</span>
+              <span>{isOutOfStock ? t('স্টক শেষ', 'Unavailable') : t('অর্ডার করুন', 'Order Now')}</span>
             </button>
           </div>
         </div>

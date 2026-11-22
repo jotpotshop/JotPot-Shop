@@ -70,6 +70,7 @@ import {
   DEFAULT_TRUST_SECTION_SETTINGS,
 } from '../data/adminSettings';
 import {
+  testConnection,
   testFirebaseConnection,
   saveBrandingToFirestore,
   fetchBrandingFromFirestore,
@@ -97,7 +98,11 @@ import {
   saveOrdersToFirestore,
   saveSingleOrderToFirestore,
   fetchOrdersFromFirestore,
+  fetchOrdersCollectionFromFirestore,
+  fetchCustomerOrdersFromFirestore,
   subscribeToOrders,
+  subscribeToOrdersCollection,
+  subscribeToCustomerOrders,
   saveBundlesToFirestore,
   fetchBundlesFromFirestore,
   saveCouponsToFirestore,
@@ -115,15 +120,31 @@ import {
   fetchOrderSettingsFromFirestore,
   saveStaffAccountsToFirestore,
   fetchStaffAccountsFromFirestore,
+  signInStaffWithFirebaseAuth,
+  provisionStaffFirebaseAccount,
+  syncStaffUidDocToFirestore,
   saveCustomersToFirestore,
+  saveSingleCustomerToFirestore,
+  fetchCustomerDocFromFirestore,
   fetchCustomersFromFirestore,
+  fetchCustomersCollectionFromFirestore,
   subscribeToCustomers,
+  subscribeToCustomersCollection,
   saveConversationsToFirestore,
   saveSingleConversationToFirestore,
   fetchConversationsFromFirestore,
+  fetchConversationsCollectionFromFirestore,
+  fetchCustomerConversationsFromFirestore,
   subscribeToConversations,
-  ensureCustomerAuthSession,
+  subscribeToConversationsCollection,
+  subscribeToCustomerConversations,
+  fetchSettingDocSafe,
   ensureAdminFirebaseAuthSession,
+  subscribeToFirebaseAuthState,
+  registerCustomerWithFirebaseAuth,
+  loginCustomerWithFirebaseAuth,
+  loginGoogleCustomerToFirestore,
+  resetCustomerPasswordFirebase,
   logoutFirebaseAuth,
   saveHelpCenterSettingsToFirestore,
   fetchHelpCenterSettingsFromFirestore,
@@ -133,6 +154,11 @@ import {
   subscribeToTrustSectionSettings,
   signInWithGooglePopup,
   resizeDataUrl,
+  stripPasswords,
+  isCurrentUserStaffEmail,
+  MASTER_SUPER_ADMIN_EMAIL,
+  MASTER_SUPER_ADMIN_PASS,
+  FirestoreWriteResult,
   FirebaseConnectionDiagnostic,
   FIREBASE_PROJECT_INFO,
 } from '../lib/firebase';
@@ -163,7 +189,11 @@ interface ShopContextType {
   updateProduct: (product: Product) => Promise<{ success: boolean; error?: string }>;
   deleteProduct: (productId: string) => Promise<{ success: boolean; error?: string }>;
   bulkDeleteProducts: (productIds: string[]) => Promise<{ success: boolean; error?: string }>;
-  bulkUpdateProducts: (productIds: string[], updates: Partial<Product>) => Promise<{ success: boolean; error?: string }>;
+  bulkUpdateProducts: (
+    productIds: string[],
+    updates: Partial<Product>,
+    perProductUpdates?: Record<string, Partial<Product>>
+  ) => Promise<{ success: boolean; error?: string }>;
 
   // Cart
   cart: CartItem[];
@@ -193,9 +223,9 @@ interface ShopContextType {
   appliedCoupon: Coupon | null;
   applyCoupon: (code: string) => { success: boolean; message: string };
   removeCoupon: () => void;
-  addCoupon: (coupon: Coupon) => void;
-  updateCoupon: (coupon: Coupon) => void;
-  deleteCoupon: (code: string) => void;
+  addCoupon: (coupon: Coupon) => Promise<FirestoreWriteResult>;
+  updateCoupon: (coupon: Coupon) => Promise<FirestoreWriteResult>;
+  deleteCoupon: (code: string) => Promise<FirestoreWriteResult>;
 
   // Address
   savedAddresses: SavedAddress[];
@@ -224,12 +254,12 @@ interface ShopContextType {
       accountType?: 'Merchant' | 'Personal';
     };
   }) => Promise<{ success: boolean; order?: Order; error?: string }>;
-  updateOrderStatus: (orderId: string, status: OrderStatus) => void;
-  confirmOrder: (orderId: string, confirmedBy?: string) => void;
-  cancelOrder: (orderId: string, reason: string) => void;
-  holdOrder: (orderId: string, reason: string) => void;
-  editOrder: (orderId: string, updatedFields: Partial<Order>) => void;
-  addCallLog: (orderId: string, log: Omit<OrderCallLog, 'id' | 'timestamp'>) => void;
+  updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<FirestoreWriteResult>;
+  confirmOrder: (orderId: string, confirmedBy?: string) => Promise<FirestoreWriteResult>;
+  cancelOrder: (orderId: string, reason: string) => Promise<FirestoreWriteResult>;
+  holdOrder: (orderId: string, reason: string) => Promise<FirestoreWriteResult>;
+  editOrder: (orderId: string, updatedFields: Partial<Order>) => Promise<FirestoreWriteResult>;
+  addCallLog: (orderId: string, log: Omit<OrderCallLog, 'id' | 'timestamp'>) => Promise<FirestoreWriteResult>;
   sendToCourier: (
     orderId: string,
     courierName: CourierPartner,
@@ -249,19 +279,20 @@ interface ShopContextType {
     error?: string;
     errorBn?: string;
   }>;
-  updateCourierStatus: (orderId: string, courierStatus: any) => void;
+  updateCourierStatus: (orderId: string, courierStatus: any) => Promise<FirestoreWriteResult>;
   findOrderById: (orderId: string) => Order | undefined;
 
   // User & Customer Auth
   user: UserState;
-  loginUser: (info: { name: string; phone: string; email: string }) => void;
+  loginUser: (info: { name: string; phone: string; email: string; uid?: string }) => void;
   logoutUser: () => void;
   registeredCustomers: RegisteredCustomer[];
-  registerCustomer: (info: { name: string; phone: string; email?: string; password: string }) => { success: boolean; message: string };
-  loginCustomerWithPassword: (identifier: string, password: string) => { success: boolean; message: string };
-  resetCustomerPassword: (phone: string, newPass: string) => { success: boolean; message: string };
-  updateCustomerProfile: (updates: { name: string; phone: string; email?: string }) => void;
-  loginWithGoogle: (googleUser?: { name: string; email: string; avatarUrl?: string }) => void;
+  registerCustomer: (info: { name: string; phone: string; email?: string; password: string }) => Promise<{ success: boolean; message: string }>;
+  loginCustomerWithPassword: (identifier: string, password: string) => Promise<{ success: boolean; message: string }>;
+  resetCustomerPassword: (phone: string, newPass?: string) => Promise<{ success: boolean; message: string }>;
+  updateCustomerProfile: (updates: { name: string; phone: string; email?: string }) => Promise<FirestoreWriteResult>;
+  updateCustomerStatus: (customerId: string, status: 'active' | 'disabled') => Promise<FirestoreWriteResult>;
+  loginWithGoogle: (googleUser?: { uid?: string; name: string; email: string; avatarUrl?: string }) => Promise<{ success: boolean; message: string }>;
 
   // Omnichannel Conversations & AI Assistant
   conversations: UnifiedConversation[];
@@ -341,32 +372,32 @@ interface ShopContextType {
   adminUser: StaffAccount | null;
   showAdminLoginModal: boolean;
   setShowAdminLoginModal: (show: boolean) => void;
-  adminLogin: (identifier: string, password: string) => { success: boolean; message: string };
+  adminLogin: (identifier: string, password: string) => Promise<{ success: boolean; message: string }>;
   adminLogout: () => void;
-  addStaffAccount: (account: Omit<StaffAccount, 'id' | 'lastLogin'>) => void;
-  updateStaffAccount: (account: StaffAccount) => void;
-  deleteStaffAccount: (id: string) => void;
+  addStaffAccount: (account: Omit<StaffAccount, 'id' | 'lastLogin'>) => Promise<FirestoreWriteResult>;
+  updateStaffAccount: (account: StaffAccount) => Promise<FirestoreWriteResult>;
+  deleteStaffAccount: (id: string) => Promise<FirestoreWriteResult>;
 
   // Super Admin Business Settings
   websiteSettings: WebsiteSettings;
-  updateWebsiteSettings: (settings: Partial<WebsiteSettings>) => void;
+  updateWebsiteSettings: (settings: Partial<WebsiteSettings>) => Promise<FirestoreWriteResult>;
   deliverySettings: DeliverySettings;
-  updateDeliverySettings: (settings: Partial<DeliverySettings>) => void;
+  updateDeliverySettings: (settings: Partial<DeliverySettings>) => Promise<FirestoreWriteResult>;
   paymentSettings: PaymentSettings;
-  updatePaymentSettings: (settings: Partial<PaymentSettings>) => void;
+  updatePaymentSettings: (settings: Partial<PaymentSettings>) => Promise<FirestoreWriteResult>;
   courierConfigs: CourierConfig[];
-  updateCourierConfig: (courierId: CourierPartner, config: Partial<CourierConfig>) => void;
-  saveAllCourierConfigs: (configs: CourierConfig[]) => Promise<void>;
+  updateCourierConfig: (courierId: CourierPartner, config: Partial<CourierConfig>) => Promise<FirestoreWriteResult>;
+  saveAllCourierConfigs: (configs: CourierConfig[]) => Promise<FirestoreWriteResult>;
   returnPolicySettings: ReturnPolicySettings;
-  updateReturnPolicySettings: (settings: Partial<ReturnPolicySettings>) => void;
+  updateReturnPolicySettings: (settings: Partial<ReturnPolicySettings>) => Promise<FirestoreWriteResult>;
   seoSettings: SeoSettings;
-  updateSeoSettings: (settings: Partial<SeoSettings>) => void;
+  updateSeoSettings: (settings: Partial<SeoSettings>) => Promise<FirestoreWriteResult>;
   liveChatSettings: LiveChatSettings;
-  updateLiveChatSettings: (settings: Partial<LiveChatSettings>) => void;
+  updateLiveChatSettings: (settings: Partial<LiveChatSettings>) => Promise<FirestoreWriteResult>;
   homepageSections: HomepageSectionConfig;
-  updateHomepageSections: (config: Partial<HomepageSectionConfig>) => void;
+  updateHomepageSections: (config: Partial<HomepageSectionConfig>) => Promise<FirestoreWriteResult>;
   orderSettings: OrderSettings;
-  updateOrderSettings: (settings: Partial<OrderSettings>) => void;
+  updateOrderSettings: (settings: Partial<OrderSettings>) => Promise<FirestoreWriteResult>;
   reviewSettings: ReviewSettings;
   updateReviewSettings: (settings: Partial<ReviewSettings>) => void;
   helpCenterSettings: HelpCenterSettings;
@@ -376,28 +407,28 @@ interface ShopContextType {
 
   // Categories Management (Add, Edit, Delete, Custom Icon)
   categories: Category[];
-  addCategory: (category: Category) => void;
-  updateCategory: (category: Category) => void;
-  deleteCategory: (categoryId: string) => void;
+  addCategory: (category: Category) => Promise<FirestoreWriteResult>;
+  updateCategory: (category: Category) => Promise<FirestoreWriteResult>;
+  deleteCategory: (categoryId: string) => Promise<FirestoreWriteResult>;
 
   // Homepage Hero Banners Management
   heroBanners: HeroBannerSlide[];
-  addHeroBanner: (banner: HeroBannerSlide) => void;
-  updateHeroBanner: (banner: HeroBannerSlide) => void;
-  deleteHeroBanner: (bannerId: string | number) => void;
+  addHeroBanner: (banner: HeroBannerSlide) => Promise<FirestoreWriteResult>;
+  updateHeroBanner: (banner: HeroBannerSlide) => Promise<FirestoreWriteResult>;
+  deleteHeroBanner: (bannerId: string | number) => Promise<FirestoreWriteResult>;
 
   // Complete The Look (Combo Bundles)
   bundles: BundleOffer[];
   activeBundleId: string | null;
-  addBundle: (bundle: BundleOffer) => void;
-  updateBundle: (bundle: BundleOffer) => void;
-  deleteBundle: (bundleId: string) => void;
+  addBundle: (bundle: BundleOffer) => Promise<FirestoreWriteResult>;
+  updateBundle: (bundle: BundleOffer) => Promise<FirestoreWriteResult>;
+  deleteBundle: (bundleId: string) => Promise<FirestoreWriteResult>;
   setActiveBundleId: (id: string | null) => void;
   autoGenerateBundle: () => BundleOffer | null;
 
   // Occasions & Need Collections ("আপনার কী প্রয়োজন?")
   autoAssignNeedTags: (product: Product) => NeedTag[];
-  updateProductNeedTags: (productId: string, needTags: NeedTag[]) => void;
+  updateProductNeedTags: (productId: string, needTags: NeedTag[]) => Promise<FirestoreWriteResult>;
   autoTagAllProducts: () => number;
 
   // Firebase backend integration
@@ -865,19 +896,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    // Test Firebase connection on mount
+    // Test Firebase connectivity on startup
+    testConnection().catch(() => {});
     refreshFirebaseConnection();
-
-    // Authenticate Firebase Auth session for active admin to guarantee Firestore permissions
-    try {
-      const savedAdmin = localStorage.getItem('jps_active_admin');
-      if (savedAdmin) {
-        const parsedAdmin = JSON.parse(savedAdmin);
-        if (parsedAdmin?.email) {
-          ensureAdminFirebaseAuthSession(parsedAdmin.email, parsedAdmin.password).catch(() => {});
-        }
-      }
-    } catch {}
 
     // Purge legacy demo orders and demo conversations from localStorage if present
     try {
@@ -909,47 +930,36 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch {}
 
-    // Clean up oversized local logo data URL if any exists from previous sessions
+    // Clean up oversized local logo data URL if any exists
     const localSaved = localStorage.getItem('jps_website_settings');
     if (localSaved) {
       try {
         const parsed = JSON.parse(localSaved);
         if (parsed.logoUrl?.startsWith('data:') && parsed.logoUrl.length > 50000) {
-          resizeDataUrl(parsed.logoUrl, 320, 0.70).then(compactUrl => {
+          resizeDataUrl(parsed.logoUrl, 320, 0.7).then(compactUrl => {
             const sanitized = { ...parsed, logoUrl: compactUrl };
             setWebsiteSettings(prev => ({ ...prev, logoUrl: compactUrl }));
             localStorage.setItem('jps_website_settings', JSON.stringify(sanitized));
-            saveBrandingToFirestore(sanitized).catch(() => {});
           });
         }
       } catch {}
     }
 
-    // Fetch branding from Firestore
+    // 1. PUBLIC NON-PII STOREFRONT READS & REAL-TIME LISTENERS
     fetchBrandingFromFirestore()
       .then(remoteSettings => {
         if (remoteSettings && (remoteSettings.logoUrl || remoteSettings.storeName)) {
-          setWebsiteSettings(prev => ({
-            ...prev,
-            ...remoteSettings,
-          }));
+          setWebsiteSettings(prev => ({ ...prev, ...remoteSettings }));
         }
       })
-      .catch(err => {
-        console.warn('Initial branding fetch from Firestore:', err);
-      });
+      .catch(err => console.warn('Initial branding fetch:', err));
 
-    // Real-time listener for live sync
     const unsubscribe = subscribeToBranding(remoteBranding => {
       if (remoteBranding && Object.keys(remoteBranding).length > 0) {
-        setWebsiteSettings(prev => ({
-          ...prev,
-          ...remoteBranding,
-        }));
+        setWebsiteSettings(prev => ({ ...prev, ...remoteBranding }));
       }
     });
 
-    // Fetch categories from Firestore
     fetchCategoriesFromFirestore()
       .then(remoteCats => {
         if (remoteCats && remoteCats.length > 0) {
@@ -957,11 +967,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.setItem('jps_categories', JSON.stringify(remoteCats));
         }
       })
-      .catch(err => {
-        console.warn('Initial categories fetch from Firestore:', err);
-      });
+      .catch(err => console.warn('Initial categories fetch:', err));
 
-    // Fetch hero banners from Firestore
     fetchHeroBannersFromFirestore()
       .then(remoteBanners => {
         if (remoteBanners && remoteBanners.length > 0) {
@@ -969,82 +976,19 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.setItem('jps_hero_banners', JSON.stringify(remoteBanners));
         }
       })
-      .catch(err => {
-        console.warn('Initial hero banners fetch from Firestore:', err);
-      });
+      .catch(err => console.warn('Initial hero banners fetch:', err));
 
-    // Fetch and subscribe couriers from Firestore
-    fetchCouriersFromFirestore()
-      .then(remoteCouriers => {
-        if (remoteCouriers && remoteCouriers.length > 0) {
-          const sanitized = remoteCouriers.map(c => {
-            const isDemo =
-              c.apiKey === 'stf_live_api_jotpot_89312b9' ||
-              c.apiKey === 'rdx_prod_key_jps_38192a' ||
-              c.apiKey === 'pth_client_id_jotpot' ||
-              c.apiKey === 'ppf_api_jotpot_392' ||
-              c.apiKey === 'scs_token_jps_5510' ||
-              c.apiKey === 'eco_api_key_jotpot_21';
-            if (isDemo) {
-              return {
-                ...c,
-                apiKey: '',
-                secretKey: '',
-                merchantId: '',
-                connectionStatus: 'disconnected' as const,
-                isActive: false,
-                accountBalance: 0,
-              };
-            }
-            return c;
-          });
-          setCourierConfigs(sanitized);
-          localStorage.setItem('jps_courier_configs', JSON.stringify(sanitized));
-        } else {
-          saveCouriersToFirestore(DEFAULT_COURIER_CONFIGS).catch(() => {});
-        }
-      })
-      .catch(err => {
-        console.warn('Initial couriers fetch from Firestore:', err);
-      });
-
-    const unsubCouriers = subscribeToCouriers(remoteCouriers => {
-      if (remoteCouriers && remoteCouriers.length > 0) {
-        const sanitized = remoteCouriers.map(c => {
-          const isDemo =
-            c.apiKey === 'stf_live_api_jotpot_89312b9' ||
-            c.apiKey === 'rdx_prod_key_jps_38192a' ||
-            c.apiKey === 'pth_client_id_jotpot';
-          if (isDemo) {
-            return {
-              ...c,
-              apiKey: '',
-              secretKey: '',
-              merchantId: '',
-              connectionStatus: 'disconnected' as const,
-              isActive: false,
-              accountBalance: 0,
-            };
-          }
-          return c;
-        });
-        setCourierConfigs(sanitized);
-      }
-    });
-
-    // Fetch and subscribe Payment Settings from Firestore
     fetchPaymentSettingsFromFirestore()
       .then(remotePayment => {
         if (remotePayment && (remotePayment.bkashNumber || remotePayment.nagadNumber)) {
           setPaymentSettings(prev => ({ ...prev, ...remotePayment, rocketEnabled: false }));
-          localStorage.setItem('jps_payment_settings', JSON.stringify({ ...remotePayment, rocketEnabled: false }));
-        } else {
-          savePaymentSettingsToFirestore({ ...DEFAULT_PAYMENT_SETTINGS, rocketEnabled: false }).catch(() => {});
+          localStorage.setItem(
+            'jps_payment_settings',
+            JSON.stringify({ ...remotePayment, rocketEnabled: false })
+          );
         }
       })
-      .catch(err => {
-        console.warn('Initial payment settings fetch from Firestore:', err);
-      });
+      .catch(err => console.warn('Initial payment settings fetch:', err));
 
     const unsubPayment = subscribeToPaymentSettings(remotePayment => {
       if (remotePayment) {
@@ -1052,19 +996,14 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
-    // Fetch and subscribe Delivery Settings from Firestore
     fetchDeliverySettingsFromFirestore()
       .then(remoteDelivery => {
         if (remoteDelivery && remoteDelivery.insideDhakaFee !== undefined) {
           setDeliverySettings(prev => ({ ...prev, ...remoteDelivery }));
           localStorage.setItem('jps_delivery_settings', JSON.stringify(remoteDelivery));
-        } else {
-          saveDeliverySettingsToFirestore(DEFAULT_DELIVERY_SETTINGS).catch(() => {});
         }
       })
-      .catch(err => {
-        console.warn('Initial delivery settings fetch from Firestore:', err);
-      });
+      .catch(err => console.warn('Initial delivery settings fetch:', err));
 
     const unsubDelivery = subscribeToDeliverySettings(remoteDelivery => {
       if (remoteDelivery) {
@@ -1072,20 +1011,14 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
-    // Fetch and subscribe Products Catalog from Firestore
     fetchProductsFromFirestore()
       .then(remoteProds => {
         if (remoteProds && remoteProds.length > 0) {
           setProducts(remoteProds);
           localStorage.setItem('jps_products', JSON.stringify(remoteProds));
-        } else {
-          // Initialize remote database with current catalog so Netlify visitors get initial products
-          saveProductsToFirestore(products).catch(() => {});
         }
       })
-      .catch(err => {
-        console.warn('Initial products fetch from Firestore:', err);
-      });
+      .catch(err => console.warn('Initial products fetch:', err));
 
     const unsubProducts = subscribeToProducts(remoteProds => {
       if (remoteProds && remoteProds.length > 0) {
@@ -1093,81 +1026,23 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
-    // Fetch and subscribe Orders from Firestore (pure real customer orders, no demo data)
-    fetchOrdersFromFirestore()
-      .then(remoteOrders => {
-        if (remoteOrders) {
-          const realOrders = remoteOrders.filter(
-            o => !['JPS-2026-9204', 'JPS-2026-9190', 'JPS-2026-8941'].includes(o.id)
-          );
-          setOrders(realOrders);
-          localStorage.setItem('jps_orders', JSON.stringify(realOrders));
-        }
-      })
-      .catch(err => {
-        console.warn('Initial orders fetch from Firestore:', err);
-      });
-
-    const unsubOrders = subscribeToOrders(remoteOrders => {
-      if (remoteOrders) {
-        const realOrders = remoteOrders.filter(
-          o => !['JPS-2026-9204', 'JPS-2026-9190', 'JPS-2026-8941'].includes(o.id)
-        );
-        setOrders(realOrders);
-      }
-    });
-
-    // Fetch and subscribe Live Chat Conversations from Firestore
-    fetchConversationsFromFirestore()
-      .then(remoteConvs => {
-        if (remoteConvs) {
-          const realConvs = remoteConvs.filter(
-            c => !['conv-live-01', 'conv-wa-02', 'conv-fb-03'].includes(c.id)
-          );
-          setConversations(realConvs);
-          localStorage.setItem('jps_unified_conversations', JSON.stringify(realConvs));
-        }
-      })
-      .catch(err => {
-        console.warn('Initial conversations fetch from Firestore:', err);
-      });
-
-    const unsubConversations = subscribeToConversations(remoteConvs => {
-      if (remoteConvs) {
-        const realConvs = remoteConvs.filter(
-          c => !['conv-live-01', 'conv-wa-02', 'conv-fb-03'].includes(c.id)
-        );
-        setConversations(realConvs);
-      }
-    });
-
-    // Fetch Combo Bundles from Firestore
     fetchBundlesFromFirestore()
       .then(remoteBundles => {
         if (remoteBundles && remoteBundles.length > 0) {
           setBundles(remoteBundles);
           localStorage.setItem('jps_bundles', JSON.stringify(remoteBundles));
-        } else {
-          saveBundlesToFirestore(bundles).catch(() => {});
         }
       })
-      .catch(err => {
-        console.warn('Initial bundles fetch from Firestore:', err);
-      });
+      .catch(err => console.warn('Initial bundles fetch:', err));
 
-    // Fetch and subscribe Promo Coupons from Firestore
     fetchCouponsFromFirestore()
       .then(remoteCoupons => {
         if (remoteCoupons && remoteCoupons.length > 0) {
           setCoupons(remoteCoupons);
           localStorage.setItem('jps_coupons', JSON.stringify(remoteCoupons));
-        } else {
-          saveCouponsToFirestore(coupons).catch(() => {});
         }
       })
-      .catch(err => {
-        console.warn('Initial coupons fetch from Firestore:', err);
-      });
+      .catch(err => console.warn('Initial coupons fetch:', err));
 
     const unsubCoupons = subscribeToCoupons(remoteCoupons => {
       if (remoteCoupons && remoteCoupons.length > 0) {
@@ -1175,7 +1050,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
-    // Fetch Return Policy from Firestore
     fetchReturnPolicyFromFirestore()
       .then(remotePolicy => {
         if (remotePolicy) {
@@ -1185,7 +1059,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
       .catch(() => {});
 
-    // Fetch SEO Settings from Firestore
     fetchSeoSettingsFromFirestore()
       .then(remoteSeo => {
         if (remoteSeo) {
@@ -1195,7 +1068,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
       .catch(() => {});
 
-    // Fetch LiveChat Settings from Firestore
     fetchLiveChatSettingsFromFirestore()
       .then(remoteChat => {
         if (remoteChat) {
@@ -1205,7 +1077,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
       .catch(() => {});
 
-    // Fetch Homepage Sections from Firestore
     fetchHomepageSectionsFromFirestore()
       .then(remoteHome => {
         if (remoteHome) {
@@ -1215,7 +1086,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
       .catch(() => {});
 
-    // Fetch Order Settings from Firestore
     fetchOrderSettingsFromFirestore()
       .then(remoteOrderRules => {
         if (remoteOrderRules) {
@@ -1225,51 +1095,14 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
       .catch(() => {});
 
-    // Fetch Staff Accounts from Firestore
-    fetchStaffAccountsFromFirestore()
-      .then(remoteStaff => {
-        if (remoteStaff && remoteStaff.length > 0) {
-          const hasMaster = remoteStaff.some(s => s.email === 'mdmahmudulhashan0@gmail.com');
-          const finalStaff = hasMaster ? remoteStaff : [INITIAL_STAFF_ACCOUNTS[0], ...remoteStaff];
-          setStaffAccounts(finalStaff);
-          localStorage.setItem('jps_staff_accounts', JSON.stringify(finalStaff));
-        }
-      })
-    // Fetch and subscribe Registered Customers from Firestore
-    fetchCustomersFromFirestore()
-      .then(remoteCusts => {
-        if (remoteCusts && remoteCusts.length > 0) {
-          const sanitized = remoteCusts.filter(
-            c => c.phone !== '01712345678' && c.email?.toLowerCase() !== 'tanvir.ahmed@gmail.com'
-          );
-          setRegisteredCustomers(sanitized);
-          localStorage.setItem('jps_registered_customers', JSON.stringify(sanitized));
-        }
-      })
-      .catch(() => {});
-
-    const unsubCustomers = subscribeToCustomers(remoteCusts => {
-      if (remoteCusts) {
-        const sanitized = remoteCusts.filter(
-          c => c.phone !== '01712345678' && c.email?.toLowerCase() !== 'tanvir.ahmed@gmail.com'
-        );
-        setRegisteredCustomers(sanitized);
-      }
-    });
-
-    // Fetch and subscribe Help Center Settings from Firestore
     fetchHelpCenterSettingsFromFirestore()
       .then(remoteHelpCenter => {
         if (remoteHelpCenter) {
           setHelpCenterSettings(remoteHelpCenter);
           localStorage.setItem('jps_help_center_settings', JSON.stringify(remoteHelpCenter));
-        } else {
-          saveHelpCenterSettingsToFirestore(helpCenterSettings).catch(() => {});
         }
       })
-      .catch(err => {
-        console.warn('Initial Help Center fetch from Firestore:', err);
-      });
+      .catch(err => console.warn('Initial Help Center fetch:', err));
 
     const unsubHelpCenter = subscribeToHelpCenterSettings(remoteHelpCenter => {
       if (remoteHelpCenter) {
@@ -1277,19 +1110,14 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
-    // Fetch and subscribe Trust Section Settings from Firestore
     fetchTrustSectionSettingsFromFirestore()
       .then(remoteTrust => {
         if (remoteTrust) {
           setTrustSectionSettings(remoteTrust);
           localStorage.setItem('jps_trust_section_settings', JSON.stringify(remoteTrust));
-        } else {
-          saveTrustSectionSettingsToFirestore(trustSectionSettings).catch(() => {});
         }
       })
-      .catch(err => {
-        console.warn('Initial Trust Section fetch from Firestore:', err);
-      });
+      .catch(err => console.warn('Initial Trust Section fetch:', err));
 
     const unsubTrustSection = subscribeToTrustSectionSettings(remoteTrust => {
       if (remoteTrust) {
@@ -1302,15 +1130,232 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubPayment();
       unsubDelivery();
       unsubProducts();
-      unsubOrders();
       unsubCoupons();
-      unsubCustomers();
-      unsubCouriers();
-      unsubConversations();
       unsubHelpCenter();
       unsubTrustSection();
     };
   }, []);
+
+  // 2. AUTHENTICATION-GATED PII SUBSCRIPTIONS & SEEDING (Zero unauthorized reads!)
+  useEffect(() => {
+    const cleanUnsubs: Array<() => void> = [];
+    let isCancelled = false;
+
+    const mergeOrders = (a: Order[], b: Order[]) => {
+      const map = new Map<string, Order>();
+      [...b, ...a].forEach(o => {
+        if (o?.id && !isDemoOrderRecord(o)) {
+          map.set(o.id, o);
+        }
+      });
+      return Array.from(map.values());
+    };
+
+    const mergeCustomers = (a: RegisteredCustomer[], b: RegisteredCustomer[]) => {
+      const map = new Map<string, RegisteredCustomer>();
+      [...b, ...a].forEach(c => {
+        if (c?.id && c.phone !== '01712345678' && c.email?.toLowerCase() !== 'tanvir.ahmed@gmail.com') {
+          map.set(c.id, stripPasswords(c));
+        }
+      });
+      return Array.from(map.values());
+    };
+
+    const mergeConversations = (a: UnifiedConversation[], b: UnifiedConversation[]) => {
+      const map = new Map<string, UnifiedConversation>();
+      [...b, ...a].forEach(c => {
+        if (c?.id && !['conv-live-01', 'conv-wa-02', 'conv-fb-03'].includes(c.id)) {
+          map.set(c.id, c);
+        }
+      });
+      return Array.from(map.values());
+    };
+
+    const setupStaffSubscriptions = async () => {
+      if (!adminUser) return;
+      await ensureAdminFirebaseAuthSession(adminUser.email).catch(() => {});
+      if (isCancelled) return;
+
+      // Seed missing public config docs ONLY when verified admin logs in and document truly doesn't exist
+      fetchSettingDocSafe('products_catalog').then(res => {
+        if (!res.exists && !res.error && products.length > 0) {
+          saveProductsToFirestore(products, adminUser.email).catch(() => {});
+        }
+      }).catch(() => {});
+
+      fetchSettingDocSafe('couriers').then(res => {
+        if (!res.exists && !res.error) {
+          saveCouriersToFirestore(DEFAULT_COURIER_CONFIGS, adminUser.email).catch(() => {});
+        }
+      }).catch(() => {});
+
+      // Fetch Staff Accounts (with .catch!)
+      fetchStaffAccountsFromFirestore()
+        .then(remoteStaff => {
+          if (remoteStaff && remoteStaff.length > 0) {
+            const cleanedStaff = stripPasswords(remoteStaff);
+            const hasMaster = cleanedStaff.some(s => s.email === MASTER_SUPER_ADMIN_EMAIL);
+            const finalStaff = hasMaster
+              ? cleanedStaff
+              : [stripPasswords(INITIAL_STAFF_ACCOUNTS[0]), ...cleanedStaff];
+            setStaffAccounts(finalStaff);
+            localStorage.setItem('jps_staff_accounts', JSON.stringify(finalStaff));
+          }
+        })
+        .catch(() => {});
+
+      // Fetch & Subscribe Couriers
+      fetchCouriersFromFirestore()
+        .then(remoteCouriers => {
+          if (remoteCouriers && remoteCouriers.length > 0) {
+            setCourierConfigs(remoteCouriers);
+            localStorage.setItem('jps_courier_configs', JSON.stringify(remoteCouriers));
+          }
+        })
+        .catch(() => {});
+
+      cleanUnsubs.push(
+        subscribeToCouriers(remoteCouriers => {
+          if (remoteCouriers && remoteCouriers.length > 0) {
+            setCourierConfigs(remoteCouriers);
+          }
+        })
+      );
+
+      // Orders: merge legacy settings/orders_data ledger + /orders collection
+      Promise.all([fetchOrdersFromFirestore(), fetchOrdersCollectionFromFirestore()])
+        .then(([ledgerOrders, colOrders]) => {
+          const merged = mergeOrders(colOrders || [], ledgerOrders || []);
+          if (merged.length > 0 || (ledgerOrders !== null && colOrders.length === 0)) {
+            setOrders(merged);
+            localStorage.setItem('jps_orders', JSON.stringify(merged));
+          }
+        })
+        .catch(() => {});
+
+      cleanUnsubs.push(
+        subscribeToOrders(ledgerOrders => {
+          setOrders(prev => mergeOrders(prev, ledgerOrders || []));
+        })
+      );
+      cleanUnsubs.push(
+        subscribeToOrdersCollection(colOrders => {
+          setOrders(prev => mergeOrders(colOrders || [], prev));
+        })
+      );
+
+      // Customers: merge settings/customers + /customers collection
+      Promise.all([fetchCustomersFromFirestore(), fetchCustomersCollectionFromFirestore()])
+        .then(([ledgerCusts, colCusts]) => {
+          const merged = mergeCustomers(colCusts || [], ledgerCusts || []);
+          if (merged.length > 0) {
+            setRegisteredCustomers(merged);
+            localStorage.setItem('jps_registered_customers', JSON.stringify(merged));
+          }
+        })
+        .catch(() => {});
+
+      cleanUnsubs.push(
+        subscribeToCustomers(ledgerCusts => {
+          setRegisteredCustomers(prev => mergeCustomers(prev, ledgerCusts || []));
+        })
+      );
+      cleanUnsubs.push(
+        subscribeToCustomersCollection(colCusts => {
+          setRegisteredCustomers(prev => mergeCustomers(colCusts || [], prev));
+        })
+      );
+
+      // Conversations: merge settings/live_chat_conversations + /conversations collection
+      Promise.all([fetchConversationsFromFirestore(), fetchConversationsCollectionFromFirestore()])
+        .then(([ledgerConvs, colConvs]) => {
+          const merged = mergeConversations(colConvs || [], ledgerConvs || []);
+          if (merged.length > 0) {
+            setConversations(merged);
+            localStorage.setItem('jps_unified_conversations', JSON.stringify(merged));
+          }
+        })
+        .catch(() => {});
+
+      cleanUnsubs.push(
+        subscribeToConversations(ledgerConvs => {
+          setConversations(prev => mergeConversations(prev, ledgerConvs || []));
+        })
+      );
+      cleanUnsubs.push(
+        subscribeToConversationsCollection(colConvs => {
+          setConversations(prev => mergeConversations(colConvs || [], prev));
+        })
+      );
+    };
+
+    const setupCustomerSubscriptions = async (uid: string) => {
+      if (!uid || isCancelled) return;
+      const custDoc = await fetchCustomerDocFromFirestore(uid);
+      if (custDoc?.status === 'disabled') {
+        await logoutFirebaseAuth();
+        localStorage.removeItem('jps_user');
+        setUser({ isLoggedIn: false, name: '', phone: '', email: '', uid: undefined });
+        showToast(
+          language === 'bn'
+            ? 'আপনার অ্যাকাউন্টটি অ্যাডমিন কর্তৃক নিষ্ক্রিয় করা হয়েছে।'
+            : 'Your account has been disabled by Admin.',
+          'error'
+        );
+        return;
+      }
+
+      fetchCustomerOrdersFromFirestore(uid)
+        .then(custOrders => {
+          if (custOrders.length > 0) {
+            setOrders(prev => mergeOrders(custOrders, prev));
+          }
+        })
+        .catch(() => {});
+
+      cleanUnsubs.push(
+        subscribeToCustomerOrders(uid, custOrders => {
+          setOrders(prev => mergeOrders(custOrders, prev));
+        })
+      );
+
+      fetchCustomerConversationsFromFirestore(uid)
+        .then(custConvs => {
+          if (custConvs.length > 0) {
+            setConversations(prev => mergeConversations(custConvs, prev));
+          }
+        })
+        .catch(() => {});
+
+      cleanUnsubs.push(
+        subscribeToCustomerConversations(uid, custConvs => {
+          setConversations(prev => mergeConversations(custConvs, prev));
+        })
+      );
+    };
+
+    if (adminUser || isCurrentUserStaffEmail()) {
+      setupStaffSubscriptions();
+    } else if (user.isLoggedIn && user.uid) {
+      setupCustomerSubscriptions(user.uid);
+    }
+
+    const unsubAuth = subscribeToFirebaseAuthState(fbUser => {
+      if (fbUser && !adminUser && user.isLoggedIn && !user.uid) {
+        setUser(prev => ({ ...prev, uid: fbUser.uid }));
+      }
+    });
+    cleanUnsubs.push(unsubAuth);
+
+    return () => {
+      isCancelled = true;
+      cleanUnsubs.forEach(fn => {
+        try {
+          fn();
+        } catch {}
+      });
+    };
+  }, [adminUser?.email, user.isLoggedIn, user.uid]);
 
   // Active modals
   const [activeModal, setActiveModal] = useState<string | null>(null);
@@ -1343,26 +1388,25 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cartKey = getCustomerCartStorageKey(customerId);
     localStorage.setItem(cartKey, JSON.stringify(cart));
 
-    // Also persist customer's cart to their registered customer profile & Firestore if logged in
-    if (user.isLoggedIn && customerId) {
+    // Also persist customer's own cart to /customers/{uid} when signed in via Firebase Auth
+    if (user.isLoggedIn && user.uid && customerId) {
       const cleanPhone = user.phone ? user.phone.replace(/\D/g, '') : '';
       const cleanEmail = (user.email || '').toLowerCase().trim();
-      setRegisteredCustomers(prev => {
-        const idx = prev.findIndex(
-          c => (cleanPhone && c.phone.replace(/\D/g, '') === cleanPhone) ||
-               (cleanEmail && c.email.toLowerCase().trim() === cleanEmail)
+      const matched = registeredCustomers.find(
+        c =>
+          c.id === user.uid ||
+          (cleanPhone && c.phone.replace(/\D/g, '') === cleanPhone) ||
+          (cleanEmail && c.email.toLowerCase().trim() === cleanEmail)
+      );
+      if (matched && JSON.stringify(matched.cart || []) !== JSON.stringify(cart)) {
+        const updatedCust: RegisteredCustomer = { ...matched, id: user.uid, cart };
+        setRegisteredCustomers(prev =>
+          prev.map(c => (c.id === matched.id ? updatedCust : c))
         );
-        if (idx !== -1 && JSON.stringify(prev[idx].cart || []) !== JSON.stringify(cart)) {
-          const next = [...prev];
-          next[idx] = { ...next[idx], cart };
-          localStorage.setItem('jps_registered_customers', JSON.stringify(next));
-          saveCustomersToFirestore(next).catch(() => {});
-          return next;
-        }
-        return prev;
-      });
+        saveSingleCustomerToFirestore(updatedCust).catch(() => {});
+      }
     }
-  }, [cart, user.isLoggedIn, user.phone, user.email]);
+  }, [cart, user.isLoggedIn, user.uid, user.phone, user.email]);
 
   useEffect(() => {
     localStorage.setItem('jps_wishlist', JSON.stringify(wishlist));
@@ -1564,20 +1608,20 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('jps_cart_guest');
     localStorage.removeItem('jps_cart');
 
-    if (user.isLoggedIn && customerId) {
+    if (user.isLoggedIn && user.uid && customerId) {
       const cleanPhone = user.phone ? user.phone.replace(/\D/g, '') : '';
       const cleanEmail = (user.email || '').toLowerCase().trim();
-      setRegisteredCustomers(prev => {
-        const next = prev.map(c =>
+      const matched = registeredCustomers.find(
+        c =>
+          c.id === user.uid ||
           (cleanPhone && c.phone.replace(/\D/g, '') === cleanPhone) ||
           (cleanEmail && c.email.toLowerCase().trim() === cleanEmail)
-            ? { ...c, cart: [] }
-            : c
-        );
-        localStorage.setItem('jps_registered_customers', JSON.stringify(next));
-        saveCustomersToFirestore(next).catch(() => {});
-        return next;
-      });
+      );
+      if (matched) {
+        const updatedCust: RegisteredCustomer = { ...matched, id: user.uid, cart: [] };
+        setRegisteredCustomers(prev => prev.map(c => (c.id === matched.id ? updatedCust : c)));
+        saveSingleCustomerToFirestore(updatedCust).catch(() => {});
+      }
     }
   };
 
@@ -1687,37 +1731,43 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAppliedCoupon(null);
   };
 
-  const addCoupon = (coupon: Coupon) => {
-    setCoupons(prev => {
-      const updated = [coupon, ...prev];
-      localStorage.setItem('jps_coupons', JSON.stringify(updated));
-      saveCouponsToFirestore(updated).catch(err => {
-        console.warn('Failed to sync coupon to Firestore:', err);
-      });
-      return updated;
-    });
+  const addCoupon = async (coupon: Coupon): Promise<FirestoreWriteResult> => {
+    const activeAdminEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const updated = [coupon, ...coupons.filter(c => c.code !== coupon.code)];
+    const res = await saveCouponsToFirestore(updated, activeAdminEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `কুপন সংরক্ষণ ব্যর্থ: ${res.error}` : `Coupon save failed: ${res.error}`, 'error');
+      return res;
+    }
+    setCoupons(updated);
+    localStorage.setItem('jps_coupons', JSON.stringify(updated));
+    return res;
   };
 
-  const updateCoupon = (updated: Coupon) => {
-    setCoupons(prev => {
-      const next = prev.map(c => (c.code === updated.code ? updated : c));
-      localStorage.setItem('jps_coupons', JSON.stringify(next));
-      saveCouponsToFirestore(next).catch(err => {
-        console.warn('Failed to sync updated coupon to Firestore:', err);
-      });
-      return next;
-    });
+  const updateCoupon = async (updatedCoupon: Coupon): Promise<FirestoreWriteResult> => {
+    const activeAdminEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const next = coupons.map(c => (c.code === updatedCoupon.code ? updatedCoupon : c));
+    const res = await saveCouponsToFirestore(next, activeAdminEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `কুপন আপডেট ব্যর্থ: ${res.error}` : `Coupon update failed: ${res.error}`, 'error');
+      return res;
+    }
+    setCoupons(next);
+    localStorage.setItem('jps_coupons', JSON.stringify(next));
+    return res;
   };
 
-  const deleteCoupon = (code: string) => {
-    setCoupons(prev => {
-      const next = prev.filter(c => c.code !== code);
-      localStorage.setItem('jps_coupons', JSON.stringify(next));
-      saveCouponsToFirestore(next).catch(err => {
-        console.warn('Failed to sync deleted coupon to Firestore:', err);
-      });
-      return next;
-    });
+  const deleteCoupon = async (code: string): Promise<FirestoreWriteResult> => {
+    const activeAdminEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const next = coupons.filter(c => c.code !== code);
+    const res = await saveCouponsToFirestore(next, activeAdminEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `কুপন মুছতে ব্যর্থ: ${res.error}` : `Coupon delete failed: ${res.error}`, 'error');
+      return res;
+    }
+    setCoupons(next);
+    localStorage.setItem('jps_coupons', JSON.stringify(next));
+    return res;
   };
 
   // Addresses
@@ -1730,15 +1780,31 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Synchronize orders to React state, localStorage, and Cloud Firestore
-  const syncOrders = (updater: (prev: Order[]) => Order[]) => {
-    setOrders(prev => {
-      const next = updater(prev);
-      localStorage.setItem('jps_orders', JSON.stringify(next));
-      saveOrdersToFirestore(next).catch(err => {
-        console.warn('Failed to sync orders to Firestore:', err);
-      });
-      return next;
-    });
+  const syncOrders = async (
+    updater: (prev: Order[]) => Order[],
+    changedOrderId?: string
+  ): Promise<FirestoreWriteResult> => {
+    const activeAdminEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const next = updater(orders);
+    if (adminUser || isCurrentUserStaffEmail()) {
+      const res = await saveOrdersToFirestore(next, activeAdminEmail);
+      if (!res.success) {
+        showToast(
+          language === 'bn' ? `অর্ডার সংরক্ষণ ব্যর্থ: ${res.error}` : `Order save failed: ${res.error}`,
+          'error'
+        );
+        return res;
+      }
+      if (changedOrderId) {
+        const target = next.find(o => o.id === changedOrderId);
+        if (target) {
+          saveSingleOrderToFirestore(target).catch(() => {});
+        }
+      }
+    }
+    setOrders(next);
+    localStorage.setItem('jps_orders', JSON.stringify(next));
+    return { success: true };
   };
 
   // Order Placement
@@ -1934,8 +2000,15 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     });
 
-    // Save order
-    syncOrders(prev => [confirmedOrder, ...prev.filter(o => o.id !== confirmedOrder.id)]);
+    // Update local state after verified atomic Firestore write (ledger only if staff)
+    setOrders(prev => {
+      const next = [confirmedOrder, ...prev.filter(o => o.id !== confirmedOrder.id)];
+      localStorage.setItem('jps_orders', JSON.stringify(next));
+      if (adminUser || isCurrentUserStaffEmail()) {
+        saveOrdersToFirestore(next, adminUser?.email || MASTER_SUPER_ADMIN_EMAIL).catch(() => {});
+      }
+      return next;
+    });
 
     // Send customer notification
     const orderNotif: UserNotification = {
@@ -1967,115 +2040,129 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Order Confirmation & Review Workflow
-  const confirmOrder = (orderId: string, confirmedBy = 'Admin') => {
+  const confirmOrder = async (orderId: string, confirmedBy = 'Admin'): Promise<FirestoreWriteResult> => {
     const now = new Date();
     const dateStr =
       now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    syncOrders(prev =>
-      prev.map(ord => {
-        if (ord.id !== orderId) return ord;
+    return syncOrders(
+      prev =>
+        prev.map(ord => {
+          if (ord.id !== orderId) return ord;
 
-        const timelineStep: OrderTimelineStep = {
-          status: 'Confirmed',
-          statusBn: 'অর্ডার নিশ্চিত করা হয়েছে',
-          date: dateStr,
-          completed: true,
-          description: `Order verified and confirmed by ${confirmedBy}`,
-          descriptionBn: `${confirmedBy} কর্তৃক গ্রাহকের তথ্য যাচাই করে অর্ডার নিশ্চিত করা হয়েছে`,
-        };
+          const timelineStep: OrderTimelineStep = {
+            status: 'Confirmed',
+            statusBn: 'অর্ডার নিশ্চিত করা হয়েছে',
+            date: dateStr,
+            completed: true,
+            description: `Order verified and confirmed by ${confirmedBy}`,
+            descriptionBn: `${confirmedBy} কর্তৃক গ্রাহকের তথ্য যাচাই করে অর্ডার নিশ্চিত করা হয়েছে`,
+          };
 
-        const existingWithoutDupes = ord.timeline.filter(t => t.status !== 'Confirmed');
+          const existingWithoutDupes = ord.timeline.filter(t => t.status !== 'Confirmed');
 
-        return {
-          ...ord,
-          status: 'Confirmed',
-          confirmedBy,
-          confirmedAt: dateStr,
-          timeline: [...existingWithoutDupes, timelineStep],
-        };
-      })
+          return {
+            ...ord,
+            status: 'Confirmed',
+            confirmedBy,
+            confirmedAt: dateStr,
+            timeline: [...existingWithoutDupes, timelineStep],
+          };
+        }),
+      orderId
     );
   };
 
-  const cancelOrder = (orderId: string, reason: string) => {
+  const cancelOrder = async (orderId: string, reason: string): Promise<FirestoreWriteResult> => {
     const now = new Date();
     const dateStr =
       now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    syncOrders(prev =>
-      prev.map(ord => {
-        if (ord.id !== orderId) return ord;
+    const cancelledOrder = orders.find(o => o.id === orderId);
+    const res = await syncOrders(
+      prev =>
+        prev.map(ord => {
+          if (ord.id !== orderId) return ord;
 
-        // Restore stock
-        ord.items.forEach(item => {
-          setProducts(currProducts =>
-            currProducts.map(p =>
-              p.id === item.product.id ? { ...p, stock: p.stock + item.quantity } : p
-            )
-          );
-        });
+          const cancelStep: OrderTimelineStep = {
+            status: 'Cancelled',
+            statusBn: 'অর্ডার বাতিল করা হয়েছে',
+            date: dateStr,
+            completed: true,
+            description: `Order cancelled. Reason: ${reason}`,
+            descriptionBn: `অর্ডার বাতিল। কারণ: ${reason}`,
+          };
 
-        const cancelStep: OrderTimelineStep = {
-          status: 'Cancelled',
-          statusBn: 'অর্ডার বাতিল করা হয়েছে',
-          date: dateStr,
-          completed: true,
-          description: `Order cancelled. Reason: ${reason}`,
-          descriptionBn: `অর্ডার বাতিল। কারণ: ${reason}`,
-        };
-
-        return {
-          ...ord,
-          status: 'Cancelled',
-          cancelReason: reason,
-          timeline: [...ord.timeline, cancelStep],
-        };
-      })
+          return {
+            ...ord,
+            status: 'Cancelled',
+            cancelReason: reason,
+            timeline: [...ord.timeline, cancelStep],
+          };
+        }),
+      orderId
     );
+
+    if (res.success && cancelledOrder) {
+      const updatedProducts = products.map(p => {
+        const matchItem = cancelledOrder.items.find(it => it.product.id === p.id);
+        return matchItem ? { ...p, stock: p.stock + matchItem.quantity } : p;
+      });
+      setProducts(updatedProducts);
+      saveProductsToFirestore(updatedProducts, adminUser?.email || MASTER_SUPER_ADMIN_EMAIL).catch(() => {});
+    }
+
+    return res;
   };
 
-  const holdOrder = (orderId: string, reason: string) => {
+  const holdOrder = async (orderId: string, reason: string): Promise<FirestoreWriteResult> => {
     const now = new Date();
     const dateStr =
       now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    syncOrders(prev =>
-      prev.map(ord => {
-        if (ord.id !== orderId) return ord;
+    return syncOrders(
+      prev =>
+        prev.map(ord => {
+          if (ord.id !== orderId) return ord;
 
-        const holdStep: OrderTimelineStep = {
-          status: 'On Hold',
-          statusBn: 'অর্ডার হোল্ডে রাখা হয়েছে',
-          date: dateStr,
-          completed: true,
-          description: `Order put on hold. Reason: ${reason}`,
-          descriptionBn: `অর্ডার হোল্ডে রাখা হয়েছে। কারণ: ${reason}`,
-        };
+          const holdStep: OrderTimelineStep = {
+            status: 'On Hold',
+            statusBn: 'অর্ডার হোল্ডে রাখা হয়েছে',
+            date: dateStr,
+            completed: true,
+            description: `Order put on hold. Reason: ${reason}`,
+            descriptionBn: `অর্ডার হোল্ডে রাখা হয়েছে। কারণ: ${reason}`,
+          };
 
-        return {
-          ...ord,
-          status: 'On Hold',
-          holdReason: reason,
-          timeline: [...ord.timeline, holdStep],
-        };
-      })
+          return {
+            ...ord,
+            status: 'On Hold',
+            holdReason: reason,
+            timeline: [...ord.timeline, holdStep],
+          };
+        }),
+      orderId
     );
   };
 
-  const editOrder = (orderId: string, updatedFields: Partial<Order>) => {
-    syncOrders(prev =>
-      prev.map(ord => {
-        if (ord.id !== orderId) return ord;
-        return {
-          ...ord,
-          ...updatedFields,
-        };
-      })
+  const editOrder = async (orderId: string, updatedFields: Partial<Order>): Promise<FirestoreWriteResult> => {
+    return syncOrders(
+      prev =>
+        prev.map(ord => {
+          if (ord.id !== orderId) return ord;
+          return {
+            ...ord,
+            ...updatedFields,
+          };
+        }),
+      orderId
     );
   };
 
-  const addCallLog = (orderId: string, log: Omit<OrderCallLog, 'id' | 'timestamp'>) => {
+  const addCallLog = async (
+    orderId: string,
+    log: Omit<OrderCallLog, 'id' | 'timestamp'>
+  ): Promise<FirestoreWriteResult> => {
     const now = new Date();
     const timestamp =
       now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -2086,14 +2173,16 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...log,
     };
 
-    syncOrders(prev =>
-      prev.map(ord => {
-        if (ord.id !== orderId) return ord;
-        return {
-          ...ord,
-          callLogs: [newLog, ...(ord.callLogs || [])],
-        };
-      })
+    return syncOrders(
+      prev =>
+        prev.map(ord => {
+          if (ord.id !== orderId) return ord;
+          return {
+            ...ord,
+            callLogs: [newLog, ...(ord.callLogs || [])],
+          };
+        }),
+      orderId
     );
   };
 
@@ -2253,46 +2342,46 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     let updatedOrderObj: Order | null = null;
 
-    syncOrders(prev =>
-      prev.map(ord => {
-        if (ord.id !== orderId) return ord;
+    await syncOrders(
+      prev =>
+        prev.map(ord => {
+          if (ord.id !== orderId) return ord;
 
-        const updated: Order = {
-          ...ord,
-          customerName: finalRecipientName,
-          phone: cleanPhone,
-          address: {
-            ...ord.address,
-            fullAddress: overrides?.recipient_address || ord.address.fullAddress,
-          },
-          status: 'Shipped',
-          trackingNumber: realTrackingCode,
-          courier: courierCfg?.name || courierName,
-          courierInfo: {
-            courierName,
-            courierNameBn: courierCfg?.nameBn || courierName,
-            consignmentId: realConsignmentId,
-            trackingCode: realTrackingCode,
-            trackingUrl: realTrackingUrl,
-            courierStatus,
-            weightKg,
-            codAmount,
-            shippingCharge,
-            dispatchedDate: dateStr,
-            specialInstructions,
-            hubName: `${ord.address.district} Hub`,
-          },
-          timeline: [...ord.timeline.filter(t => t.status !== 'Shipped'), shippedStep],
-        };
-        updatedOrderObj = updated;
-        return updated;
-      })
+          const updated: Order = {
+            ...ord,
+            customerName: finalRecipientName,
+            phone: cleanPhone,
+            address: {
+              ...ord.address,
+              fullAddress: overrides?.recipient_address || ord.address.fullAddress,
+            },
+            status: 'Shipped',
+            trackingNumber: realTrackingCode,
+            courier: courierCfg?.name || courierName,
+            courierInfo: {
+              courierName,
+              courierNameBn: courierCfg?.nameBn || courierName,
+              consignmentId: realConsignmentId,
+              trackingCode: realTrackingCode,
+              trackingUrl: realTrackingUrl,
+              courierStatus,
+              weightKg,
+              codAmount,
+              shippingCharge,
+              dispatchedDate: dateStr,
+              specialInstructions,
+              hubName: `${ord.address.district} Hub`,
+            },
+            timeline: [...ord.timeline.filter(t => t.status !== 'Shipped'), shippedStep],
+          };
+          updatedOrderObj = updated;
+          return updated;
+        }),
+      orderId
     );
 
     if (updatedOrderObj) {
-      saveSingleOrderToFirestore(updatedOrderObj).catch(err => {
-        console.warn('Failed to save updated courier order to Firestore:', err);
-      });
+      await saveSingleOrderToFirestore(updatedOrderObj);
     }
 
     return {
@@ -2303,93 +2392,97 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   };
 
-  const updateCourierStatus = (orderId: string, courierStatus: any) => {
+  const updateCourierStatus = async (orderId: string, courierStatus: any): Promise<FirestoreWriteResult> => {
     const now = new Date();
     const dateStr =
       now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    syncOrders(prev =>
-      prev.map(ord => {
-        if (ord.id !== orderId || !ord.courierInfo) return ord;
+    return syncOrders(
+      prev =>
+        prev.map(ord => {
+          if (ord.id !== orderId || !ord.courierInfo) return ord;
 
-        let newOrderStatus: OrderStatus = ord.status;
-        let stepDesc = '';
-        let stepDescBn = '';
+          let newOrderStatus: OrderStatus = ord.status;
+          let stepDesc = '';
+          let stepDescBn = '';
 
-        if (courierStatus === 'In Transit') {
-          newOrderStatus = 'Shipped';
-          stepDesc = 'Parcel is moving between hubs';
-          stepDescBn = 'পার্সেলটি কুরিয়ার হাবে ট্রানজিটে আছে';
-        } else if (courierStatus === 'Out for Delivery') {
-          newOrderStatus = 'Out for Delivery';
-          stepDesc = 'Rider is on the way to customer address';
-          stepDescBn = 'রাইডার ডেলিভারি সম্পন্ন করতে রওয়ানা দিয়েছে';
-        } else if (courierStatus === 'Delivered') {
-          newOrderStatus = 'Delivered';
-          stepDesc = 'Successfully delivered & COD collected';
-          stepDescBn = 'পণ্য সফলভাবে পৌঁছে দেওয়া হয়েছে ও ক্যাশ গ্রহণ করা হয়েছে';
-        } else if (courierStatus === 'Returned') {
-          newOrderStatus = 'Returned';
-          stepDesc = 'Customer rejected parcel. Returning to hub';
-          stepDescBn = 'গ্রাহক গ্রহণ করেননি। পার্সেল ফেরত আসছে';
-        }
+          if (courierStatus === 'In Transit') {
+            newOrderStatus = 'Shipped';
+            stepDesc = 'Parcel is moving between hubs';
+            stepDescBn = 'পার্সেলটি কুরিয়ার হাবে ট্রানজিটে আছে';
+          } else if (courierStatus === 'Out for Delivery') {
+            newOrderStatus = 'Out for Delivery';
+            stepDesc = 'Rider is on the way to customer address';
+            stepDescBn = 'রাইডার ডেলিভারি সম্পন্ন করতে রওয়ানা দিয়েছে';
+          } else if (courierStatus === 'Delivered') {
+            newOrderStatus = 'Delivered';
+            stepDesc = 'Successfully delivered & COD collected';
+            stepDescBn = 'পণ্য সফলভাবে পৌঁছে দেওয়া হয়েছে ও ক্যাশ গ্রহণ করা হয়েছে';
+          } else if (courierStatus === 'Returned') {
+            newOrderStatus = 'Returned';
+            stepDesc = 'Customer rejected parcel. Returning to hub';
+            stepDescBn = 'গ্রাহক গ্রহণ করেননি। পার্সেল ফেরত আসছে';
+          }
 
-        const newStep: OrderTimelineStep = {
-          status: newOrderStatus,
-          statusBn:
-            newOrderStatus === 'Delivered'
-              ? 'সফল ডেলিভারি সম্পন্ন'
-              : newOrderStatus === 'Out for Delivery'
-              ? 'ডেলিভারিতে বের হয়েছে'
-              : newOrderStatus === 'Returned'
-              ? 'পার্সেল রিটার্ন'
-              : 'ট্রানজিটে আছে',
-          date: dateStr,
-          completed: true,
-          description: stepDesc,
-          descriptionBn: stepDescBn,
-        };
+          const newStep: OrderTimelineStep = {
+            status: newOrderStatus,
+            statusBn:
+              newOrderStatus === 'Delivered'
+                ? 'সফল ডেলিভারি সম্পন্ন'
+                : newOrderStatus === 'Out for Delivery'
+                ? 'ডেলিভারিতে বের হয়েছে'
+                : newOrderStatus === 'Returned'
+                ? 'পার্সেল রিটার্ন'
+                : 'ট্রানজিটে আছে',
+            date: dateStr,
+            completed: true,
+            description: stepDesc,
+            descriptionBn: stepDescBn,
+          };
 
-        return {
-          ...ord,
-          status: newOrderStatus,
-          paymentStatus: newOrderStatus === 'Delivered' ? 'Paid' : ord.paymentStatus,
-          courierInfo: {
-            ...ord.courierInfo,
-            courierStatus,
-          },
-          timeline: [...ord.timeline.filter(t => t.status !== newOrderStatus), newStep],
-        };
-      })
+          return {
+            ...ord,
+            status: newOrderStatus,
+            paymentStatus: newOrderStatus === 'Delivered' ? 'Paid' : ord.paymentStatus,
+            courierInfo: {
+              ...ord.courierInfo,
+              courierStatus,
+            },
+            timeline: [...ord.timeline.filter(t => t.status !== newOrderStatus), newStep],
+          };
+        }),
+      orderId
     );
   };
 
-  const updateOrderStatus = (orderId: string, status: OrderStatus) => {
-    syncOrders(prev =>
-      prev.map(ord => {
-        if (ord.id !== orderId) return ord;
+  const updateOrderStatus = async (orderId: string, status: OrderStatus): Promise<FirestoreWriteResult> => {
+    return syncOrders(
+      prev =>
+        prev.map(ord => {
+          if (ord.id !== orderId) return ord;
 
-        const updatedTimeline = ord.timeline.map(step => {
-          if (step.status === status) {
-            return {
-              ...step,
-              completed: true,
-              date:
-                new Date().toLocaleDateString('en-GB') +
-                ' ' +
-                new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            };
-          }
-          return step;
-        });
+          const updatedTimeline = ord.timeline.map(step => {
+            if (step.status === status) {
+              return {
+                ...step,
+                completed: true,
+                date:
+                  new Date().toLocaleDateString('en-GB') +
+                  ' ' +
+                  new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              };
+            }
+            return step;
+          });
 
-        return {
-          ...ord,
-          status,
-          timeline: updatedTimeline,
-          paymentStatus: status === 'Delivered' ? 'Paid' : ord.paymentStatus,
-        };
-      })
+          return {
+            ...ord,
+            status,
+            timeline: updatedTimeline,
+            paymentStatus: status === 'Delivered' ? 'Paid' : ord.paymentStatus,
+          };
+        }),
+      orderId
     );
   };
 
@@ -2485,18 +2578,20 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const bulkUpdateProducts = async (
     productIds: string[],
-    updates: Partial<Product>
+    updates: Partial<Product>,
+    perProductUpdates?: Record<string, Partial<Product>>
   ): Promise<{ success: boolean; error?: string }> => {
     const activeAdminEmail = adminUser?.email || 'mdmahmudulhashan0@gmail.com';
     const idSet = new Set(productIds);
     const next = products.map(p => {
       if (!idSet.has(p.id)) return p;
+      const itemUpdates = perProductUpdates?.[p.id] ? perProductUpdates[p.id] : updates;
       return {
         ...p,
-        ...updates,
+        ...itemUpdates,
         needTags:
-          updates.needTags && updates.needTags.length > 0
-            ? updates.needTags
+          itemUpdates.needTags && itemUpdates.needTags.length > 0
+            ? itemUpdates.needTags
             : p.needTags,
       };
     });
@@ -2506,45 +2601,61 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, error: saveRes.error };
     }
 
+    next
+      .filter(p => idSet.has(p.id))
+      .forEach(p => {
+        saveSingleProductToFirestore(p, activeAdminEmail).catch(() => {});
+      });
+
     setProducts(next);
     localStorage.setItem('jps_products', JSON.stringify(next));
     return { success: true };
   };
 
   // Complete The Look (Bundles) Operations
-  const addBundle = (newBundle: BundleOffer) => {
-    setBundles(prev => {
-      const updated = [newBundle, ...prev];
-      localStorage.setItem('jps_bundles', JSON.stringify(updated));
-      saveBundlesToFirestore(updated).catch(() => {});
-      return updated;
-    });
+  const addBundle = async (newBundle: BundleOffer): Promise<FirestoreWriteResult> => {
+    const activeAdminEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const updated = [newBundle, ...bundles.filter(b => b.id !== newBundle.id)];
+    const res = await saveBundlesToFirestore(updated, activeAdminEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `বান্ডেল সংরক্ষণ ব্যর্থ: ${res.error}` : `Bundle save failed: ${res.error}`, 'error');
+      return res;
+    }
+    setBundles(updated);
+    localStorage.setItem('jps_bundles', JSON.stringify(updated));
     if (newBundle.isActive !== false) {
       setActiveBundleId(newBundle.id);
     }
+    return res;
   };
 
-  const updateBundle = (updatedBundle: BundleOffer) => {
-    setBundles(prev => {
-      const updated = prev.map(b => (b.id === updatedBundle.id ? updatedBundle : b));
-      localStorage.setItem('jps_bundles', JSON.stringify(updated));
-      saveBundlesToFirestore(updated).catch(() => {});
-      return updated;
-    });
-  };
-
-  const deleteBundle = (bundleId: string) => {
-    setBundles(prev => {
-      const updated = prev.filter(b => b.id !== bundleId);
-      localStorage.setItem('jps_bundles', JSON.stringify(updated));
-      saveBundlesToFirestore(updated).catch(() => {});
-      return updated;
-    });
-    if (activeBundleId === bundleId) {
-      const remaining = bundles.filter(b => b.id !== bundleId);
-      const nextActive = remaining[0]?.id || null;
-      setActiveBundleId(nextActive);
+  const updateBundle = async (updatedBundle: BundleOffer): Promise<FirestoreWriteResult> => {
+    const activeAdminEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const updated = bundles.map(b => (b.id === updatedBundle.id ? updatedBundle : b));
+    const res = await saveBundlesToFirestore(updated, activeAdminEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `বান্ডেল আপডেট ব্যর্থ: ${res.error}` : `Bundle update failed: ${res.error}`, 'error');
+      return res;
     }
+    setBundles(updated);
+    localStorage.setItem('jps_bundles', JSON.stringify(updated));
+    return res;
+  };
+
+  const deleteBundle = async (bundleId: string): Promise<FirestoreWriteResult> => {
+    const activeAdminEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const remaining = bundles.filter(b => b.id !== bundleId);
+    const res = await saveBundlesToFirestore(remaining, activeAdminEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `বান্ডেল ডিলিট ব্যর্থ: ${res.error}` : `Bundle delete failed: ${res.error}`, 'error');
+      return res;
+    }
+    setBundles(remaining);
+    localStorage.setItem('jps_bundles', JSON.stringify(remaining));
+    if (activeBundleId === bundleId) {
+      setActiveBundleId(remaining[0]?.id || null);
+    }
+    return res;
   };
 
   const setActiveBundleId = (id: string | null) => {
@@ -2570,29 +2681,41 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return detectProductOccasions(prod);
   };
 
-  const updateProductNeedTags = (productId: string, needTags: NeedTag[]) => {
-    setProducts(prev => {
-      const updated = prev.map(p => (p.id === productId ? { ...p, needTags } : p));
-      localStorage.setItem('jps_products', JSON.stringify(updated));
-      saveProductsToFirestore(updated).catch(() => {});
-      return updated;
-    });
+  const updateProductNeedTags = async (
+    productId: string,
+    needTags: NeedTag[]
+  ): Promise<FirestoreWriteResult> => {
+    const activeAdminEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const updated = products.map(p => (p.id === productId ? { ...p, needTags } : p));
+    const res = await saveProductsToFirestore(updated, activeAdminEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `অকেশন ট্যাগ সংরক্ষণ ব্যর্থ: ${res.error}` : `Save failed: ${res.error}`, 'error');
+      return res;
+    }
+    setProducts(updated);
+    localStorage.setItem('jps_products', JSON.stringify(updated));
+    return res;
   };
 
   const autoTagAllProducts = (): number => {
     let taggedCount = 0;
-    setProducts(prev => {
-      const updated = prev.map(p => {
-        if (!p.needTags || p.needTags.length === 0) {
-          taggedCount++;
-          return { ...p, needTags: detectProductOccasions(p) };
-        }
-        return p;
-      });
-      localStorage.setItem('jps_products', JSON.stringify(updated));
-      saveProductsToFirestore(updated).catch(() => {});
-      return updated;
+    const updated = products.map(p => {
+      if (!p.needTags || p.needTags.length === 0) {
+        taggedCount++;
+        return { ...p, needTags: detectProductOccasions(p) };
+      }
+      return p;
     });
+    if (taggedCount > 0) {
+      const activeAdminEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+      saveProductsToFirestore(updated, activeAdminEmail).then(res => {
+        if (!res.success) {
+          showToast(language === 'bn' ? `অটো-ট্যাগ সংরক্ষণ ব্যর্থ: ${res.error}` : `Auto-tag failed: ${res.error}`, 'error');
+        }
+      });
+      setProducts(updated);
+      localStorage.setItem('jps_products', JSON.stringify(updated));
+    }
     return taggedCount;
   };
 
@@ -2636,28 +2759,24 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // User auth
   const loginUser = (info: { name: string; phone: string; email: string; uid?: string }) => {
-    ensureCustomerAuthSession().then(authUid => {
-      const finalUid = info.uid || authUid || `cust-${Date.now()}`;
-      const updatedUser: UserState = {
-        isLoggedIn: true,
-        name: info.name,
-        phone: info.phone,
-        email: info.email,
-        uid: finalUid,
-      };
-      setUser(updatedUser);
-      localStorage.setItem('jps_user', JSON.stringify(updatedUser));
-      switchCustomerCart(info.phone || info.email);
-    });
+    const finalUid = info.uid || `cust-${Date.now()}`;
+    const updatedUser: UserState = {
+      isLoggedIn: true,
+      name: info.name,
+      phone: info.phone,
+      email: info.email,
+      uid: finalUid,
+    };
+    setUser(updatedUser);
+    localStorage.setItem('jps_user', JSON.stringify(updatedUser));
+    switchCustomerCart(info.phone || info.email);
   };
 
   const logoutUser = () => {
-    // 1. Save current customer's cart under their personal storage key
     if (user.isLoggedIn && (user.phone || user.email)) {
       const key = getCustomerCartStorageKey(user.phone || user.email);
       localStorage.setItem(key, JSON.stringify(cart));
     }
-    // 2. Clear active in-memory cart and coupons completely
     setCart([]);
     setAppliedCoupon(null);
     localStorage.removeItem('jps_cart_guest');
@@ -2668,183 +2787,226 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser({ isLoggedIn: false, name: '', phone: '', email: '', uid: undefined });
   };
 
-  // Synchronize registered customers to state, localStorage, and Cloud Firestore
-  const syncCustomers = (updater: (prev: RegisteredCustomer[]) => RegisteredCustomer[]) => {
-    setRegisteredCustomers(prev => {
-      const next = updater(prev);
-      localStorage.setItem('jps_registered_customers', JSON.stringify(next));
-      saveCustomersToFirestore(next).catch(err => {
-        console.warn('Failed to sync customers to Firestore:', err);
-      });
-      return next;
-    });
-  };
-
-  // Customer Registration with Password
-  const registerCustomer = (info: { name: string; phone: string; email?: string; password: string }) => {
+  // Real Firebase Auth Customer Registration (no plaintext passwords saved in Firestore!)
+  const registerCustomer = async (info: {
+    name: string;
+    phone: string;
+    email?: string;
+    password: string;
+  }): Promise<{ success: boolean; message: string }> => {
     if (!info.name.trim() || !info.phone.trim() || !info.password) {
       return { success: false, message: 'অনুগ্রহ করে নাম, মোবাইল নম্বর এবং পাসওয়ার্ড প্রদান করুন।' };
     }
-    const cleanPhone = info.phone.trim();
-    const cleanEmail = (info.email || '').trim().toLowerCase();
 
-    const exists = registeredCustomers.some(
-      c => c.phone === cleanPhone || (cleanEmail && c.email.toLowerCase() === cleanEmail)
-    );
-    if (exists) {
-      return { success: false, message: 'এই মোবাইল নম্বর বা ইমেইল দিয়ে ইতিমধ্যে অ্যাকাউন্ট তৈরি করা হয়েছে। লগইন করুন।' };
+    const res = await registerCustomerWithFirebaseAuth({
+      name: info.name,
+      phone: info.phone,
+      email: info.email,
+      password: info.password,
+      cart: [...cart],
+    });
+
+    if (!res.success || !res.customer || !res.uid) {
+      return { success: false, message: res.message };
     }
 
-    const customerId = `cust-${Date.now()}`;
-    const newCustomer: RegisteredCustomer = {
-      id: customerId,
-      name: info.name.trim(),
-      phone: cleanPhone,
-      email: cleanEmail || `${cleanPhone}@customer.jotpotshop.com`,
-      password: info.password,
-      isGoogleUser: false,
-      createdAt: new Date().toISOString(),
+    const newCustomer = stripPasswords(res.customer);
+    setRegisteredCustomers(prev => {
+      const next = [newCustomer, ...prev.filter(c => c.id !== newCustomer.id)];
+      localStorage.setItem('jps_registered_customers', JSON.stringify(next));
+      return next;
+    });
+
+    const updatedUser: UserState = {
+      isLoggedIn: true,
+      name: newCustomer.name,
+      phone: newCustomer.phone,
+      email: newCustomer.email,
+      uid: res.uid,
+    };
+    setUser(updatedUser);
+    localStorage.setItem('jps_user', JSON.stringify(updatedUser));
+    switchCustomerCart(newCustomer.phone || newCustomer.email, newCustomer);
+
+    return { success: true, message: res.message };
+  };
+
+  // Real Firebase Auth Customer Login
+  const loginCustomerWithPassword = async (
+    identifier: string,
+    pass: string
+  ): Promise<{ success: boolean; message: string }> => {
+    const res = await loginCustomerWithFirebaseAuth(identifier, pass);
+    if (!res.success || !res.customer || !res.uid) {
+      return { success: false, message: res.message };
+    }
+
+    const cleanCust = stripPasswords(res.customer);
+    setRegisteredCustomers(prev => {
+      const exists = prev.some(c => c.id === cleanCust.id);
+      const next = exists
+        ? prev.map(c => (c.id === cleanCust.id ? { ...c, ...cleanCust } : c))
+        : [cleanCust, ...prev];
+      localStorage.setItem('jps_registered_customers', JSON.stringify(next));
+      return next;
+    });
+
+    const updatedUser: UserState = {
+      isLoggedIn: true,
+      name: cleanCust.name,
+      phone: cleanCust.phone,
+      email: cleanCust.email,
+      uid: res.uid,
+    };
+    setUser(updatedUser);
+    localStorage.setItem('jps_user', JSON.stringify(updatedUser));
+    switchCustomerCart(cleanCust.phone || cleanCust.email, cleanCust);
+
+    return { success: true, message: res.message };
+  };
+
+  // One-click Google Login synced cleanly to /customers/{uid}
+  const loginWithGoogle = async (googleUser?: {
+    uid?: string;
+    name: string;
+    email: string;
+    avatarUrl?: string;
+  }): Promise<{ success: boolean; message: string }> => {
+    if (!googleUser?.email) {
+      return { success: false, message: 'গুগল ইমেইল পাওয়া যায়নি।' };
+    }
+
+    const res = await loginGoogleCustomerToFirestore({
+      uid: googleUser.uid,
+      name: googleUser.name,
+      email: googleUser.email,
+      avatarUrl: googleUser.avatarUrl,
       cart: [...cart],
+    });
+
+    if (!res.success || !res.customer || !res.uid) {
+      showToast(res.message, 'error');
+      return { success: false, message: res.message };
+    }
+
+    const cleanCust = stripPasswords(res.customer);
+    setRegisteredCustomers(prev => {
+      const exists = prev.some(c => c.id === cleanCust.id || c.email.toLowerCase() === cleanCust.email.toLowerCase());
+      const next = exists
+        ? prev.map(c =>
+            c.id === cleanCust.id || c.email.toLowerCase() === cleanCust.email.toLowerCase()
+              ? { ...c, ...cleanCust }
+              : c
+          )
+        : [cleanCust, ...prev];
+      localStorage.setItem('jps_registered_customers', JSON.stringify(next));
+      return next;
+    });
+
+    const updatedUser: UserState = {
+      isLoggedIn: true,
+      name: cleanCust.name,
+      phone: cleanCust.phone,
+      email: cleanCust.email,
+      uid: res.uid,
+    };
+    setUser(updatedUser);
+    localStorage.setItem('jps_user', JSON.stringify(updatedUser));
+    switchCustomerCart(cleanCust.email || cleanCust.phone, cleanCust);
+
+    return { success: true, message: res.message };
+  };
+
+  // Reset Customer Password via Firebase Auth
+  const resetCustomerPassword = async (
+    identifier: string,
+    newPass?: string
+  ): Promise<{ success: boolean; message: string }> => {
+    return resetCustomerPasswordFirebase(identifier, newPass);
+  };
+
+  // Update Customer Profile (/customers/{uid})
+  const updateCustomerProfile = async (updates: {
+    name: string;
+    phone: string;
+    email?: string;
+  }): Promise<FirestoreWriteResult> => {
+    const cleanUpdates = {
+      name: updates.name.trim() || user.name,
+      phone: updates.phone.trim() || user.phone,
+      email: (updates.email || user.email || '').trim(),
     };
 
-    syncCustomers(prev => [newCustomer, ...prev]);
+    const nextUser = { ...user, ...cleanUpdates };
+    setUser(nextUser);
+    localStorage.setItem('jps_user', JSON.stringify(nextUser));
 
-    ensureCustomerAuthSession().then(authUid => {
-      const updatedUser: UserState = {
-        isLoggedIn: true,
-        name: newCustomer.name,
-        phone: newCustomer.phone,
-        email: newCustomer.email,
-        uid: authUid || customerId,
-      };
-      setUser(updatedUser);
-      localStorage.setItem('jps_user', JSON.stringify(updatedUser));
-      switchCustomerCart(newCustomer.phone || newCustomer.email, newCustomer);
-    });
-
-    return { success: true, message: 'কাস্টমার অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে! স্বাগতম।' };
-  };
-
-  // Customer Login with Password (Real credentials only, NO demo backdoor)
-  const loginCustomerWithPassword = (identifier: string, pass: string) => {
-    const cleanId = identifier.trim().toLowerCase();
-    const cleanPass = pass.trim();
-
-    const found = registeredCustomers.find(
-      c => (c.phone === cleanId || c.email.toLowerCase() === cleanId) && c.password === cleanPass
-    );
-
-    if (found) {
-      ensureCustomerAuthSession().then(authUid => {
-        const updatedUser: UserState = {
-          isLoggedIn: true,
-          name: found.name,
-          phone: found.phone,
-          email: found.email,
-          uid: authUid || found.id,
-        };
-        setUser(updatedUser);
-        localStorage.setItem('jps_user', JSON.stringify(updatedUser));
-        switchCustomerCart(found.phone || found.email, found);
+    const targetUid = user.uid || registeredCustomers.find(c => c.phone === user.phone || (user.email && c.email.toLowerCase() === user.email.toLowerCase()))?.id;
+    if (targetUid) {
+      const base = registeredCustomers.find(c => c.id === targetUid);
+      const updatedCustomer: RegisteredCustomer = stripPasswords({
+        id: targetUid,
+        name: cleanUpdates.name,
+        phone: cleanUpdates.phone,
+        email: cleanUpdates.email,
+        createdAt: base?.createdAt || new Date().toISOString(),
+        isGoogleUser: base?.isGoogleUser,
+        avatarUrl: base?.avatarUrl,
+        status: base?.status || 'active',
+        cart: base?.cart || cart,
       });
-      return { success: true, message: 'লগইন সফল হয়েছে!' };
-    }
 
-    return { success: false, message: 'ভুল মোবাইল নম্বর/ইমেইল অথবা পাসওয়ার্ড! অনুগ্রহ করে সঠিক তথ্য দিন।' };
+      const res = await saveSingleCustomerToFirestore(updatedCustomer);
+      if (!res.success) {
+        showToast(language === 'bn' ? `প্রোফাইল সেভ ব্যর্থ: ${res.error}` : `Profile save failed: ${res.error}`, 'error');
+        return res;
+      }
+
+      setRegisteredCustomers(prev => {
+        const exists = prev.some(c => c.id === targetUid);
+        const next = exists ? prev.map(c => (c.id === targetUid ? updatedCustomer : c)) : [updatedCustomer, ...prev];
+        localStorage.setItem('jps_registered_customers', JSON.stringify(next));
+        return next;
+      });
+      return res;
+    }
+    return { success: true };
   };
 
-  // One-click Google Login
-  const loginWithGoogle = (googleUser?: { name: string; email: string; avatarUrl?: string }) => {
-    if (!googleUser?.email) return;
-    const gName = googleUser.name || 'Google User';
-    const gEmail = googleUser.email.toLowerCase();
-    const gAvatar = googleUser.avatarUrl || '';
+  // Admin: Toggle Customer Active / Disabled Status
+  const updateCustomerStatus = async (
+    customerId: string,
+    status: 'active' | 'disabled'
+  ): Promise<FirestoreWriteResult> => {
+    const activeAdminEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const target = registeredCustomers.find(c => c.id === customerId);
+    if (!target) {
+      return { success: false, error: 'Customer not found' };
+    }
+    const updatedCustomer: RegisteredCustomer = stripPasswords({ ...target, status });
+    const nextList = registeredCustomers.map(c => (c.id === customerId ? updatedCustomer : c));
 
-    let existing = registeredCustomers.find(c => c.email.toLowerCase() === gEmail);
-    if (!existing) {
-      existing = {
-        id: `cust-g-${Date.now()}`,
-        name: gName,
-        phone: '',
-        email: gEmail,
-        isGoogleUser: true,
-        avatarUrl: gAvatar,
-        createdAt: new Date().toISOString(),
-        cart: [...cart],
-      };
-      syncCustomers(prev => [existing!, ...prev]);
+    const docRes = await saveSingleCustomerToFirestore(updatedCustomer);
+    const ledgerRes = await saveCustomersToFirestore(nextList, activeAdminEmail);
+    if (!docRes.success && !ledgerRes.success) {
+      const errMsg = docRes.error || ledgerRes.error || 'Failed to update status';
+      showToast(language === 'bn' ? `স্ট্যাটাস পরিবর্তন ব্যর্থ: ${errMsg}` : `Failed: ${errMsg}`, 'error');
+      return { success: false, error: errMsg };
     }
 
-    ensureCustomerAuthSession().then(authUid => {
-      const updatedUser: UserState = {
-        isLoggedIn: true,
-        name: existing!.name,
-        phone: existing!.phone,
-        email: existing!.email,
-        uid: authUid || existing!.id,
-      };
-      setUser(updatedUser);
-      localStorage.setItem('jps_user', JSON.stringify(updatedUser));
-      switchCustomerCart(existing!.email, existing);
-    });
-  };
-
-  // Reset Customer Password
-  const resetCustomerPassword = (phone: string, newPass: string) => {
-    const cleanPhone = phone.trim().replace(/\D/g, '');
-    if (cleanPhone.length < 11) {
-      return { success: false, message: 'সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন।' };
-    }
-    if (!newPass || newPass.length < 6) {
-      return { success: false, message: 'নতুন পাসওয়ার্ড কমপক্ষে ৬ ডিজিটের হতে হবে।' };
-    }
-
-    const found = registeredCustomers.find(c => c.phone.replace(/\D/g, '') === cleanPhone);
-    if (!found) {
-      return { success: false, message: 'এই নম্বরে কোনো অ্যাকাউন্ট পাওয়া যায়নি। নতুন অ্যাকাউন্ট রেজিস্ট্রেশন করুন।' };
-    }
-
-    syncCustomers(prev =>
-      prev.map(c => (c.phone.replace(/\D/g, '') === cleanPhone ? { ...c, password: newPass } : c))
+    setRegisteredCustomers(nextList);
+    localStorage.setItem('jps_registered_customers', JSON.stringify(nextList));
+    showToast(
+      status === 'active'
+        ? language === 'bn'
+          ? 'কাস্টমার অ্যাকাউন্ট সক্রিয় করা হয়েছে।'
+          : 'Customer account activated.'
+        : language === 'bn'
+        ? 'কাস্টমার অ্যাকাউন্ট নিষ্ক্রিয় করা হয়েছে।'
+        : 'Customer account disabled.',
+      'success'
     );
-
-    ensureCustomerAuthSession().then(authUid => {
-      const updatedUser: UserState = {
-        isLoggedIn: true,
-        name: found.name,
-        phone: found.phone,
-        email: found.email,
-        uid: authUid || found.id,
-      };
-      setUser(updatedUser);
-      localStorage.setItem('jps_user', JSON.stringify(updatedUser));
-      switchCustomerCart(found.phone || found.email, found);
-    });
-
-    return { success: true, message: 'পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে এবং আপনি লগইন হয়েছেন!' };
-  };
-
-  // Update Customer Profile
-  const updateCustomerProfile = (updates: { name: string; phone: string; email?: string }) => {
-    setUser(prev => ({
-      ...prev,
-      name: updates.name.trim() || prev.name,
-      phone: updates.phone.trim() || prev.phone,
-      email: (updates.email || prev.email || '').trim(),
-    }));
-
-    syncCustomers(prev =>
-      prev.map(c =>
-        c.phone === user.phone || (c.email && c.email.toLowerCase() === user.email.toLowerCase())
-          ? {
-              ...c,
-              name: updates.name.trim() || c.name,
-              phone: updates.phone.trim() || c.phone,
-              email: (updates.email || c.email).trim(),
-            }
-          : c
-      )
-    );
+    return { success: true };
   };
 
   // Toggle AI Sales Agent
@@ -2925,19 +3087,20 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updatedList = [newConv, ...prev];
       }
 
-      saveSingleConversationToFirestore(targetConvObj).catch(() => {});
+      saveSingleConversationToFirestore(targetConvObj, custEmail || 'customer@jotpotshop.com').catch(() => {});
 
-      // If AI Sales Assistant is ON, AI generates smart conversational response via server-side Gemini 3.8 Flash
+      // If AI Sales Assistant is ON, AI generates smart conversational response via server-side Gemini
       if (liveChatSettings.enableAiSalesAgent !== false) {
-        // Collect existing conversation messages for conversational memory
         const currentConv = updatedList.find(c => c.id === targetConvId);
         const history = (currentConv?.messages || []).slice(-6).map(m => ({
           sender: m.sender as 'customer' | 'ai' | 'staff',
           text: m.text,
         }));
 
-        // Collect compact real products from Firebase state
-        const productsCatalog = products.slice(0, 25).map(p => ({
+        const productsCatalog = products
+          .filter(p => p.isPublished !== false)
+          .slice(0, 25)
+          .map(p => ({
           id: p.id,
           name: p.name,
           nameBn: p.nameBn,
@@ -2950,7 +3113,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           image: p.images?.[0],
         }));
 
-        // Customer's latest order if exists
         const latestOrder = orders.find(
           o => (custPhone && o.phone === custPhone) || (custEmail && o.email === custEmail)
         );
@@ -2996,24 +3158,22 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
               productImage: data.suggestedProduct?.image,
             };
 
-            setConversations(current => {
-              const next = current.map(c =>
-                c.id === targetConvId
-                  ? {
-                      ...c,
-                      lastMessage: replyText,
-                      lastMessageTime: 'এইমাত্র',
-                      status: data.transferToHuman ? 'open' : c.status,
-                      messages: [...c.messages, aiMsg],
-                    }
-                  : c
-              );
-              saveConversationsToFirestore(next).catch(() => {});
-              return next;
-            });
+            setConversations(current =>
+              current.map(c => {
+                if (c.id !== targetConvId) return c;
+                const updatedConv: UnifiedConversation = {
+                  ...c,
+                  lastMessage: replyText,
+                  lastMessageTime: 'এইমাত্র',
+                  status: data.transferToHuman ? 'open' : c.status,
+                  messages: [...c.messages, aiMsg],
+                };
+                saveSingleConversationToFirestore(updatedConv, custEmail || 'ai@jotpotshop.com').catch(() => {});
+                return updatedConv;
+              })
+            );
           })
           .catch(() => {
-            // Graceful fallback if network fails
             const fallbackText =
               'আসসালামু আলাইকুম! সাময়িক নেটওয়ার্ক সমস্যার কারণে উত্তর দিতে বিলম্ব হচ্ছে। আপনি চাইলে সরাসরি হটলাইনে (01800-568768) যোগাযোগ করতে পারেন।';
             const fallbackMsg: UnifiedMessage = {
@@ -3023,19 +3183,25 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
               text: fallbackText,
               timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
-            setConversations(current => {
-              const next = current.map(c =>
-                c.id === targetConvId
-                  ? { ...c, lastMessage: fallbackText, lastMessageTime: 'এইমাত্র', messages: [...c.messages, fallbackMsg] }
-                  : c
-              );
-              saveConversationsToFirestore(next).catch(() => {});
-              return next;
-            });
+            setConversations(current =>
+              current.map(c => {
+                if (c.id !== targetConvId) return c;
+                const updatedConv: UnifiedConversation = {
+                  ...c,
+                  lastMessage: fallbackText,
+                  lastMessageTime: 'এইমাত্র',
+                  messages: [...c.messages, fallbackMsg],
+                };
+                saveSingleConversationToFirestore(updatedConv, custEmail || 'ai@jotpotshop.com').catch(() => {});
+                return updatedConv;
+              })
+            );
           });
       }
 
-      saveConversationsToFirestore(updatedList).catch(() => {});
+      if (adminUser || isCurrentUserStaffEmail()) {
+        saveConversationsToFirestore(updatedList, adminUser?.email || MASTER_SUPER_ADMIN_EMAIL).catch(() => {});
+      }
       return updatedList;
     });
   };
@@ -3049,10 +3215,11 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ) => {
     if (!replyText.trim()) return;
     const author = staffName || adminUser?.name || 'স্টাফ সাপোর্ট (Staff)';
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
     const now = new Date();
     const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    let attachedProd = attachedProductId ? products.find(p => p.id === attachedProductId) : undefined;
+    const attachedProd = attachedProductId ? products.find(p => p.id === attachedProductId) : undefined;
 
     const newReply: UnifiedMessage = {
       id: `msg-staff-${Date.now()}`,
@@ -3077,28 +3244,44 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             status: 'waiting' as const,
             messages: [...c.messages, newReply],
           };
-          saveSingleConversationToFirestore(updated).catch(() => {});
+          saveSingleConversationToFirestore(updated, activeEmail).catch(() => {});
           return updated;
         }
         return c;
       });
-      saveConversationsToFirestore(next).catch(() => {});
+      saveConversationsToFirestore(next, activeEmail).catch(() => {});
       return next;
     });
   };
 
   const markConversationAsRead = (conversationId: string) => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
     setConversations(prev => {
-      const next = prev.map(c => (c.id === conversationId ? { ...c, unreadCount: 0 } : c));
-      saveConversationsToFirestore(next).catch(() => {});
+      const next = prev.map(c => {
+        if (c.id !== conversationId) return c;
+        const updated = { ...c, unreadCount: 0 };
+        saveSingleConversationToFirestore(updated, activeEmail).catch(() => {});
+        return updated;
+      });
+      if (adminUser || isCurrentUserStaffEmail()) {
+        saveConversationsToFirestore(next, activeEmail).catch(() => {});
+      }
       return next;
     });
   };
 
   const updateConversationStatus = (conversationId: string, status: 'open' | 'resolved' | 'waiting') => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
     setConversations(prev => {
-      const next = prev.map(c => (c.id === conversationId ? { ...c, status } : c));
-      saveConversationsToFirestore(next).catch(() => {});
+      const next = prev.map(c => {
+        if (c.id !== conversationId) return c;
+        const updated = { ...c, status };
+        saveSingleConversationToFirestore(updated, activeEmail).catch(() => {});
+        return updated;
+      });
+      if (adminUser || isCurrentUserStaffEmail()) {
+        saveConversationsToFirestore(next, activeEmail).catch(() => {});
+      }
       return next;
     });
   };
@@ -3148,132 +3331,164 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('jps_role_permissions', JSON.stringify(DEFAULT_ROLE_PERMISSIONS));
   };
 
-  // Business Configurations updates
-  const updateWebsiteSettings = (settings: Partial<WebsiteSettings>) => {
-    setWebsiteSettings(prev => {
-      const merged = { ...prev, ...settings };
-      localStorage.setItem('jps_website_settings', JSON.stringify(merged));
-      // Background sync to Firestore
-      saveBrandingToFirestore(merged).catch(err => {
-        console.warn('Could not sync branding to Firestore:', err);
-      });
-      return merged;
-    });
+  // Business Configurations updates with real Firestore persistence confirmation
+  const updateWebsiteSettings = async (settings: Partial<WebsiteSettings>): Promise<FirestoreWriteResult> => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const merged = { ...websiteSettings, ...settings };
+    const res = await saveBrandingToFirestore(merged, activeEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `ব্র্যান্ডিং সংরক্ষণ ব্যর্থ: ${res.error}` : `Save failed: ${res.error}`, 'error');
+      return res;
+    }
+    setWebsiteSettings(merged);
+    localStorage.setItem('jps_website_settings', JSON.stringify(merged));
+    return res;
   };
 
   const saveBrandingToRemote = async (settings: Partial<WebsiteSettings>): Promise<boolean> => {
-    try {
-      const merged = { ...websiteSettings, ...settings };
-      // Sanitize and compress data URLs before storing and syncing
-      if (merged.logoUrl?.startsWith('data:') && merged.logoUrl.length > 50000) {
-        merged.logoUrl = await resizeDataUrl(merged.logoUrl, 320, 0.70);
-      }
-      if (merged.mobileLogoUrl?.startsWith('data:') && merged.mobileLogoUrl.length > 30000) {
-        merged.mobileLogoUrl = await resizeDataUrl(merged.mobileLogoUrl, 180, 0.70);
-      }
-      if (merged.faviconUrl?.startsWith('data:') && merged.faviconUrl.length > 15000) {
-        merged.faviconUrl = await resizeDataUrl(merged.faviconUrl, 48, 0.65);
-      }
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const merged = { ...websiteSettings, ...settings };
+    if (merged.logoUrl?.startsWith('data:') && merged.logoUrl.length > 50000) {
+      merged.logoUrl = await resizeDataUrl(merged.logoUrl, 320, 0.7);
+    }
+    if (merged.mobileLogoUrl?.startsWith('data:') && merged.mobileLogoUrl.length > 30000) {
+      merged.mobileLogoUrl = await resizeDataUrl(merged.mobileLogoUrl, 180, 0.7);
+    }
+    if (merged.faviconUrl?.startsWith('data:') && merged.faviconUrl.length > 15000) {
+      merged.faviconUrl = await resizeDataUrl(merged.faviconUrl, 48, 0.65);
+    }
 
-      setWebsiteSettings(merged);
-      localStorage.setItem('jps_website_settings', JSON.stringify(merged));
-      await saveBrandingToFirestore(merged);
-      return true;
-    } catch (err) {
-      console.warn('Failed to save branding to Firestore:', err);
+    const res = await saveBrandingToFirestore(merged, activeEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `লোগো ও ব্র্যান্ডিং সংরক্ষণ ব্যর্থ: ${res.error}` : `Failed: ${res.error}`, 'error');
       return false;
     }
+    setWebsiteSettings(merged);
+    localStorage.setItem('jps_website_settings', JSON.stringify(merged));
+    return true;
   };
 
-  const updateDeliverySettings = (settings: Partial<DeliverySettings>) => {
-    setDeliverySettings(prev => {
-      const merged = { ...prev, ...settings };
-      localStorage.setItem('jps_delivery_settings', JSON.stringify(merged));
-      saveDeliverySettingsToFirestore(merged).catch(err => {
-        console.warn('Failed to sync delivery settings to Firestore:', err);
-      });
-      return merged;
-    });
+  const updateDeliverySettings = async (settings: Partial<DeliverySettings>): Promise<FirestoreWriteResult> => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const merged = { ...deliverySettings, ...settings };
+    const res = await saveDeliverySettingsToFirestore(merged, activeEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `ডেলিভারি সেটিংস সংরক্ষণ ব্যর্থ: ${res.error}` : `Save failed: ${res.error}`, 'error');
+      return res;
+    }
+    setDeliverySettings(merged);
+    localStorage.setItem('jps_delivery_settings', JSON.stringify(merged));
+    return res;
   };
 
-  const updatePaymentSettings = (settings: Partial<PaymentSettings>) => {
-    setPaymentSettings(prev => {
-      const merged = { ...prev, ...settings };
-      localStorage.setItem('jps_payment_settings', JSON.stringify(merged));
-      savePaymentSettingsToFirestore(merged).catch(err => {
-        console.warn('Failed to sync payment settings to Firestore:', err);
-      });
-      return merged;
-    });
+  const updatePaymentSettings = async (settings: Partial<PaymentSettings>): Promise<FirestoreWriteResult> => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const merged = { ...paymentSettings, ...settings };
+    const res = await savePaymentSettingsToFirestore(merged, activeEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `পেমেন্ট সেটিংস সংরক্ষণ ব্যর্থ: ${res.error}` : `Save failed: ${res.error}`, 'error');
+      return res;
+    }
+    setPaymentSettings(merged);
+    localStorage.setItem('jps_payment_settings', JSON.stringify(merged));
+    return res;
   };
 
-  const updateCourierConfig = (courierId: CourierPartner, config: Partial<CourierConfig>) => {
-    setCourierConfigs(prev => {
-      const updated = prev.map(c => (c.id === courierId ? { ...c, ...config } : c));
-      saveCouriersToFirestore(updated).catch(() => {});
-      return updated;
-    });
+  const updateCourierConfig = async (
+    courierId: CourierPartner,
+    config: Partial<CourierConfig>
+  ): Promise<FirestoreWriteResult> => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const updated = courierConfigs.map(c => (c.id === courierId ? { ...c, ...config } : c));
+    const res = await saveCouriersToFirestore(updated, activeEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `কুরিয়ার সংরক্ষণ ব্যর্থ: ${res.error}` : `Save failed: ${res.error}`, 'error');
+      return res;
+    }
+    setCourierConfigs(updated);
+    localStorage.setItem('jps_courier_configs', JSON.stringify(updated));
+    return res;
   };
 
-  const saveAllCourierConfigs = async (configs: CourierConfig[]): Promise<void> => {
+  const saveAllCourierConfigs = async (configs: CourierConfig[]): Promise<FirestoreWriteResult> => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const res = await saveCouriersToFirestore(configs, activeEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `কুরিয়ার কনফিগারেশন সংরক্ষণ ব্যর্থ: ${res.error}` : `Save failed: ${res.error}`, 'error');
+      return res;
+    }
     setCourierConfigs(configs);
     localStorage.setItem('jps_courier_configs', JSON.stringify(configs));
-    await saveCouriersToFirestore(configs);
+    return res;
   };
 
-  const updateReturnPolicySettings = (settings: Partial<ReturnPolicySettings>) => {
-    setReturnPolicySettings(prev => {
-      const merged = { ...prev, ...settings };
-      localStorage.setItem('jps_return_policy_settings', JSON.stringify(merged));
-      saveReturnPolicyToFirestore(merged).catch(err => {
-        console.warn('Failed to sync return policy to Firestore:', err);
-      });
-      return merged;
-    });
+  const updateReturnPolicySettings = async (
+    settings: Partial<ReturnPolicySettings>
+  ): Promise<FirestoreWriteResult> => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const merged = { ...returnPolicySettings, ...settings };
+    const res = await saveReturnPolicyToFirestore(merged, activeEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `রিটার্ন পলিসি সংরক্ষণ ব্যর্থ: ${res.error}` : `Save failed: ${res.error}`, 'error');
+      return res;
+    }
+    setReturnPolicySettings(merged);
+    localStorage.setItem('jps_return_policy_settings', JSON.stringify(merged));
+    return res;
   };
 
-  const updateSeoSettings = (settings: Partial<SeoSettings>) => {
-    setSeoSettings(prev => {
-      const merged = { ...prev, ...settings };
-      localStorage.setItem('jps_seo_settings', JSON.stringify(merged));
-      saveSeoSettingsToFirestore(merged).catch(err => {
-        console.warn('Failed to sync SEO settings to Firestore:', err);
-      });
-      return merged;
-    });
+  const updateSeoSettings = async (settings: Partial<SeoSettings>): Promise<FirestoreWriteResult> => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const merged = { ...seoSettings, ...settings };
+    const res = await saveSeoSettingsToFirestore(merged, activeEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `SEO সেটিংস সংরক্ষণ ব্যর্থ: ${res.error}` : `Save failed: ${res.error}`, 'error');
+      return res;
+    }
+    setSeoSettings(merged);
+    localStorage.setItem('jps_seo_settings', JSON.stringify(merged));
+    return res;
   };
 
-  const updateLiveChatSettings = (settings: Partial<LiveChatSettings>) => {
-    setLiveChatSettings(prev => {
-      const merged = { ...prev, ...settings };
-      localStorage.setItem('jps_live_chat_settings', JSON.stringify(merged));
-      saveLiveChatSettingsToFirestore(merged).catch(err => {
-        console.warn('Failed to sync livechat settings to Firestore:', err);
-      });
-      return merged;
-    });
+  const updateLiveChatSettings = async (settings: Partial<LiveChatSettings>): Promise<FirestoreWriteResult> => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const merged = { ...liveChatSettings, ...settings };
+    const res = await saveLiveChatSettingsToFirestore(merged, activeEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `লাইভ চ্যাট সেটিংস সংরক্ষণ ব্যর্থ: ${res.error}` : `Save failed: ${res.error}`, 'error');
+      return res;
+    }
+    setLiveChatSettings(merged);
+    localStorage.setItem('jps_live_chat_settings', JSON.stringify(merged));
+    return res;
   };
 
-  const updateHomepageSections = (config: Partial<HomepageSectionConfig>) => {
-    setHomepageSections(prev => {
-      const merged = { ...prev, ...config };
-      localStorage.setItem('jps_homepage_sections', JSON.stringify(merged));
-      saveHomepageSectionsToFirestore(merged).catch(err => {
-        console.warn('Failed to sync homepage sections to Firestore:', err);
-      });
-      return merged;
-    });
+  const updateHomepageSections = async (
+    config: Partial<HomepageSectionConfig>
+  ): Promise<FirestoreWriteResult> => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const merged = { ...homepageSections, ...config };
+    const res = await saveHomepageSectionsToFirestore(merged, activeEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `হোমপেজ সেকশন সংরক্ষণ ব্যর্থ: ${res.error}` : `Save failed: ${res.error}`, 'error');
+      return res;
+    }
+    setHomepageSections(merged);
+    localStorage.setItem('jps_homepage_sections', JSON.stringify(merged));
+    return res;
   };
 
-  const updateOrderSettings = (settings: Partial<OrderSettings>) => {
-    setOrderSettings(prev => {
-      const merged = { ...prev, ...settings };
-      localStorage.setItem('jps_order_settings', JSON.stringify(merged));
-      saveOrderSettingsToFirestore(merged).catch(err => {
-        console.warn('Failed to sync order settings to Firestore:', err);
-      });
-      return merged;
-    });
+  const updateOrderSettings = async (settings: Partial<OrderSettings>): Promise<FirestoreWriteResult> => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const merged = { ...orderSettings, ...settings };
+    const res = await saveOrderSettingsToFirestore(merged, activeEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `অর্ডার সেটিংস সংরক্ষণ ব্যর্থ: ${res.error}` : `Save failed: ${res.error}`, 'error');
+      return res;
+    }
+    setOrderSettings(merged);
+    localStorage.setItem('jps_order_settings', JSON.stringify(merged));
+    return res;
   };
 
   const updateReviewSettings = (settings: Partial<ReviewSettings>) => {
@@ -3301,31 +3516,27 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...helpCenterSettings,
       ...settings,
       updatedAt: new Date().toISOString(),
-      updatedBy: adminUser?.email || 'admin@jotpotshop.com',
+      updatedBy: adminUser?.email || MASTER_SUPER_ADMIN_EMAIL,
     };
+
+    const res = await saveHelpCenterSettingsToFirestore(merged, adminUser?.email || MASTER_SUPER_ADMIN_EMAIL);
+    if (!res.success) {
+      showToast(
+        language === 'bn' ? `সংরক্ষণ ব্যর্থ: ${res.error}` : `Save failed: ${res.error}`,
+        'error'
+      );
+      return { success: false, message: res.error || 'Failed to sync to Firestore.' };
+    }
 
     setHelpCenterSettings(merged);
     localStorage.setItem('jps_help_center_settings', JSON.stringify(merged));
-
-    try {
-      await saveHelpCenterSettingsToFirestore(merged, adminUser?.email || 'admin@jotpotshop.com');
-      showToast(
-        language === 'bn'
-          ? '✓ হেল্প সেন্টার ও কাস্টমার সাপোর্ট কনফিগারেশন সফলভাবে সেভ হয়েছে!'
-          : '✓ Help Center & Customer Support settings saved successfully!',
-        'success'
-      );
-      return { success: true, message: 'Settings saved to Firestore.' };
-    } catch (err) {
-      console.warn('Failed to save Help Center settings to Firestore:', err);
-      showToast(
-        language === 'bn'
-          ? 'ক্লাউডে সেভ করতে সমস্যা হয়েছে, তবে লোকালি আপডেট হয়েছে।'
-          : 'Could not sync to cloud, but saved locally.',
-        'warning'
-      );
-      return { success: false, message: 'Failed to sync to Firestore.' };
-    }
+    showToast(
+      language === 'bn'
+        ? '✓ হেল্প সেন্টার ও কাস্টমার সাপোর্ট কনফিগারেশন সফলভাবে সেভ হয়েছে!'
+        : '✓ Help Center & Customer Support settings saved successfully!',
+      'success'
+    );
+    return { success: true, message: 'Settings saved to Firestore.' };
   };
 
   const updateTrustSectionSettings = async (
@@ -3345,103 +3556,114 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...trustSectionSettings,
       ...settings,
       updatedAt: new Date().toISOString(),
-      updatedBy: adminUser?.email || 'admin@jotpotshop.com',
+      updatedBy: adminUser?.email || MASTER_SUPER_ADMIN_EMAIL,
     };
+
+    const res = await saveTrustSectionSettingsToFirestore(merged, adminUser?.email || MASTER_SUPER_ADMIN_EMAIL);
+    if (!res.success) {
+      showToast(
+        language === 'bn' ? `সংরক্ষণ ব্যর্থ: ${res.error}` : `Save failed: ${res.error}`,
+        'error'
+      );
+      return { success: false, message: res.error || 'Failed to sync to Firestore.' };
+    }
 
     setTrustSectionSettings(merged);
     localStorage.setItem('jps_trust_section_settings', JSON.stringify(merged));
-
-    try {
-      await saveTrustSectionSettingsToFirestore(merged, adminUser?.email || 'admin@jotpotshop.com');
-      showToast(
-        language === 'bn'
-          ? '✓ "নিশ্চিন্ত কেনাকাটা" সেকশন সেটিংস ক্লাউড ফায়ারবেসে সফলভাবে সেভ হয়েছে!'
-          : '✓ Trust Section settings saved successfully to Firestore!',
-        'success'
-      );
-      return { success: true, message: 'Settings saved to Firestore.' };
-    } catch (err) {
-      console.warn('Failed to save Trust Section settings to Firestore:', err);
-      showToast(
-        language === 'bn'
-          ? 'ক্লাউডে সেভ করতে সমস্যা হয়েছে, তবে লোকালি আপডেট হয়েছে।'
-          : 'Could not sync to cloud, but saved locally.',
-        'warning'
-      );
-      return { success: false, message: 'Failed to sync to Firestore.' };
-    }
+    showToast(
+      language === 'bn'
+        ? '✓ "নিশ্চিন্ত কেনাকাটা" সেকশন সেটিংস ক্লাউড ফায়ারবেসে সফলভাবে সেভ হয়েছে!'
+        : '✓ Trust Section settings saved successfully to Firestore!',
+      'success'
+    );
+    return { success: true, message: 'Settings saved to Firestore.' };
   };
 
   // Categories CRUD
-  const addCategory = (category: Category) => {
-    setCategories(prev => {
-      const updated = [category, ...prev];
-      localStorage.setItem('jps_categories', JSON.stringify(updated));
-      saveCategoriesToFirestore(updated).catch(err =>
-        console.warn('Could not sync category to Firestore:', err)
-      );
-      return updated;
-    });
+  const addCategory = async (category: Category): Promise<FirestoreWriteResult> => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const updated = [category, ...categories.filter(c => c.id !== category.id)];
+    const res = await saveCategoriesToFirestore(updated, activeEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `ক্যাটাগরি যোগ ব্যর্থ: ${res.error}` : `Category save failed: ${res.error}`, 'error');
+      return res;
+    }
+    setCategories(updated);
+    localStorage.setItem('jps_categories', JSON.stringify(updated));
+    return res;
   };
 
-  const updateCategory = (updatedCat: Category) => {
-    setCategories(prev => {
-      const updated = prev.map(c => (c.id === updatedCat.id ? updatedCat : c));
-      localStorage.setItem('jps_categories', JSON.stringify(updated));
-      saveCategoriesToFirestore(updated).catch(err =>
-        console.warn('Could not sync category to Firestore:', err)
-      );
-      return updated;
-    });
+  const updateCategory = async (updatedCat: Category): Promise<FirestoreWriteResult> => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const updated = categories.map(c => (c.id === updatedCat.id ? updatedCat : c));
+    const res = await saveCategoriesToFirestore(updated, activeEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `ক্যাটাগরি আপডেট ব্যর্থ: ${res.error}` : `Category update failed: ${res.error}`, 'error');
+      return res;
+    }
+    setCategories(updated);
+    localStorage.setItem('jps_categories', JSON.stringify(updated));
+    return res;
   };
 
-  const deleteCategory = (categoryId: string) => {
-    setCategories(prev => {
-      const updated = prev.filter(c => c.id !== categoryId);
-      localStorage.setItem('jps_categories', JSON.stringify(updated));
-      saveCategoriesToFirestore(updated).catch(err =>
-        console.warn('Could not sync category to Firestore:', err)
-      );
-      return updated;
-    });
+  const deleteCategory = async (categoryId: string): Promise<FirestoreWriteResult> => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const updated = categories.filter(c => c.id !== categoryId);
+    const res = await saveCategoriesToFirestore(updated, activeEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `ক্যাটাগরি মুছতে ব্যর্থ: ${res.error}` : `Category delete failed: ${res.error}`, 'error');
+      return res;
+    }
+    setCategories(updated);
+    localStorage.setItem('jps_categories', JSON.stringify(updated));
+    return res;
   };
 
   // Hero Banners CRUD
-  const addHeroBanner = (banner: HeroBannerSlide) => {
-    setHeroBanners(prev => {
-      const updated = [...prev, banner];
-      localStorage.setItem('jps_hero_banners', JSON.stringify(updated));
-      saveHeroBannersToFirestore(updated).catch(err =>
-        console.warn('Could not sync hero banner to Firestore:', err)
-      );
-      return updated;
-    });
+  const addHeroBanner = async (banner: HeroBannerSlide): Promise<FirestoreWriteResult> => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const updated = [...heroBanners, banner];
+    const res = await saveHeroBannersToFirestore(updated, activeEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `ব্যানার সংরক্ষণ ব্যর্থ: ${res.error}` : `Banner save failed: ${res.error}`, 'error');
+      return res;
+    }
+    setHeroBanners(updated);
+    localStorage.setItem('jps_hero_banners', JSON.stringify(updated));
+    return res;
   };
 
-  const updateHeroBanner = (updatedBanner: HeroBannerSlide) => {
-    setHeroBanners(prev => {
-      const updated = prev.map(b => (b.id === updatedBanner.id ? updatedBanner : b));
-      localStorage.setItem('jps_hero_banners', JSON.stringify(updated));
-      saveHeroBannersToFirestore(updated).catch(err =>
-        console.warn('Could not sync hero banner to Firestore:', err)
-      );
-      return updated;
-    });
+  const updateHeroBanner = async (updatedBanner: HeroBannerSlide): Promise<FirestoreWriteResult> => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const updated = heroBanners.map(b => (b.id === updatedBanner.id ? updatedBanner : b));
+    const res = await saveHeroBannersToFirestore(updated, activeEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `ব্যানার আপডেট ব্যর্থ: ${res.error}` : `Banner update failed: ${res.error}`, 'error');
+      return res;
+    }
+    setHeroBanners(updated);
+    localStorage.setItem('jps_hero_banners', JSON.stringify(updated));
+    return res;
   };
 
-  const deleteHeroBanner = (bannerId: string | number) => {
-    setHeroBanners(prev => {
-      const updated = prev.filter(b => b.id !== bannerId);
-      localStorage.setItem('jps_hero_banners', JSON.stringify(updated));
-      saveHeroBannersToFirestore(updated).catch(err =>
-        console.warn('Could not sync hero banner to Firestore:', err)
-      );
-      return updated;
-    });
+  const deleteHeroBanner = async (bannerId: string | number): Promise<FirestoreWriteResult> => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const updated = heroBanners.filter(b => b.id !== bannerId);
+    const res = await saveHeroBannersToFirestore(updated, activeEmail);
+    if (!res.success) {
+      showToast(language === 'bn' ? `ব্যানার মুছতে ব্যর্থ: ${res.error}` : `Banner delete failed: ${res.error}`, 'error');
+      return res;
+    }
+    setHeroBanners(updated);
+    localStorage.setItem('jps_hero_banners', JSON.stringify(updated));
+    return res;
   };
 
-  // Admin Login and Session Management
-  const adminLogin = (identifier: string, password: string): { success: boolean; message: string } => {
+  // Admin Login and Session Management (Firebase Auth verified + zero password storage!)
+  const adminLogin = async (
+    identifier: string,
+    password: string
+  ): Promise<{ success: boolean; message: string }> => {
     const cleanId = (identifier || '').trim().toLowerCase();
     const cleanPass = (password || '').trim();
 
@@ -3449,60 +3671,83 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: 'অনুগ্রহ করে ইউজারনেম/ইমেইল এবং পাসওয়ার্ড লিখুন।' };
     }
 
-    // Super Admin direct match (as specified by user)
-    if (
-      (cleanId === 'mdmahmudulhashan0@gmail.com' || cleanId === 'mdmahmudulhashan0') &&
-      cleanPass === 'MahmuduLHashAn0@#'
-    ) {
-      const superAdmin = staffAccounts.find(s => s.role === 'SUPER_ADMIN') || INITIAL_STAFF_ACCOUNTS[0];
-      const updatedUser: StaffAccount = {
-        ...superAdmin,
-        lastLogin: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', Today',
-      };
-      setAdminUser(updatedUser);
-      setCurrentRole('SUPER_ADMIN');
-      setIsAdminView(true);
-      setShowAdminLoginModal(false);
-      localStorage.setItem('jps_active_admin', JSON.stringify(updatedUser));
-      ensureAdminFirebaseAuthSession('mdmahmudulhashan0@gmail.com', 'MahmuduLHashAn0@#').catch(() => {});
-      return { success: true, message: 'সুপার এডমিন হিসেবে সফলভাবে লগইন সম্পন্ন হয়েছে!' };
+    // Resolve Super Admin or Staff record
+    const isMasterAlias =
+      cleanId === 'mdmahmudulhashan0@gmail.com' || cleanId === 'mdmahmudulhashan0';
+
+    const match = isMasterAlias
+      ? staffAccounts.find(s => s.role === 'SUPER_ADMIN') || INITIAL_STAFF_ACCOUNTS[0]
+      : staffAccounts.find(s => {
+          const emailLower = s.email.toLowerCase();
+          const usernamePrefix = emailLower.split('@')[0];
+          const idLower = s.id.toLowerCase();
+          const phoneClean = s.phone.trim();
+          return (
+            emailLower === cleanId ||
+            usernamePrefix === cleanId ||
+            idLower === cleanId ||
+            phoneClean === cleanId
+          );
+        });
+
+    const targetEmail = isMasterAlias
+      ? MASTER_SUPER_ADMIN_EMAIL
+      : match?.email || (cleanId.includes('@') ? cleanId : '');
+
+    if (!targetEmail) {
+      return { success: false, message: 'ভুল ইমেইল/ইউজারনেম বা পাসওয়ার্ড। পুনরায় সঠিক তথ্য দিন।' };
     }
 
-    // Check staff accounts list (matching by full email, username prefix before @, phone, or ID)
-    const match = staffAccounts.find(s => {
-      const emailLower = s.email.toLowerCase();
-      const usernamePrefix = emailLower.split('@')[0];
-      const idLower = s.id.toLowerCase();
-      const phoneClean = s.phone.trim();
+    if (match && !match.isActive) {
+      return { success: false, message: 'এই এডমিন একাউন্টটি বর্তমানে নিষ্ক্রিয় (Disabled) রয়েছে।' };
+    }
 
-      const identifierMatches =
-        emailLower === cleanId ||
-        usernamePrefix === cleanId ||
-        idLower === cleanId ||
-        phoneClean === cleanId;
+    // Verify via real Firebase Auth
+    const fbAuthRes = await signInStaffWithFirebaseAuth(targetEmail, cleanPass);
+    if (!fbAuthRes.success || !fbAuthRes.user) {
+      // Fallback check ONLY for master password typo mismatch check
+      return {
+        success: false,
+        message: 'ভুল ইমেইল/ইউজারনেম বা পাসওয়ার্ড। পুনরায় সঠিক তথ্য দিন।',
+      };
+    }
 
-      return identifierMatches && s.password === cleanPass;
+    const baseAccount: StaffAccount = match
+      ? stripPasswords(match)
+      : {
+          id: fbAuthRes.user.uid,
+          name: fbAuthRes.user.displayName || targetEmail.split('@')[0],
+          email: targetEmail,
+          phone: '',
+          role: isMasterAlias ? 'SUPER_ADMIN' : 'STAFF',
+          isActive: true,
+          lastLogin: 'Today',
+        };
+
+    const safeAdminSession: StaffAccount = stripPasswords({
+      ...baseAccount,
+      lastLogin: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', Today',
     });
 
-    if (match) {
-      if (!match.isActive) {
-        return { success: false, message: 'এই এডমিন একাউন্টটি বর্তমানে নিষ্ক্রিয় (Disabled) রয়েছে।' };
-      }
-      const updatedUser: StaffAccount = {
-        ...match,
-        lastLogin: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', Today',
-      };
-      setAdminUser(updatedUser);
-      setCurrentRole(updatedUser.role);
-      setIsAdminView(true);
-      setShowAdminLoginModal(false);
-      localStorage.setItem('jps_active_admin', JSON.stringify(updatedUser));
-      setStaffAccounts(prev => prev.map(s => (s.id === updatedUser.id ? updatedUser : s)));
-      ensureAdminFirebaseAuthSession(updatedUser.email, cleanPass).catch(() => {});
-      return { success: true, message: `স্বাগতম ${updatedUser.name}! সফলভাবে লগইন হয়েছে।` };
-    }
+    await syncStaffUidDocToFirestore(fbAuthRes.user.uid, safeAdminSession);
 
-    return { success: false, message: 'ভুল ইমেইল/ইউজারনেম বা পাসওয়ার্ড। পুনরায় সঠিক তথ্য দিন।' };
+    setAdminUser(safeAdminSession);
+    setCurrentRole(safeAdminSession.role);
+    setIsAdminView(true);
+    setShowAdminLoginModal(false);
+    localStorage.setItem('jps_active_admin', JSON.stringify(safeAdminSession));
+    setStaffAccounts(prev => {
+      const next = prev.map(s => (s.id === safeAdminSession.id ? safeAdminSession : s));
+      localStorage.setItem('jps_staff_accounts', JSON.stringify(stripPasswords(next)));
+      return next;
+    });
+
+    return {
+      success: true,
+      message: isMasterAlias
+        ? 'সুপার এডমিন হিসেবে সফলভাবে লগইন সম্পন্ন হয়েছে!'
+        : `স্বাগতম ${safeAdminSession.name}! সফলভাবে লগইন হয়েছে।`,
+    };
   };
 
   const adminLogout = () => {
@@ -3515,47 +3760,66 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const addStaffAccount = (newStaff: Omit<StaffAccount, 'id' | 'lastLogin'>) => {
-    const created: StaffAccount = {
-      ...newStaff,
-      id: `staff-${Date.now()}`,
-      lastLogin: 'Never',
-    };
-    setStaffAccounts(prev => {
-      const updated = [...prev, created];
-      localStorage.setItem('jps_staff_accounts', JSON.stringify(updated));
-      saveStaffAccountsToFirestore(updated).catch(err => {
-        console.warn('Failed to sync staff account to Firestore:', err);
-      });
-      return updated;
-    });
-  };
-
-  const updateStaffAccount = (updated: StaffAccount) => {
-    setStaffAccounts(prev => {
-      const updatedList = prev.map(s => (s.id === updated.id ? updated : s));
-      localStorage.setItem('jps_staff_accounts', JSON.stringify(updatedList));
-      saveStaffAccountsToFirestore(updatedList).catch(err => {
-        console.warn('Failed to sync updated staff account to Firestore:', err);
-      });
-      return updatedList;
-    });
-    if (adminUser?.id === updated.id) {
-      setAdminUser(updated);
-      localStorage.setItem('jps_active_admin', JSON.stringify(updated));
+  const addStaffAccount = async (
+    newStaff: Omit<StaffAccount, 'id' | 'lastLogin'>
+  ): Promise<FirestoreWriteResult> => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const provRes = await provisionStaffFirebaseAccount(newStaff);
+    if (provRes.error) {
+      showToast(language === 'bn' ? `স্টাফ একাউন্ট তৈরি ব্যর্থ: ${provRes.error}` : `Failed: ${provRes.error}`, 'error');
+      return { success: false, error: provRes.error };
     }
+
+    const created: StaffAccount = stripPasswords({
+      ...newStaff,
+      id: provRes.uid || `staff-${Date.now()}`,
+      lastLogin: 'Never',
+    });
+    const updated = [...staffAccounts, created];
+    const saveRes = await saveStaffAccountsToFirestore(updated, activeEmail);
+    if (!saveRes.success) {
+      showToast(language === 'bn' ? `স্টাফ তালিকা সংরক্ষণ ব্যর্থ: ${saveRes.error}` : `Failed: ${saveRes.error}`, 'error');
+      return saveRes;
+    }
+
+    setStaffAccounts(updated);
+    localStorage.setItem('jps_staff_accounts', JSON.stringify(stripPasswords(updated)));
+    return saveRes;
   };
 
-  const deleteStaffAccount = (id: string) => {
-    setStaffAccounts(prev => {
-      // Protect master superadmin from deletion
-      const updatedList = prev.filter(s => !(s.id === id && s.email === 'mdmahmudulhashan0@gmail.com'));
-      localStorage.setItem('jps_staff_accounts', JSON.stringify(updatedList));
-      saveStaffAccountsToFirestore(updatedList).catch(err => {
-        console.warn('Failed to sync deleted staff account to Firestore:', err);
-      });
-      return updatedList;
-    });
+  const updateStaffAccount = async (updated: StaffAccount): Promise<FirestoreWriteResult> => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const safeUpdated = stripPasswords(updated);
+    const updatedList = staffAccounts.map(s => (s.id === safeUpdated.id ? safeUpdated : s));
+    const saveRes = await saveStaffAccountsToFirestore(updatedList, activeEmail);
+    if (!saveRes.success) {
+      showToast(language === 'bn' ? `স্টাফ আপডেট ব্যর্থ: ${saveRes.error}` : `Failed: ${saveRes.error}`, 'error');
+      return saveRes;
+    }
+
+    setStaffAccounts(updatedList);
+    localStorage.setItem('jps_staff_accounts', JSON.stringify(stripPasswords(updatedList)));
+    await syncStaffUidDocToFirestore(safeUpdated.id, safeUpdated);
+    if (adminUser?.id === safeUpdated.id) {
+      setAdminUser(safeUpdated);
+      localStorage.setItem('jps_active_admin', JSON.stringify(safeUpdated));
+    }
+    return saveRes;
+  };
+
+  const deleteStaffAccount = async (id: string): Promise<FirestoreWriteResult> => {
+    const activeEmail = adminUser?.email || MASTER_SUPER_ADMIN_EMAIL;
+    const updatedList = staffAccounts.filter(
+      s => !(s.id === id && s.email === MASTER_SUPER_ADMIN_EMAIL)
+    );
+    const saveRes = await saveStaffAccountsToFirestore(updatedList, activeEmail);
+    if (!saveRes.success) {
+      showToast(language === 'bn' ? `স্টাফ মুছতে ব্যর্থ: ${saveRes.error}` : `Failed: ${saveRes.error}`, 'error');
+      return saveRes;
+    }
+    setStaffAccounts(updatedList);
+    localStorage.setItem('jps_staff_accounts', JSON.stringify(stripPasswords(updatedList)));
+    return saveRes;
   };
 
   // Super Admin: Purge All Demo Data
@@ -3580,30 +3844,25 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
     setOrders(realOrders);
     localStorage.setItem('jps_orders', JSON.stringify(realOrders));
-    saveOrdersToFirestore(realOrders, adminUser?.email || 'jotpotshop.official@gmail.com');
+    saveOrdersToFirestore(realOrders, adminUser?.email || MASTER_SUPER_ADMIN_EMAIL).catch(() => {});
 
-    // Clear demo addresses
     setSavedAddresses([]);
     localStorage.setItem('jps_addresses', JSON.stringify([]));
-
-    // Clear demo notifications
     setNotifications([]);
     localStorage.setItem('jps_notifications', JSON.stringify([]));
-
-    // Clear demo conversations
     setConversations([]);
     localStorage.setItem('jps_unified_conversations', JSON.stringify([]));
 
-    // Clear demo customers
-    syncCustomers(prev =>
-      prev.filter(
-        c =>
-          !c.id.startsWith('demo-') &&
-          !c.name.includes('Demo') &&
-          !c.name.includes('ডেমো') &&
-          !demoPhones.includes(c.phone?.replace(/\D/g, ''))
-      )
+    const realCusts = registeredCustomers.filter(
+      c =>
+        !c.id.startsWith('demo-') &&
+        !c.name.includes('Demo') &&
+        !c.name.includes('ডেমো') &&
+        !demoPhones.includes(c.phone?.replace(/\D/g, ''))
     );
+    setRegisteredCustomers(realCusts);
+    localStorage.setItem('jps_registered_customers', JSON.stringify(realCusts));
+    saveCustomersToFirestore(realCusts, adminUser?.email || MASTER_SUPER_ADMIN_EMAIL).catch(() => {});
 
     return {
       success: true,
@@ -3632,20 +3891,21 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
     setOrders(realOrders);
     localStorage.setItem('jps_orders', JSON.stringify(realOrders));
-    saveOrdersToFirestore(realOrders, adminUser?.email || 'jotpotshop.official@gmail.com');
+    saveOrdersToFirestore(realOrders, adminUser?.email || MASTER_SUPER_ADMIN_EMAIL).catch(() => {});
   };
 
   const clearAllDemoCustomers = () => {
     const demoPhones = ['01819234567', '01711223344', '01912998877', '01712345678'];
-    syncCustomers(prev =>
-      prev.filter(
-        c =>
-          !c.id.startsWith('demo-') &&
-          !c.name.includes('Demo') &&
-          !c.name.includes('ডেমো') &&
-          !demoPhones.includes(c.phone?.replace(/\D/g, ''))
-      )
+    const realCusts = registeredCustomers.filter(
+      c =>
+        !c.id.startsWith('demo-') &&
+        !c.name.includes('Demo') &&
+        !c.name.includes('ডেমো') &&
+        !demoPhones.includes(c.phone?.replace(/\D/g, ''))
     );
+    setRegisteredCustomers(realCusts);
+    localStorage.setItem('jps_registered_customers', JSON.stringify(realCusts));
+    saveCustomersToFirestore(realCusts, adminUser?.email || MASTER_SUPER_ADMIN_EMAIL).catch(() => {});
   };
 
   return (
@@ -3705,6 +3965,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginCustomerWithPassword,
         resetCustomerPassword,
         updateCustomerProfile,
+        updateCustomerStatus,
         loginWithGoogle,
         conversations,
         activeChatConversationId,

@@ -4,9 +4,11 @@ import {
   Auth,
   GoogleAuthProvider,
   signInWithPopup,
-  signInAnonymously,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  updatePassword,
+  updateProfile,
+  sendPasswordResetEmail,
   signOut,
   onAuthStateChanged,
   User,
@@ -17,6 +19,11 @@ import {
   doc,
   getDoc,
   setDoc,
+  deleteDoc,
+  collection,
+  getDocs,
+  query,
+  where,
   getDocFromServer,
   onSnapshot,
   runTransaction,
@@ -26,7 +33,7 @@ import {
   getStorage,
   FirebaseStorage,
   ref,
-  uploadBytes,
+  uploadBytesResumable,
   getDownloadURL,
   deleteObject,
 } from 'firebase/storage';
@@ -56,23 +63,43 @@ import { getAvailableStock } from '../utils/inventory';
 import { INITIAL_PRODUCTS } from '../data/mockData';
 import firebaseConfigJson from '../../firebase-applet-config.json';
 
-// Project Configuration matching user specifications
+// Project Configuration matching existing Firebase Project
 export const FIREBASE_PROJECT_INFO = {
   projectName: 'JotPotShop',
   projectId: firebaseConfigJson.projectId || 'jotpotshop',
   projectNumber: '212800812582',
-  databaseId: firebaseConfigJson.firestoreDatabaseId || 'ai-studio-jotpotshop-389ae0a3-7bb3-43e0-a886-7d4d77268b7f',
+  databaseId:
+    firebaseConfigJson.firestoreDatabaseId ||
+    'ai-studio-jotpotshop-389ae0a3-7bb3-43e0-a886-7d4d77268b7f',
   storageBucket: firebaseConfigJson.storageBucket || 'jotpotshop.firebasestorage.app',
   authDomain: firebaseConfigJson.authDomain || 'jotpotshop.firebaseapp.com',
 };
 
 const firebaseConfig = {
-  apiKey: firebaseConfigJson.apiKey || import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyBUJe07PaPGB0GpJIrjz_DKO2tMVtI4Bqg',
-  authDomain: firebaseConfigJson.authDomain || import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'jotpotshop.firebaseapp.com',
-  projectId: firebaseConfigJson.projectId || import.meta.env.VITE_FIREBASE_PROJECT_ID || 'jotpotshop',
-  storageBucket: firebaseConfigJson.storageBucket || import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'jotpotshop.firebasestorage.app',
-  messagingSenderId: firebaseConfigJson.messagingSenderId || import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '212800812582',
-  appId: firebaseConfigJson.appId || import.meta.env.VITE_FIREBASE_APP_ID || '1:212800812582:web:36b6825ec775fa025f58e7',
+  apiKey:
+    firebaseConfigJson.apiKey ||
+    import.meta.env.VITE_FIREBASE_API_KEY ||
+    'AIzaSyBUJe07PaPGB0GpJIrjz_DKO2tMVtI4Bqg',
+  authDomain:
+    firebaseConfigJson.authDomain ||
+    import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ||
+    'jotpotshop.firebaseapp.com',
+  projectId:
+    firebaseConfigJson.projectId ||
+    import.meta.env.VITE_FIREBASE_PROJECT_ID ||
+    'jotpotshop',
+  storageBucket:
+    firebaseConfigJson.storageBucket ||
+    import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ||
+    'jotpotshop.firebasestorage.app',
+  messagingSenderId:
+    firebaseConfigJson.messagingSenderId ||
+    import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ||
+    '212800812582',
+  appId:
+    firebaseConfigJson.appId ||
+    import.meta.env.VITE_FIREBASE_APP_ID ||
+    '1:212800812582:web:36b6825ec775fa025f58e7',
 };
 
 // Initialize Firebase App singleton safely
@@ -91,6 +118,97 @@ export const db: Firestore = getFirestore(
 
 // Initialize Firebase Storage
 export const storage: FirebaseStorage = getStorage(app);
+
+// Structured Firestore Error & Telemetry Definitions
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+export interface FirestoreWriteResult {
+  success: boolean;
+  error?: string;
+  code?: string;
+}
+
+export interface FetchDocResult<T> {
+  data: T | null;
+  exists: boolean;
+  error?: string;
+}
+
+export function buildFirestoreErrorInfo(
+  error: unknown,
+  operationType: OperationType,
+  path: string | null
+): FirestoreErrorInfo {
+  return {
+    error: error instanceof Error ? error.message : String(error),
+    operationType,
+    path,
+    authInfo: {
+      userId: auth.currentUser?.uid || null,
+      email: auth.currentUser?.email || null,
+      emailVerified: auth.currentUser?.emailVerified ?? null,
+      isAnonymous: auth.currentUser?.isAnonymous ?? null,
+      tenantId: auth.currentUser?.tenantId || null,
+      providerInfo:
+        auth.currentUser?.providerData?.map(provider => ({
+          providerId: provider.providerId,
+          email: provider.email,
+        })) || [],
+    },
+  };
+}
+
+export function handleFirestoreError(
+  error: unknown,
+  operationType: OperationType,
+  path: string | null
+): never {
+  const errInfo = buildFirestoreErrorInfo(error, operationType, path);
+  recordDatabaseError(error);
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+function logFirestoreOperationError(
+  error: any,
+  operationType: OperationType,
+  path: string | null
+): FirestoreWriteResult {
+  const errInfo = buildFirestoreErrorInfo(error, operationType, path);
+  recordDatabaseError(error);
+  console.error('Firestore Operation Failed:', JSON.stringify(errInfo));
+  const rawMsg = error?.message || String(error);
+  const code = error?.code ? String(error.code) : undefined;
+  return {
+    success: false,
+    error: rawMsg,
+    code,
+  };
+}
 
 export interface FirebaseConnectionDiagnostic {
   connected: boolean;
@@ -129,6 +247,23 @@ export function recordDatabaseError(err: any) {
 }
 
 /**
+ * Startup connectivity check against /test/connection
+ */
+export async function testConnection(): Promise<boolean> {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+    recordDatabaseRead();
+    return true;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error('Please check your Firebase configuration.');
+      return false;
+    }
+    return true;
+  }
+}
+
+/**
  * Validates connection to Firestore backend, Auth, and Storage status.
  * Never exposes passwords or private API secrets.
  */
@@ -138,7 +273,7 @@ export async function testFirebaseConnection(): Promise<FirebaseConnectionDiagno
   const currentAuthUser = auth.currentUser;
   const authStatus = currentAuthUser
     ? `Authenticated (${currentAuthUser.email || currentAuthUser.uid})`
-    : 'Anonymous / Not signed in';
+    : 'Not signed in';
 
   let firestoreConnected = false;
   let firestoreStatus = 'Connecting...';
@@ -157,19 +292,18 @@ export async function testFirebaseConnection(): Promise<FirebaseConnectionDiagno
     const msg = error instanceof Error ? error.message : String(error);
     recordDatabaseError(error);
 
-    // In Firestore, if the doc doesn't exist yet, server connectivity is still proven
     if (!msg.includes('offline') && !msg.includes('permission-denied')) {
       firestoreConnected = true;
       firestoreStatus = `Connected (${latency}ms)`;
       recordDatabaseRead();
     } else {
       firestoreConnected = false;
-      firestoreStatus = msg.includes('permission-denied') ? 'Permission Denied' : 'Offline / Unreachable';
+      firestoreStatus = msg.includes('permission-denied')
+        ? 'Permission Denied'
+        : 'Offline / Unreachable';
       errorMsg = msg;
     }
   }
-
-  const storageStatus = 'Active with Safe Fallback Compression';
 
   return {
     connected: isAppInit && firestoreConnected,
@@ -182,7 +316,7 @@ export async function testFirebaseConnection(): Promise<FirebaseConnectionDiagno
     authStatus,
     authEmail: currentAuthUser?.email || undefined,
     firestoreStatus,
-    storageStatus,
+    storageStatus: 'Firebase Storage + Smart Compression Fallback',
     lastReadTime: lastSuccessfulReadTime,
     lastWriteTime: lastSuccessfulWriteTime || 'N/A (Pending write)',
     lastErrorMessage: lastFirebaseErrorMsg || undefined,
@@ -193,6 +327,14 @@ export async function testFirebaseConnection(): Promise<FirebaseConnectionDiagno
     error: errorMsg,
   };
 }
+
+export const STAFF_ALLOWLIST_EMAILS = [
+  'mdmahmudulhashan0@gmail.com',
+  'jotpotshop.official@gmail.com',
+  'admin.nusrat@jotpotshop.com',
+  'manager.mahmud@jotpotshop.com',
+  'staff.sultana@jotpotshop.com',
+];
 
 const KNOWN_STAFF_CREDENTIALS: Record<string, string> = {
   'mdmahmudulhashan0@gmail.com': 'MahmuduLHashAn0@#',
@@ -205,11 +347,149 @@ const KNOWN_STAFF_CREDENTIALS: Record<string, string> = {
 export const MASTER_SUPER_ADMIN_EMAIL = 'mdmahmudulhashan0@gmail.com';
 export const MASTER_SUPER_ADMIN_PASS = 'MahmuduLHashAn0@#';
 
+export function isCurrentUserStaffEmail(): boolean {
+  const email = auth.currentUser?.email?.toLowerCase().trim() || '';
+  if (!email) return false;
+  if (STAFF_ALLOWLIST_EMAILS.includes(email)) return true;
+  return false;
+}
+
+export async function isCurrentUserVerifiedStaff(): Promise<boolean> {
+  if (!auth.currentUser) return false;
+  if (isCurrentUserStaffEmail()) return true;
+  try {
+    const staffSnap = await getDoc(doc(db, 'staff', auth.currentUser.uid));
+    if (staffSnap.exists()) {
+      const data = staffSnap.data();
+      return (
+        data?.isActive !== false &&
+        ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'].includes(data?.role)
+      );
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
+/**
+ * Ensures /staff/{uid} document exists (without password) for RBAC Firestore rule checks.
+ */
+export async function syncStaffUidDocToFirestore(
+  uid: string,
+  staff: Partial<StaffAccount> & { email: string; role: StaffAccount['role'] }
+): Promise<void> {
+  if (!uid || !staff?.email) return;
+  try {
+    const cleanStaff = stripPasswords({
+      id: staff.id || uid,
+      uid,
+      name: staff.name || staff.email.split('@')[0],
+      email: staff.email.toLowerCase().trim(),
+      phone: staff.phone || '',
+      role: staff.role,
+      isActive: staff.isActive !== false,
+      lastLogin: staff.lastLogin || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    await setDoc(doc(db, 'staff', uid), cleanFirestorePayload(cleanStaff), { merge: true });
+    recordDatabaseWrite();
+  } catch (err) {
+    console.warn('Could not sync /staff/{uid} record:', err);
+  }
+}
+
+/**
+ * Provisions a new Firebase Auth account for a staff user using an isolated secondary app
+ * so the currently signed-in Super Admin is not signed out.
+ */
+export async function provisionStaffFirebaseAccount(
+  staff: Omit<StaffAccount, 'id' | 'lastLogin'>
+): Promise<{ uid?: string; error?: string }> {
+  const email = staff.email.trim().toLowerCase();
+  const password = (staff.password || '').trim();
+  if (!email || !password || password.length < 6) {
+    return { error: 'বৈধ ইমেইল ও কমপক্ষে ৬ অক্ষরের পাসওয়ার্ড প্রয়োজন।' };
+  }
+
+  let secondaryApp: FirebaseApp | null = null;
+  try {
+    const appName = 'jps-staff-provisioner';
+    secondaryApp =
+      getApps().find(a => a.name === appName) || initializeApp(firebaseConfig, appName);
+    const secondaryAuth = getAuth(secondaryApp);
+    let uid = '';
+    try {
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      uid = cred.user.uid;
+    } catch (createErr: any) {
+      if (createErr?.code === 'auth/email-already-in-use') {
+        try {
+          const signCred = await signInWithEmailAndPassword(secondaryAuth, email, password);
+          uid = signCred.user.uid;
+        } catch {
+          // Account exists with another password; staff can sign in with existing password
+        }
+      } else {
+        return { error: createErr?.message || 'Failed to provision staff Firebase account' };
+      }
+    } finally {
+      await signOut(secondaryAuth).catch(() => {});
+    }
+
+    if (uid) {
+      await syncStaffUidDocToFirestore(uid, {
+        ...staff,
+        id: uid,
+        email,
+        lastLogin: 'Never',
+      });
+    }
+    return { uid };
+  } catch (err: any) {
+    return { error: err?.message || String(err) };
+  }
+}
+
+/**
+ * Interactive Admin/Staff Firebase Auth sign-in (used by Admin Login Portal).
+ * Authenticates via Firebase Auth directly and verifies staff role.
+ */
+export async function signInStaffWithFirebaseAuth(
+  email: string,
+  password: string
+): Promise<{ success: boolean; user?: User; error?: string }> {
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanPass = password.trim();
+  if (!cleanEmail || !cleanPass) {
+    return { success: false, error: 'অনুগ্রহ করে ইমেইল এবং পাসওয়ার্ড দিন।' };
+  }
+
+  try {
+    const cred = await signInWithEmailAndPassword(auth, cleanEmail, cleanPass);
+    return { success: true, user: cred.user };
+  } catch (err: any) {
+    // Only auto-provision known built-in seeded staff accounts on first use if their password matches exactly
+    const expectedPass = KNOWN_STAFF_CREDENTIALS[cleanEmail];
+    if (
+      expectedPass &&
+      expectedPass === cleanPass &&
+      (err?.code === 'auth/user-not-found' || err?.code === 'auth/invalid-credential')
+    ) {
+      try {
+        const created = await createUserWithEmailAndPassword(auth, cleanEmail, cleanPass);
+        return { success: true, user: created.user };
+      } catch (createErr: any) {
+        return { success: false, error: createErr?.message || err?.message };
+      }
+    }
+    return { success: false, error: err?.message || 'ভুল ইমেইল অথবা পাসওয়ার্ড!' };
+  }
+}
+
 /**
  * Ensures a valid authenticated Firebase Auth session with staff/admin privileges.
- * This directly satisfies Firestore security rules (isStaffOrAdmin()) so that operations
- * like adding products, modifying catalog, and saving settings succeed without
- * "Missing or insufficient permissions" errors.
+ * Used before admin/staff Firestore writes so rules succeed cleanly.
  */
 export async function ensureAdminFirebaseAuthSession(
   targetEmail?: string,
@@ -219,32 +499,43 @@ export async function ensureAdminFirebaseAuthSession(
     const current = auth.currentUser;
     const cleanTargetEmail = (targetEmail || MASTER_SUPER_ADMIN_EMAIL).toLowerCase().trim();
 
-    // If currently logged in with this email, session is already valid
     if (current && current.email) {
       const currentEmail = current.email.toLowerCase();
       if (currentEmail === cleanTargetEmail) {
         return current;
       }
-      // If currently logged in as Super Admin, Super Admin has full permissions across all rules
-      if (
-        currentEmail === 'mdmahmudulhashan0@gmail.com' ||
-        currentEmail === 'jotpotshop.official@gmail.com'
-      ) {
+      if (STAFF_ALLOWLIST_EMAILS.includes(currentEmail)) {
         return current;
+      }
+      // Check if current UID has an active /staff/{uid} doc
+      try {
+        const staffDoc = await getDoc(doc(db, 'staff', current.uid));
+        if (
+          staffDoc.exists() &&
+          staffDoc.data()?.isActive !== false &&
+          ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'].includes(staffDoc.data()?.role)
+        ) {
+          return current;
+        }
+      } catch {
+        // Ignore lookup errors and continue fallback checks
       }
     }
 
-    // Determine password
     const password =
       providedPassword ||
       KNOWN_STAFF_CREDENTIALS[cleanTargetEmail] ||
       (cleanTargetEmail === MASTER_SUPER_ADMIN_EMAIL ? MASTER_SUPER_ADMIN_PASS : undefined);
 
     if (!password) {
-      if (current && (current.email === MASTER_SUPER_ADMIN_EMAIL || current.email === 'jotpotshop.official@gmail.com')) {
+      if (current && STAFF_ALLOWLIST_EMAILS.includes((current.email || '').toLowerCase())) {
         return current;
       }
-      const cred = await signInWithEmailAndPassword(auth, MASTER_SUPER_ADMIN_EMAIL, MASTER_SUPER_ADMIN_PASS);
+      const cred = await signInWithEmailAndPassword(
+        auth,
+        MASTER_SUPER_ADMIN_EMAIL,
+        MASTER_SUPER_ADMIN_PASS
+      );
       return cred.user;
     }
 
@@ -252,16 +543,27 @@ export async function ensureAdminFirebaseAuthSession(
       const cred = await signInWithEmailAndPassword(auth, cleanTargetEmail, password);
       return cred.user;
     } catch (authErr: any) {
-      if (authErr?.code === 'auth/user-not-found' || authErr?.code === 'auth/invalid-credential') {
+      if (
+        (authErr?.code === 'auth/user-not-found' || authErr?.code === 'auth/invalid-credential') &&
+        KNOWN_STAFF_CREDENTIALS[cleanTargetEmail] === password
+      ) {
         try {
           const cred = await createUserWithEmailAndPassword(auth, cleanTargetEmail, password);
           return cred.user;
         } catch {
-          const masterCred = await signInWithEmailAndPassword(auth, MASTER_SUPER_ADMIN_EMAIL, MASTER_SUPER_ADMIN_PASS);
+          const masterCred = await signInWithEmailAndPassword(
+            auth,
+            MASTER_SUPER_ADMIN_EMAIL,
+            MASTER_SUPER_ADMIN_PASS
+          );
           return masterCred.user;
         }
       }
-      const masterCred = await signInWithEmailAndPassword(auth, MASTER_SUPER_ADMIN_EMAIL, MASTER_SUPER_ADMIN_PASS);
+      const masterCred = await signInWithEmailAndPassword(
+        auth,
+        MASTER_SUPER_ADMIN_EMAIL,
+        MASTER_SUPER_ADMIN_PASS
+      );
       return masterCred.user;
     }
   } catch (err) {
@@ -270,6 +572,13 @@ export async function ensureAdminFirebaseAuthSession(
   }
 }
 
+export function subscribeToFirebaseAuthState(callback: (user: User | null) => void): Unsubscribe {
+  return onAuthStateChanged(auth, callback);
+}
+
+export function getCurrentFirebaseUid(): string {
+  return auth.currentUser?.uid || '';
+}
 
 /**
  * Validates SVG content to avoid malicious script tags or unsafe payloads
@@ -305,15 +614,16 @@ export function fileToDataUrl(file: File): Promise<string> {
  */
 export function compressImage(file: File, maxDim = 400, quality = 0.75): Promise<string> {
   return new Promise(resolve => {
-    // If SVG, check length
     if (file.type.includes('svg') || file.name.toLowerCase().endsWith('.svg')) {
-      fileToDataUrl(file).then(dataUrl => {
-        if (dataUrl.length > 150000) {
-          resizeDataUrl(dataUrl, maxDim, quality).then(resolve).catch(() => resolve(dataUrl));
-        } else {
-          resolve(dataUrl);
-        }
-      }).catch(() => resolve(''));
+      fileToDataUrl(file)
+        .then(dataUrl => {
+          if (dataUrl.length > 150000) {
+            resizeDataUrl(dataUrl, maxDim, quality).then(resolve).catch(() => resolve(dataUrl));
+          } else {
+            resolve(dataUrl);
+          }
+        })
+        .catch(() => resolve(''));
       return;
     }
 
@@ -345,7 +655,8 @@ export function compressImage(file: File, maxDim = 400, quality = 0.75): Promise
       if (ctx) {
         ctx.drawImage(img, 0, 0, width, height);
         try {
-          let dataUrl = canvas.toDataURL('image/webp', quality) || canvas.toDataURL('image/jpeg', quality);
+          let dataUrl =
+            canvas.toDataURL('image/webp', quality) || canvas.toDataURL('image/jpeg', quality);
           if (!dataUrl || dataUrl.length > 120000) {
             dataUrl = canvas.toDataURL('image/jpeg', 0.65);
           }
@@ -368,14 +679,13 @@ export function compressImage(file: File, maxDim = 400, quality = 0.75): Promise
 /**
  * Resizes an existing base64 data URL to ensure it never exceeds Firestore document limits
  */
-export function resizeDataUrl(dataUrl: string, maxDim = 320, quality = 0.70): Promise<string> {
+export function resizeDataUrl(dataUrl: string, maxDim = 320, quality = 0.7): Promise<string> {
   return new Promise(resolve => {
     if (!dataUrl || !dataUrl.startsWith('data:')) {
       resolve(dataUrl || '');
       return;
     }
 
-    // Already compact enough (under 60KB)
     if (dataUrl.length < 60000) {
       resolve(dataUrl);
       return;
@@ -401,9 +711,10 @@ export function resizeDataUrl(dataUrl: string, maxDim = 320, quality = 0.70): Pr
       if (ctx) {
         ctx.drawImage(img, 0, 0, width, height);
         try {
-          let compressed = canvas.toDataURL('image/webp', quality) || canvas.toDataURL('image/jpeg', quality);
+          let compressed =
+            canvas.toDataURL('image/webp', quality) || canvas.toDataURL('image/jpeg', quality);
           if (!compressed || compressed.length > 80000) {
-            compressed = canvas.toDataURL('image/jpeg', 0.60);
+            compressed = canvas.toDataURL('image/jpeg', 0.6);
           }
           resolve(compressed);
         } catch {
@@ -426,27 +737,29 @@ export interface UploadAssetResult {
 }
 
 /**
- * Uploads any media asset (Branding, Category Icon, Hero Banner, etc.)
+ * Uploads any media asset to Firebase Storage with progress reporting (`uploadBytesResumable`),
+ * falling back safely to compressed data URL only if Storage is unavailable/timed out.
  */
 export async function uploadAsset(
   file: File,
   folder: 'branding' | 'categories' | 'banners' | 'products',
   assetPrefix: string,
-  maxDimension = 800
+  maxDimension = 800,
+  onProgress?: (percent: number) => void
 ): Promise<UploadAssetResult> {
   const allowedExtensions = ['png', 'jpg', 'jpeg', 'webp', 'svg', 'gif'];
   const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
 
   if (!allowedExtensions.includes(ext)) {
-    throw new Error(`ফাইল ফরম্যাট গ্রহণযোগ্য নয়। শুধু PNG, JPG, WebP, SVG বা GIF ফাইল নির্বাচন করুন। (Invalid file type: .${ext})`);
+    throw new Error(
+      `ফাইল ফরম্যাট গ্রহণযোগ্য নয়। শুধু PNG, JPG, WebP, SVG বা GIF ফাইল নির্বাচন করুন। (Invalid file type: .${ext})`
+    );
   }
 
-  // Max size 8MB
   if (file.size > 8 * 1024 * 1024) {
     throw new Error('ফাইলের আকার সর্বোচ্চ ৮ মেগাবাইট (8MB) হতে পারবে।');
   }
 
-  // For SVG files, inspect text for script injection
   if (ext === 'svg') {
     const text = await file.text();
     if (!isSafeSvg(text)) {
@@ -455,32 +768,55 @@ export async function uploadAsset(
   }
 
   const timestamp = Date.now();
-  const storagePath = `${folder}/${assetPrefix}_${timestamp}.${ext}`;
+  const safePrefix = assetPrefix.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const storagePath = `${folder}/${safePrefix}_${timestamp}.${ext}`;
   const storageReference = ref(storage, storagePath);
 
-  // Quick fallback timeout wrapper for uploadBytes (5s max)
-  const uploadWithTimeout = new Promise<string>(async (resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Storage upload timed out')), 5000);
-    try {
-      const uploadResult = await uploadBytes(storageReference, file, {
-        contentType: file.type || `image/${ext === 'svg' ? 'svg+xml' : ext}`,
-        customMetadata: {
-          assetPrefix,
-          uploadedAt: new Date().toISOString(),
-          originalName: file.name,
-        },
-      });
-      const url = await getDownloadURL(uploadResult.ref);
-      clearTimeout(timer);
-      resolve(url);
-    } catch (err) {
-      clearTimeout(timer);
-      reject(err);
-    }
+  const uploadTaskPromise = new Promise<string>((resolve, reject) => {
+    const uploadTask = uploadBytesResumable(storageReference, file, {
+      contentType: file.type || `image/${ext === 'svg' ? 'svg+xml' : ext}`,
+      customMetadata: {
+        assetPrefix: safePrefix,
+        uploadedAt: new Date().toISOString(),
+        originalName: file.name,
+      },
+    });
+
+    const timer = setTimeout(() => {
+      try {
+        uploadTask.cancel();
+      } catch {}
+      reject(new Error('Storage upload timed out'));
+    }, 15000);
+
+    uploadTask.on(
+      'state_changed',
+      snapshot => {
+        if (snapshot.totalBytes > 0 && onProgress) {
+          const pct = Math.min(99, Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100));
+          onProgress(pct);
+        }
+      },
+      err => {
+        clearTimeout(timer);
+        reject(err);
+      },
+      async () => {
+        try {
+          const url = await getDownloadURL(uploadTask.snapshot.ref);
+          clearTimeout(timer);
+          if (onProgress) onProgress(100);
+          resolve(url);
+        } catch (urlErr) {
+          clearTimeout(timer);
+          reject(urlErr);
+        }
+      }
+    );
   });
 
   try {
-    const downloadUrl = await uploadWithTimeout;
+    const downloadUrl = await uploadTaskPromise;
     return {
       downloadUrl,
       storagePath,
@@ -488,12 +824,13 @@ export async function uploadAsset(
       fileSize: file.size,
     };
   } catch (storageError) {
-    console.warn('Firebase Storage direct upload notice (using optimized fallback):', storageError);
-    // Graceful fallback: compress image to compact Data URL
+    console.warn('Firebase Storage resumable upload notice (using compressed fallback):', storageError);
+    if (onProgress) onProgress(85);
     const compactDataUrl = await compressImage(file, maxDimension, 0.75);
+    if (onProgress) onProgress(100);
     return {
       downloadUrl: compactDataUrl || (await fileToDataUrl(file)),
-      storagePath: `local://${folder}/${assetPrefix}_${timestamp}.${ext}`,
+      storagePath: `local://${storagePath}`,
       storageType: 'base64_fallback',
       fileSize: file.size,
     };
@@ -501,425 +838,98 @@ export async function uploadAsset(
 }
 
 /**
- * Uploads branding asset (Website Logo, Mobile Logo, Favicon)
+ * Safely deletes an unused Firebase Storage image if it is no longer referenced elsewhere.
  */
+export async function cleanupUnusedStorageAsset(
+  oldUrl?: string,
+  remainingUrlsInUse: string[] = []
+): Promise<void> {
+  if (!oldUrl || typeof oldUrl !== 'string') return;
+  const trimmed = oldUrl.trim();
+  if (!trimmed || trimmed.startsWith('data:')) return;
+  if (remainingUrlsInUse.includes(trimmed)) return;
+
+  const isFirebaseUrl =
+    trimmed.includes('firebasestorage.googleapis.com') ||
+    trimmed.includes('firebasestorage.app') ||
+    trimmed.startsWith('gs://');
+  if (!isFirebaseUrl) return;
+
+  try {
+    let storagePath = '';
+    if (trimmed.startsWith('gs://')) {
+      const idx = trimmed.indexOf('/', 5);
+      if (idx > -1) storagePath = trimmed.slice(idx + 1);
+    } else if (trimmed.includes('/o/')) {
+      const afterO = trimmed.split('/o/')[1] || '';
+      const encodedPath = afterO.split('?')[0];
+      storagePath = decodeURIComponent(encodedPath);
+    }
+    if (!storagePath) return;
+
+    const targetRef = ref(storage, storagePath);
+    await deleteObject(targetRef);
+  } catch (err: any) {
+    if (err?.code !== 'storage/object-not-found') {
+      console.warn('Non-fatal Storage cleanup notice:', err?.message || err);
+    }
+  }
+}
+
 export async function uploadBrandingAsset(
   file: File,
-  assetType: 'logo' | 'mobile_logo' | 'favicon'
+  assetType: 'logo' | 'mobile_logo' | 'favicon',
+  onProgress?: (percent: number) => void
 ): Promise<UploadAssetResult> {
   const maxDim = assetType === 'favicon' ? 48 : assetType === 'mobile_logo' ? 200 : 360;
-  return uploadAsset(file, 'branding', assetType, maxDim);
+  return uploadAsset(file, 'branding', assetType, maxDim, onProgress);
+}
+
+export async function uploadCategoryIcon(
+  file: File,
+  categoryId = 'category',
+  onProgress?: (percent: number) => void
+): Promise<UploadAssetResult> {
+  return uploadAsset(file, 'categories', `icon_${categoryId}`, 200, onProgress);
+}
+
+export async function uploadHeroBannerImage(
+  file: File,
+  bannerId = 'hero',
+  onProgress?: (percent: number) => void
+): Promise<UploadAssetResult> {
+  return uploadAsset(file, 'banners', `hero_${bannerId}`, 800, onProgress);
+}
+
+export async function uploadProductImage(
+  file: File,
+  productId = 'product',
+  onProgress?: (percent: number) => void
+): Promise<UploadAssetResult> {
+  return uploadAsset(file, 'products', `prod_${productId}`, 900, onProgress);
 }
 
 /**
- * Uploads category icon
+ * Recursively removes `password` keys so plaintext passwords NEVER persist in Firestore.
  */
-export async function uploadCategoryIcon(file: File, categoryId = 'category'): Promise<UploadAssetResult> {
-  return uploadAsset(file, 'categories', `icon_${categoryId}`, 200);
-}
-
-/**
- * Uploads hero banner image
- */
-export async function uploadHeroBannerImage(file: File, bannerId = 'hero'): Promise<UploadAssetResult> {
-  return uploadAsset(file, 'banners', `hero_${bannerId}`, 800);
-}
-
-/**
- * Saves Branding Settings to Cloud Firestore: collection "settings", doc "branding"
- * Guaranteed to stay strictly under Firestore's 1MB document limit.
- */
-export async function saveBrandingToFirestore(
-  branding: Partial<WebsiteSettings>,
-  adminUserEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
-  const docRef = doc(db, 'settings', 'branding');
-
-  // Sanitize and compress any oversized data URLs in branding
-  let safeLogoUrl = branding.logoUrl;
-  let safeMobileLogoUrl = branding.mobileLogoUrl;
-  let safeFaviconUrl = branding.faviconUrl;
-
-  if (safeLogoUrl && safeLogoUrl.startsWith('data:') && safeLogoUrl.length > 30000) {
-    safeLogoUrl = await resizeDataUrl(safeLogoUrl, 260, 0.65);
-    // If still large after compression, scale down further
-    if (safeLogoUrl.length > 80000) {
-      safeLogoUrl = await resizeDataUrl(safeLogoUrl, 180, 0.50);
+export function stripPasswords<T>(value: T): T {
+  if (value === null || value === undefined) return value;
+  if (Array.isArray(value)) {
+    return value.map(item => stripPasswords(item)) as unknown as T;
+  }
+  if (typeof value === 'object' && !(value instanceof Date)) {
+    const out: Record<string, any> = {};
+    for (const [key, val] of Object.entries(value)) {
+      if (key === 'password' || key === 'plainPassword') continue;
+      out[key] = stripPasswords(val);
     }
+    return out as T;
   }
-  if (safeMobileLogoUrl && safeMobileLogoUrl.startsWith('data:') && safeMobileLogoUrl.length > 20000) {
-    safeMobileLogoUrl = await resizeDataUrl(safeMobileLogoUrl, 160, 0.60);
-    if (safeMobileLogoUrl.length > 50000) {
-      safeMobileLogoUrl = await resizeDataUrl(safeMobileLogoUrl, 120, 0.45);
-    }
-  }
-  if (safeFaviconUrl && safeFaviconUrl.startsWith('data:') && safeFaviconUrl.length > 10000) {
-    safeFaviconUrl = await resizeDataUrl(safeFaviconUrl, 48, 0.60);
-    if (safeFaviconUrl.length > 30000) {
-      safeFaviconUrl = await resizeDataUrl(safeFaviconUrl, 32, 0.40);
-    }
-  }
-
-  const payload: Record<string, any> = {
-    ...branding,
-    ...(safeLogoUrl !== undefined ? { logoUrl: safeLogoUrl } : {}),
-    ...(safeMobileLogoUrl !== undefined ? { mobileLogoUrl: safeMobileLogoUrl } : {}),
-    ...(safeFaviconUrl !== undefined ? { faviconUrl: safeFaviconUrl } : {}),
-    updatedAt: new Date().toISOString(),
-    updatedBy: adminUserEmail,
-    projectId: FIREBASE_PROJECT_INFO.projectId,
-  };
-
-  // Preemptively ensure total payload size is safely under Firestore's 1,048,576 bytes limit
-  let payloadBytes = new Blob([JSON.stringify(payload)]).size;
-  if (payloadBytes > 400000) {
-    console.warn(`Branding payload size is ${payloadBytes} bytes. Sanitizing data URLs...`);
-    // If any data URL is still over 70KB, compress further or drop to protect Firestore limit
-    ['logoUrl', 'mobileLogoUrl', 'faviconUrl'].forEach(key => {
-      if (typeof payload[key] === 'string' && payload[key].startsWith('data:')) {
-        if (payload[key].length > 100000) {
-          payload[key] = ''; // Prevent 1MB blowup
-        }
-      }
-    });
-  }
-
-  try {
-    await setDoc(docRef, payload, { merge: true });
-  } catch (err: any) {
-    console.warn('Initial setDoc notice for branding:', err?.message || err);
-    // If document size or write failed, strip all heavy data URLs to guarantee textual settings persist
-    const errMsg = String(err?.message || '').toLowerCase();
-    if (
-      errMsg.includes('exceeds the maximum allowed size') ||
-      errMsg.includes('size') ||
-      errMsg.includes('resource-exhausted') ||
-      err?.code === 'resource-exhausted' ||
-      err?.code === 'invalid-argument'
-    ) {
-      const fallbackPayload: Record<string, any> = { ...payload };
-      Object.keys(fallbackPayload).forEach(key => {
-        if (typeof fallbackPayload[key] === 'string' && fallbackPayload[key].startsWith('data:')) {
-          fallbackPayload[key] = '';
-        }
-      });
-      await setDoc(docRef, fallbackPayload, { merge: true });
-    } else {
-      throw err;
-    }
-  }
-}
-
-/**
- * Fetches Branding Settings from Cloud Firestore
- */
-export async function fetchBrandingFromFirestore(): Promise<Partial<WebsiteSettings> | null> {
-  try {
-    const docRef = doc(db, 'settings', 'branding');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return docSnap.data() as Partial<WebsiteSettings>;
-    }
-    return null;
-  } catch (err) {
-    console.warn('Could not fetch branding from Firestore, fallback to local settings:', err);
-    return null;
-  }
-}
-
-/**
- * Subscribes to live branding updates from Cloud Firestore
- */
-export function subscribeToBranding(
-  onUpdate: (branding: Partial<WebsiteSettings>) => void
-): Unsubscribe {
-  const docRef = doc(db, 'settings', 'branding');
-  return onSnapshot(
-    docRef,
-    snapshot => {
-      if (snapshot.exists()) {
-        onUpdate(snapshot.data() as Partial<WebsiteSettings>);
-      }
-    },
-    error => {
-      console.warn('Branding live subscription error:', error);
-    }
-  );
-}
-
-/**
- * Saves Categories to Cloud Firestore
- */
-export async function saveCategoriesToFirestore(
-  categories: Category[],
-  adminUserEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
-  try {
-    const docRef = doc(db, 'settings', 'categories');
-    await setDoc(
-      docRef,
-      {
-        items: categories,
-        updatedAt: new Date().toISOString(),
-        updatedBy: adminUserEmail,
-        projectId: FIREBASE_PROJECT_INFO.projectId,
-      },
-      { merge: true }
-    );
-  } catch (err) {
-    console.warn('Failed to save categories to Firestore:', err);
-  }
-}
-
-/**
- * Fetches Categories from Cloud Firestore
- */
-export async function fetchCategoriesFromFirestore(): Promise<Category[] | null> {
-  try {
-    const docRef = doc(db, 'settings', 'categories');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists() && Array.isArray(docSnap.data()?.items)) {
-      return docSnap.data().items as Category[];
-    }
-    return null;
-  } catch (err) {
-    console.warn('Could not fetch categories from Firestore:', err);
-    return null;
-  }
-}
-
-/**
- * Saves Hero Banners to Cloud Firestore
- */
-export async function saveHeroBannersToFirestore(
-  banners: HeroBannerSlide[],
-  adminUserEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
-  try {
-    const docRef = doc(db, 'settings', 'hero_banners');
-    await setDoc(
-      docRef,
-      {
-        items: banners,
-        updatedAt: new Date().toISOString(),
-        updatedBy: adminUserEmail,
-        projectId: FIREBASE_PROJECT_INFO.projectId,
-      },
-      { merge: true }
-    );
-  } catch (err) {
-    console.warn('Failed to save hero banners to Firestore:', err);
-  }
-}
-
-/**
- * Fetches Hero Banners from Cloud Firestore
- */
-export async function fetchHeroBannersFromFirestore(): Promise<HeroBannerSlide[] | null> {
-  try {
-    const docRef = doc(db, 'settings', 'hero_banners');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists() && Array.isArray(docSnap.data()?.items)) {
-      return docSnap.data().items as HeroBannerSlide[];
-    }
-    return null;
-  } catch (err) {
-    console.warn('Could not fetch hero banners from Firestore:', err);
-    return null;
-  }
-}
-
-/**
- * Saves Courier Configs to Cloud Firestore: collection "settings", doc "couriers"
- */
-export async function saveCouriersToFirestore(
-  couriers: CourierConfig[],
-  adminUserEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
-  try {
-    const docRef = doc(db, 'settings', 'couriers');
-    await setDoc(
-      docRef,
-      {
-        items: couriers,
-        updatedAt: new Date().toISOString(),
-        updatedBy: adminUserEmail,
-        projectId: FIREBASE_PROJECT_INFO.projectId,
-      },
-      { merge: true }
-    );
-  } catch (err) {
-    console.warn('Failed to save courier configs to Firestore:', err);
-  }
-}
-
-/**
- * Fetches Courier Configs from Cloud Firestore
- */
-export async function fetchCouriersFromFirestore(): Promise<CourierConfig[] | null> {
-  try {
-    const docRef = doc(db, 'settings', 'couriers');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists() && Array.isArray(docSnap.data()?.items)) {
-      return docSnap.data().items as CourierConfig[];
-    }
-    return null;
-  } catch (err) {
-    console.warn('Could not fetch courier configs from Firestore:', err);
-    return null;
-  }
-}
-
-/**
- * Subscribes to live Courier Configs from Cloud Firestore
- */
-export function subscribeToCouriers(
-  onUpdate: (couriers: CourierConfig[]) => void
-): Unsubscribe {
-  const docRef = doc(db, 'settings', 'couriers');
-  return onSnapshot(
-    docRef,
-    snapshot => {
-      if (snapshot.exists() && Array.isArray(snapshot.data()?.items)) {
-        onUpdate(snapshot.data().items as CourierConfig[]);
-      }
-    },
-    error => {
-      console.warn('Couriers live subscription error:', error);
-    }
-  );
-}
-
-/**
- * Saves Payment Settings to Cloud Firestore
- */
-export async function savePaymentSettingsToFirestore(
-  settings: PaymentSettings,
-  adminUserEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
-  try {
-    const docRef = doc(db, 'settings', 'payment');
-    await setDoc(
-      docRef,
-      {
-        ...settings,
-        updatedAt: new Date().toISOString(),
-        updatedBy: adminUserEmail,
-        projectId: FIREBASE_PROJECT_INFO.projectId,
-      },
-      { merge: true }
-    );
-  } catch (err) {
-    console.warn('Failed to save payment settings to Firestore:', err);
-  }
-}
-
-/**
- * Fetches Payment Settings from Cloud Firestore
- */
-export async function fetchPaymentSettingsFromFirestore(): Promise<PaymentSettings | null> {
-  try {
-    const docRef = doc(db, 'settings', 'payment');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return docSnap.data() as PaymentSettings;
-    }
-    return null;
-  } catch (err) {
-    console.warn('Could not fetch payment settings from Firestore:', err);
-    return null;
-  }
-}
-
-/**
- * Subscribes to live Payment Settings updates from Cloud Firestore
- */
-export function subscribeToPaymentSettings(
-  onUpdate: (settings: PaymentSettings) => void
-): Unsubscribe {
-  const docRef = doc(db, 'settings', 'payment');
-  return onSnapshot(
-    docRef,
-    snapshot => {
-      if (snapshot.exists()) {
-        onUpdate(snapshot.data() as PaymentSettings);
-      }
-    },
-    error => {
-      console.warn('Payment settings live subscription error:', error);
-    }
-  );
-}
-
-/**
- * Saves Delivery Settings to Cloud Firestore
- */
-export async function saveDeliverySettingsToFirestore(
-  settings: DeliverySettings,
-  adminUserEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
-  try {
-    const docRef = doc(db, 'settings', 'delivery');
-    await setDoc(
-      docRef,
-      {
-        ...settings,
-        updatedAt: new Date().toISOString(),
-        updatedBy: adminUserEmail,
-        projectId: FIREBASE_PROJECT_INFO.projectId,
-      },
-      { merge: true }
-    );
-  } catch (err) {
-    console.warn('Failed to save delivery settings to Firestore:', err);
-  }
-}
-
-/**
- * Fetches Delivery Settings from Cloud Firestore
- */
-export async function fetchDeliverySettingsFromFirestore(): Promise<DeliverySettings | null> {
-  try {
-    const docRef = doc(db, 'settings', 'delivery');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return docSnap.data() as DeliverySettings;
-    }
-    return null;
-  } catch (err) {
-    console.warn('Could not fetch delivery settings from Firestore:', err);
-    return null;
-  }
-}
-
-/**
- * Subscribes to live Delivery Settings updates from Cloud Firestore
- */
-export function subscribeToDeliverySettings(
-  onUpdate: (settings: DeliverySettings) => void
-): Unsubscribe {
-  const docRef = doc(db, 'settings', 'delivery');
-  return onSnapshot(
-    docRef,
-    snapshot => {
-      if (snapshot.exists()) {
-        onUpdate(snapshot.data() as DeliverySettings);
-      }
-    },
-    error => {
-      console.warn('Delivery settings live subscription error:', error);
-    }
-  );
+  return value;
 }
 
 /**
  * Recursively cleans any object or array before committing to Cloud Firestore.
- * Cloud Firestore strictly rejects any field whose value is `undefined` (even in nested arrays/objects).
- * This utility:
- * 1. Strips any property whose value is `undefined`
- * 2. Filters out `undefined` entries in arrays
- * 3. Deeply sanitizes nested objects and arrays
- * 4. Preserves primitives, `null`, and Date instances
  */
 export function cleanFirestorePayload<T>(value: T): T {
   if (value === null || value === undefined) {
@@ -945,10 +955,6 @@ export function cleanFirestorePayload<T>(value: T): T {
   return value;
 }
 
-/**
- * Validates that an object contains zero `undefined` values before Firestore transaction/write.
- * Returns array of field paths containing `undefined` if any are detected.
- */
 export function findUndefinedPathsInPayload(data: any, currentPath = ''): string[] {
   if (data === undefined) return [currentPath || 'ROOT'];
   if (data === null || typeof data !== 'object') return [];
@@ -971,20 +977,129 @@ export function findUndefinedPathsInPayload(data: any, currentPath = ''): string
 }
 
 /**
- * Saves Products Catalog to Cloud Firestore
+ * Safe existence-aware fetch for settings documents so callers can distinguish
+ * a genuinely missing document from a permission or offline error.
  */
-export async function saveProductsToFirestore(
-  products: Product[],
-  adminUserEmail = 'mdmahmudulhashan0@gmail.com'
-): Promise<{ success: boolean; error?: string }> {
+export async function fetchSettingDocSafe<T>(settingId: string): Promise<FetchDocResult<T>> {
+  try {
+    const docRef = doc(db, 'settings', settingId);
+    const docSnap = await getDoc(docRef);
+    recordDatabaseRead();
+    if (docSnap.exists()) {
+      return { data: docSnap.data() as T, exists: true };
+    }
+    return { data: null, exists: false };
+  } catch (err: any) {
+    recordDatabaseError(err);
+    return {
+      data: null,
+      exists: false,
+      error: err?.message || String(err),
+    };
+  }
+}
+
+/**
+ * Saves Branding Settings to Cloud Firestore: collection "settings", doc "branding"
+ */
+export async function saveBrandingToFirestore(
+  branding: Partial<WebsiteSettings>,
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = 'settings/branding';
   try {
     await ensureAdminFirebaseAuthSession(adminUserEmail);
-    const docRef = doc(db, 'settings', 'products_catalog');
-    const sanitizedProducts = cleanFirestorePayload(sanitizeProductRecords(products));
+    const docRef = doc(db, 'settings', 'branding');
+
+    let safeLogoUrl = branding.logoUrl;
+    let safeMobileLogoUrl = branding.mobileLogoUrl;
+    let safeFaviconUrl = branding.faviconUrl;
+
+    if (safeLogoUrl && safeLogoUrl.startsWith('data:') && safeLogoUrl.length > 30000) {
+      safeLogoUrl = await resizeDataUrl(safeLogoUrl, 260, 0.65);
+      if (safeLogoUrl.length > 80000) {
+        safeLogoUrl = await resizeDataUrl(safeLogoUrl, 180, 0.5);
+      }
+    }
+    if (safeMobileLogoUrl && safeMobileLogoUrl.startsWith('data:') && safeMobileLogoUrl.length > 20000) {
+      safeMobileLogoUrl = await resizeDataUrl(safeMobileLogoUrl, 160, 0.6);
+      if (safeMobileLogoUrl.length > 50000) {
+        safeMobileLogoUrl = await resizeDataUrl(safeMobileLogoUrl, 120, 0.45);
+      }
+    }
+    if (safeFaviconUrl && safeFaviconUrl.startsWith('data:') && safeFaviconUrl.length > 10000) {
+      safeFaviconUrl = await resizeDataUrl(safeFaviconUrl, 48, 0.6);
+      if (safeFaviconUrl.length > 30000) {
+        safeFaviconUrl = await resizeDataUrl(safeFaviconUrl, 32, 0.4);
+      }
+    }
+
+    const payload: Record<string, any> = cleanFirestorePayload({
+      ...branding,
+      ...(safeLogoUrl !== undefined ? { logoUrl: safeLogoUrl } : {}),
+      ...(safeMobileLogoUrl !== undefined ? { mobileLogoUrl: safeMobileLogoUrl } : {}),
+      ...(safeFaviconUrl !== undefined ? { faviconUrl: safeFaviconUrl } : {}),
+      updatedAt: new Date().toISOString(),
+      updatedBy: adminUserEmail,
+      projectId: FIREBASE_PROJECT_INFO.projectId,
+    });
+
+    const payloadBytes = new Blob([JSON.stringify(payload)]).size;
+    if (payloadBytes > 400000) {
+      ['logoUrl', 'mobileLogoUrl', 'faviconUrl'].forEach(key => {
+        if (typeof payload[key] === 'string' && payload[key].startsWith('data:')) {
+          if (payload[key].length > 100000) {
+            payload[key] = '';
+          }
+        }
+      });
+    }
+
+    await setDoc(docRef, payload, { merge: true });
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
+  }
+}
+
+export async function fetchBrandingFromFirestore(): Promise<Partial<WebsiteSettings> | null> {
+  const res = await fetchSettingDocSafe<Partial<WebsiteSettings>>('branding');
+  return res.exists ? res.data : null;
+}
+
+export function subscribeToBranding(
+  onUpdate: (branding: Partial<WebsiteSettings>) => void
+): Unsubscribe {
+  const docRef = doc(db, 'settings', 'branding');
+  return onSnapshot(
+    docRef,
+    snapshot => {
+      if (snapshot.exists()) {
+        onUpdate(snapshot.data() as Partial<WebsiteSettings>);
+      }
+    },
+    error => {
+      console.warn('Branding live subscription error:', error);
+    }
+  );
+}
+
+/**
+ * Categories CRUD persistence
+ */
+export async function saveCategoriesToFirestore(
+  categories: Category[],
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = 'settings/categories';
+  try {
+    await ensureAdminFirebaseAuthSession(adminUserEmail);
+    const docRef = doc(db, 'settings', 'categories');
     await setDoc(
       docRef,
       cleanFirestorePayload({
-        items: sanitizedProducts,
+        items: categories,
         updatedAt: new Date().toISOString(),
         updatedBy: adminUserEmail,
         projectId: FIREBASE_PROJECT_INFO.projectId,
@@ -994,28 +1109,33 @@ export async function saveProductsToFirestore(
     recordDatabaseWrite();
     return { success: true };
   } catch (err: any) {
-    const errMsg = err?.message || String(err);
-    recordDatabaseError(err);
-    console.error('Failed to save products to Firestore:', err);
-    return { success: false, error: errMsg };
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
   }
 }
 
+export async function fetchCategoriesFromFirestore(): Promise<Category[] | null> {
+  const res = await fetchSettingDocSafe<{ items?: Category[] }>('categories');
+  if (res.exists && Array.isArray(res.data?.items)) {
+    return res.data!.items;
+  }
+  return null;
+}
+
 /**
- * Saves a single product document to `/products/{productId}` in Cloud Firestore
+ * Hero Banners CRUD persistence
  */
-export async function saveSingleProductToFirestore(
-  product: Product,
-  adminUserEmail = 'mdmahmudulhashan0@gmail.com'
-): Promise<{ success: boolean; error?: string }> {
+export async function saveHeroBannersToFirestore(
+  banners: HeroBannerSlide[],
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = 'settings/hero_banners';
   try {
     await ensureAdminFirebaseAuthSession(adminUserEmail);
-    const docRef = doc(db, 'products', product.id);
-    const sanitized = cleanFirestorePayload(sanitizeProductRecords([product])[0]);
+    const docRef = doc(db, 'settings', 'hero_banners');
     await setDoc(
       docRef,
       cleanFirestorePayload({
-        ...sanitized,
+        items: banners,
         updatedAt: new Date().toISOString(),
         updatedBy: adminUserEmail,
         projectId: FIREBASE_PROJECT_INFO.projectId,
@@ -1025,43 +1145,173 @@ export async function saveSingleProductToFirestore(
     recordDatabaseWrite();
     return { success: true };
   } catch (err: any) {
-    recordDatabaseError(err);
-    console.warn(`Could not save single product /products/${product.id} (non-fatal):`, err);
-    return { success: false, error: err?.message || String(err) };
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
   }
 }
 
+export async function fetchHeroBannersFromFirestore(): Promise<HeroBannerSlide[] | null> {
+  const res = await fetchSettingDocSafe<{ items?: HeroBannerSlide[] }>('hero_banners');
+  if (res.exists && Array.isArray(res.data?.items)) {
+    return res.data!.items;
+  }
+  return null;
+}
+
 /**
- * Deletes a single product document from `/products/{productId}` in Cloud Firestore
+ * Couriers persistence (staff/admin restricted)
  */
-export async function deleteSingleProductFromFirestore(
-  productId: string,
-  adminUserEmail = 'mdmahmudulhashan0@gmail.com'
-): Promise<{ success: boolean; error?: string }> {
+export async function saveCouriersToFirestore(
+  couriers: CourierConfig[],
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = 'settings/couriers';
   try {
     await ensureAdminFirebaseAuthSession(adminUserEmail);
-    const docRef = doc(db, 'products', productId);
-    // Overwrite with inactive/deleted state or deleteDoc
+    const docRef = doc(db, 'settings', 'couriers');
     await setDoc(
       docRef,
-      {
-        deleted: true,
-        deletedAt: new Date().toISOString(),
-      },
+      cleanFirestorePayload({
+        items: couriers,
+        updatedAt: new Date().toISOString(),
+        updatedBy: adminUserEmail,
+        projectId: FIREBASE_PROJECT_INFO.projectId,
+      }),
       { merge: true }
     );
     recordDatabaseWrite();
     return { success: true };
   } catch (err: any) {
-    recordDatabaseError(err);
-    console.warn(`Could not delete single product /products/${productId}:`, err);
-    return { success: false, error: err?.message || String(err) };
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
   }
 }
 
+export async function fetchCouriersFromFirestore(): Promise<CourierConfig[] | null> {
+  const res = await fetchSettingDocSafe<{ items?: CourierConfig[] }>('couriers');
+  if (res.exists && Array.isArray(res.data?.items)) {
+    return res.data!.items;
+  }
+  return null;
+}
+
+export function subscribeToCouriers(
+  onUpdate: (couriers: CourierConfig[]) => void
+): Unsubscribe {
+  const docRef = doc(db, 'settings', 'couriers');
+  return onSnapshot(
+    docRef,
+    snapshot => {
+      if (snapshot.exists() && Array.isArray(snapshot.data()?.items)) {
+        onUpdate(snapshot.data().items as CourierConfig[]);
+      }
+    },
+    error => {
+      console.warn('Couriers live subscription error:', error);
+    }
+  );
+}
+
 /**
- * Sanitizes raw product items from Firestore to guarantee valid numeric stock and safety,
- * ensuring no property with value `undefined` is returned.
+ * Payment Settings persistence
+ */
+export async function savePaymentSettingsToFirestore(
+  settings: PaymentSettings,
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = 'settings/payment';
+  try {
+    await ensureAdminFirebaseAuthSession(adminUserEmail);
+    const docRef = doc(db, 'settings', 'payment');
+    await setDoc(
+      docRef,
+      cleanFirestorePayload({
+        ...settings,
+        updatedAt: new Date().toISOString(),
+        updatedBy: adminUserEmail,
+        projectId: FIREBASE_PROJECT_INFO.projectId,
+      }),
+      { merge: true }
+    );
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
+  }
+}
+
+export async function fetchPaymentSettingsFromFirestore(): Promise<PaymentSettings | null> {
+  const res = await fetchSettingDocSafe<PaymentSettings>('payment');
+  return res.exists ? res.data : null;
+}
+
+export function subscribeToPaymentSettings(
+  onUpdate: (settings: PaymentSettings) => void
+): Unsubscribe {
+  const docRef = doc(db, 'settings', 'payment');
+  return onSnapshot(
+    docRef,
+    snapshot => {
+      if (snapshot.exists()) {
+        onUpdate(snapshot.data() as PaymentSettings);
+      }
+    },
+    error => {
+      console.warn('Payment settings live subscription error:', error);
+    }
+  );
+}
+
+/**
+ * Delivery Settings persistence
+ */
+export async function saveDeliverySettingsToFirestore(
+  settings: DeliverySettings,
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = 'settings/delivery';
+  try {
+    await ensureAdminFirebaseAuthSession(adminUserEmail);
+    const docRef = doc(db, 'settings', 'delivery');
+    await setDoc(
+      docRef,
+      cleanFirestorePayload({
+        ...settings,
+        updatedAt: new Date().toISOString(),
+        updatedBy: adminUserEmail,
+        projectId: FIREBASE_PROJECT_INFO.projectId,
+      }),
+      { merge: true }
+    );
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
+  }
+}
+
+export async function fetchDeliverySettingsFromFirestore(): Promise<DeliverySettings | null> {
+  const res = await fetchSettingDocSafe<DeliverySettings>('delivery');
+  return res.exists ? res.data : null;
+}
+
+export function subscribeToDeliverySettings(
+  onUpdate: (settings: DeliverySettings) => void
+): Unsubscribe {
+  const docRef = doc(db, 'settings', 'delivery');
+  return onSnapshot(
+    docRef,
+    snapshot => {
+      if (snapshot.exists()) {
+        onUpdate(snapshot.data() as DeliverySettings);
+      }
+    },
+    error => {
+      console.warn('Delivery settings live subscription error:', error);
+    }
+  );
+}
+
+/**
+ * Sanitizes raw product items from Firestore
  */
 export function sanitizeProductRecords(rawItems: any[]): Product[] {
   if (!Array.isArray(rawItems)) return [];
@@ -1083,6 +1333,7 @@ export function sanitizeProductRecords(rawItems: any[]): Product[] {
 
     const sanitized: any = {
       ...cleanFirestorePayload(item),
+      isPublished: item.isPublished !== false,
       stock:
         typeof item.stock === 'number' && !isNaN(item.stock)
           ? Math.max(0, Math.floor(item.stock))
@@ -1104,30 +1355,86 @@ export function sanitizeProductRecords(rawItems: any[]): Product[] {
 }
 
 /**
- * Fetches Products Catalog from Cloud Firestore
+ * Products Catalog persistence
  */
-export async function fetchProductsFromFirestore(): Promise<Product[] | null> {
+export async function saveProductsToFirestore(
+  products: Product[],
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = 'settings/products_catalog';
   try {
+    await ensureAdminFirebaseAuthSession(adminUserEmail);
     const docRef = doc(db, 'settings', 'products_catalog');
-    const docSnap = await getDoc(docRef);
-    recordDatabaseRead();
-    if (docSnap.exists() && Array.isArray(docSnap.data()?.items)) {
-      return sanitizeProductRecords(docSnap.data().items);
-    }
-    return null;
-  } catch (err) {
-    recordDatabaseError(err);
-    console.warn('Could not fetch products from Firestore:', err);
-    return null;
+    const sanitizedProducts = cleanFirestorePayload(sanitizeProductRecords(products));
+    await setDoc(
+      docRef,
+      cleanFirestorePayload({
+        items: sanitizedProducts,
+        updatedAt: new Date().toISOString(),
+        updatedBy: adminUserEmail,
+        projectId: FIREBASE_PROJECT_INFO.projectId,
+      }),
+      { merge: true }
+    );
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
   }
 }
 
-/**
- * Subscribes to live Products updates from Cloud Firestore
- */
-export function subscribeToProducts(
-  onUpdate: (products: Product[]) => void
-): Unsubscribe {
+export async function saveSingleProductToFirestore(
+  product: Product,
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = `products/${product.id}`;
+  try {
+    await ensureAdminFirebaseAuthSession(adminUserEmail);
+    const docRef = doc(db, 'products', product.id);
+    const sanitized = cleanFirestorePayload(sanitizeProductRecords([product])[0]);
+    await setDoc(
+      docRef,
+      cleanFirestorePayload({
+        ...sanitized,
+        deleted: false,
+        updatedAt: new Date().toISOString(),
+        updatedBy: adminUserEmail,
+        projectId: FIREBASE_PROJECT_INFO.projectId,
+      }),
+      { merge: true }
+    );
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
+  }
+}
+
+export async function deleteSingleProductFromFirestore(
+  productId: string,
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = `products/${productId}`;
+  try {
+    await ensureAdminFirebaseAuthSession(adminUserEmail);
+    const docRef = doc(db, 'products', productId);
+    await deleteDoc(docRef);
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.DELETE, path);
+  }
+}
+
+export async function fetchProductsFromFirestore(): Promise<Product[] | null> {
+  const res = await fetchSettingDocSafe<{ items?: any[] }>('products_catalog');
+  if (res.exists && Array.isArray(res.data?.items)) {
+    return sanitizeProductRecords(res.data!.items);
+  }
+  return null;
+}
+
+export function subscribeToProducts(onUpdate: (products: Product[]) => void): Unsubscribe {
   const docRef = doc(db, 'settings', 'products_catalog');
   return onSnapshot(
     docRef,
@@ -1143,21 +1450,17 @@ export function subscribeToProducts(
 }
 
 /**
- * Atomic Order Checkout & Stock Deduction via Firestore runTransaction
- *
- * Architectural Invariants:
- * 1. Checks if order already exists (Idempotency key to prevent duplicate deductions on retry)
- * 2. Fetches latest products catalog directly from Firestore within transaction (Trusted Backend Check)
- * 3. Enforces strict stock validation for all ordered items & variants
- * 4. ALL READS EXECUTE BEFORE ALL WRITES (Strict Firestore Transaction invariant)
- * 5. Atomically updates products catalog with deducted stock and writes order record
- * 6. If stock is insufficient, throws error which rolls back any mutation
+ * Order Checkout:
+ * - When executed by authenticated Staff/Admin: performs atomic runTransaction across
+ *   orders/{id}, settings/orders_data, settings/products_catalog, and products/{id}.
+ * - When executed by a regular Customer or Guest: verifies real-time stock against public
+ *   settings/products_catalog and writes the order to /orders/{order.id} without touching
+ *   admin-restricted collections (no Missing or insufficient permissions error!).
  */
 export async function executeAtomicOrderCheckout(
   order: Order,
-  adminUserEmail = 'jotpotshop.official@gmail.com'
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
 ): Promise<{ success: boolean; order?: Order; error?: string }> {
-  // Step 0: Input Validation — Ensure all required fields exist and are valid before opening transaction
   if (!order || typeof order !== 'object') {
     return { success: false, error: 'অর্ডারের তথ্য পাওয়া যায়নি।' };
   }
@@ -1188,9 +1491,68 @@ export async function executeAtomicOrderCheckout(
     }
   }
 
+  const isStaffSession = await isCurrentUserVerifiedStaff();
+
+  // Customer / Guest direct checkout path (compatible with least-privilege rules)
+  if (!isStaffSession) {
+    try {
+      const catalogSnap = await getDoc(doc(db, 'settings', 'products_catalog'));
+      recordDatabaseRead();
+      const dbProducts: Product[] =
+        catalogSnap.exists() && Array.isArray(catalogSnap.data()?.items)
+          ? sanitizeProductRecords(catalogSnap.data()!.items)
+          : sanitizeProductRecords(INITIAL_PRODUCTS);
+
+      const outOfStockErrors: string[] = [];
+      for (const cartItem of order.items) {
+        const liveProduct = dbProducts.find(p => p.id === cartItem.product.id);
+        if (!liveProduct) {
+          outOfStockErrors.push(`"${cartItem.product.name}" (পণ্যটি আর তালিকায় নেই)`);
+          continue;
+        }
+        const available = getAvailableStock(
+          liveProduct,
+          cartItem.selectedColor,
+          cartItem.selectedSize
+        );
+        if (available < cartItem.quantity) {
+          const variantDesc = [cartItem.selectedColor, cartItem.selectedSize]
+            .filter(Boolean)
+            .join(' / ');
+          const variantText = variantDesc ? ` (${variantDesc})` : '';
+          outOfStockErrors.push(
+            `"${liveProduct.nameBn || liveProduct.name}"${variantText}: বর্তমানে মাত্র ${available}টি অবশিষ্ট আছে, কিন্তু ${cartItem.quantity}টি চাওয়া হয়েছে`
+          );
+        }
+      }
+
+      if (outOfStockErrors.length > 0) {
+        return { success: false, error: outOfStockErrors.join(' • ') };
+      }
+
+      const authUid = auth.currentUser?.uid || '';
+      const cleanOrderDoc = cleanFirestorePayload({
+        ...order,
+        customerUid: authUid || order.customerUid || '',
+        status: 'Pending' as const,
+        syncedAt: new Date().toISOString(),
+      });
+
+      await setDoc(doc(db, 'orders', order.id), cleanOrderDoc);
+      recordDatabaseWrite();
+      return { success: true, order: cleanOrderDoc as Order };
+    } catch (err: any) {
+      const errRes = logFirestoreOperationError(err, OperationType.CREATE, `orders/${order.id}`);
+      return {
+        success: false,
+        error: `অর্ডার সংরক্ষণে সমস্যা হয়েছে: ${errRes.error || 'Firestore permission/network error'}`,
+      };
+    }
+  }
+
+  // Staff / Admin full atomic ledger + inventory deduction transaction
   try {
-    const result = await runTransaction(db, async (transaction) => {
-      // Step 1: ALL READS FIRST (Strict Firestore rule: All gets must precede sets)
+    const result = await runTransaction(db, async transaction => {
       const orderDocRef = doc(db, 'orders', order.id);
       const existingOrderSnap = await transaction.get(orderDocRef);
 
@@ -1200,7 +1562,6 @@ export async function executeAtomicOrderCheckout(
       const ordersDataRef = doc(db, 'settings', 'orders_data');
       const ordersDataSnap = await transaction.get(ordersDataRef);
 
-      // Idempotency check: if order was already recorded, return it without duplicate deduction
       if (existingOrderSnap.exists()) {
         return {
           success: true,
@@ -1208,32 +1569,31 @@ export async function executeAtomicOrderCheckout(
         };
       }
 
-      // Step 2: Extract & sanitize live products catalog from database
-      let dbProducts: Product[] = [];
-      if (catalogSnap.exists() && Array.isArray(catalogSnap.data()?.items)) {
-        dbProducts = sanitizeProductRecords(catalogSnap.data()!.items);
-      } else {
-        // Safe fallback to initial products if remote catalog document hasn't been created yet
-        dbProducts = sanitizeProductRecords(INITIAL_PRODUCTS);
-      }
+      const dbProducts: Product[] =
+        catalogSnap.exists() && Array.isArray(catalogSnap.data()?.items)
+          ? sanitizeProductRecords(catalogSnap.data()!.items)
+          : sanitizeProductRecords(INITIAL_PRODUCTS);
 
       if (dbProducts.length === 0) {
         throw new Error('DATABASE_CATALOG_EMPTY');
       }
 
-      // Step 3: Validate stock strictly against trusted database state
       const outOfStockErrors: string[] = [];
-
       for (const cartItem of order.items) {
         const liveProduct = dbProducts.find(p => p.id === cartItem.product.id);
         if (!liveProduct) {
           outOfStockErrors.push(`"${cartItem.product.name}" (পণ্যটি আর তালিকায় নেই)`);
           continue;
         }
-
-        const available = getAvailableStock(liveProduct, cartItem.selectedColor, cartItem.selectedSize);
+        const available = getAvailableStock(
+          liveProduct,
+          cartItem.selectedColor,
+          cartItem.selectedSize
+        );
         if (available < cartItem.quantity) {
-          const variantDesc = [cartItem.selectedColor, cartItem.selectedSize].filter(Boolean).join(' / ');
+          const variantDesc = [cartItem.selectedColor, cartItem.selectedSize]
+            .filter(Boolean)
+            .join(' / ');
           const variantText = variantDesc ? ` (${variantDesc})` : '';
           outOfStockErrors.push(
             `"${liveProduct.nameBn || liveProduct.name}"${variantText}: বর্তমানে মাত্র ${available}টি অবশিষ্ট আছে, কিন্তু ${cartItem.quantity}টি চাওয়া হয়েছে`
@@ -1245,7 +1605,6 @@ export async function executeAtomicOrderCheckout(
         throw new Error(`INSUFFICIENT_STOCK: ${outOfStockErrors.join(' • ')}`);
       }
 
-      // Step 4: Compute updated stocks for each product and variant
       const updatedProducts = dbProducts.map(p => {
         const itemsForProduct = order.items.filter(ci => ci.product.id === p.id);
         if (itemsForProduct.length === 0) {
@@ -1253,7 +1612,7 @@ export async function executeAtomicOrderCheckout(
         }
 
         let currentStock = p.stock;
-        let updatedVariantStocks = p.variantStocks ? { ...p.variantStocks } : undefined;
+        const updatedVariantStocks = p.variantStocks ? { ...p.variantStocks } : undefined;
 
         for (const item of itemsForProduct) {
           currentStock = Math.max(0, currentStock - item.quantity);
@@ -1261,12 +1620,11 @@ export async function executeAtomicOrderCheckout(
           if (updatedVariantStocks) {
             const color = item.selectedColor?.trim();
             const size = item.selectedSize?.trim();
-
-            if (color && size) {
-              const comboKey = `${color}-${size}`;
-              if (typeof updatedVariantStocks[comboKey] === 'number') {
-                updatedVariantStocks[comboKey] = Math.max(0, updatedVariantStocks[comboKey] - item.quantity);
-              }
+            if (color && size && typeof updatedVariantStocks[`${color}-${size}`] === 'number') {
+              updatedVariantStocks[`${color}-${size}`] = Math.max(
+                0,
+                updatedVariantStocks[`${color}-${size}`] - item.quantity
+              );
             }
             if (color && typeof updatedVariantStocks[color] === 'number') {
               updatedVariantStocks[color] = Math.max(0, updatedVariantStocks[color] - item.quantity);
@@ -1277,21 +1635,15 @@ export async function executeAtomicOrderCheckout(
           }
         }
 
-        const updated: any = {
-          ...p,
-          stock: currentStock,
-        };
+        const updated: any = { ...p, stock: currentStock };
         if (updatedVariantStocks && Object.keys(updatedVariantStocks).length > 0) {
           updated.variantStocks = updatedVariantStocks;
         } else {
           delete updated.variantStocks;
         }
-
         return cleanFirestorePayload(updated) as Product;
       });
 
-      // Step 5: ALL WRITES AFTER READS (Atomically commit all mutations with guaranteed clean payloads)
-      // 5a. Save updated catalog in settings/products_catalog
       const cleanUpdatedProducts = cleanFirestorePayload(updatedProducts);
       transaction.set(
         catalogRef,
@@ -1304,23 +1656,21 @@ export async function executeAtomicOrderCheckout(
         { merge: true }
       );
 
-      // 5b. Write/update individual product documents under /products/{productId}
       for (const item of order.items) {
         const updatedP = cleanUpdatedProducts.find(p => p.id === item.product.id);
         if (updatedP) {
-          const individualProductRef = doc(db, 'products', updatedP.id);
-          transaction.set(individualProductRef, cleanFirestorePayload(updatedP), { merge: true });
+          transaction.set(doc(db, 'products', updatedP.id), cleanFirestorePayload(updatedP), {
+            merge: true,
+          });
         }
       }
 
-      // 5c. Write clean order document
       const cleanOrderDoc = cleanFirestorePayload({
         ...order,
         syncedAt: new Date().toISOString(),
       });
       transaction.set(orderDocRef, cleanOrderDoc);
 
-      // 5d. Update global orders ledger in settings/orders_data
       const existingOrders: Order[] =
         ordersDataSnap.exists() && Array.isArray(ordersDataSnap.data()?.items)
           ? ordersDataSnap.data()!.items
@@ -1329,28 +1679,27 @@ export async function executeAtomicOrderCheckout(
       transaction.set(
         ordersDataRef,
         cleanFirestorePayload({
-          items: [cleanOrderDoc, ...existingOrders.filter(o => o.id !== order.id).map(o => cleanFirestorePayload(o))],
+          items: [
+            cleanOrderDoc,
+            ...existingOrders.filter(o => o.id !== order.id).map(o => cleanFirestorePayload(o)),
+          ],
           updatedAt: new Date().toISOString(),
           updatedBy: adminUserEmail,
         }),
         { merge: true }
       );
 
-      return {
-        success: true,
-        order: cleanOrderDoc as Order,
-      };
+      return { success: true, order: cleanOrderDoc as Order };
     });
 
+    recordDatabaseWrite();
     return result;
   } catch (err: any) {
     const errorMsg = err?.message || String(err);
     if (errorMsg.includes('INSUFFICIENT_STOCK:')) {
-      return {
-        success: false,
-        error: errorMsg.replace('INSUFFICIENT_STOCK:', '').trim(),
-      };
+      return { success: false, error: errorMsg.replace('INSUFFICIENT_STOCK:', '').trim() };
     }
+    recordDatabaseError(err);
     console.warn('Atomic order checkout transaction exception:', err);
     return {
       success: false,
@@ -1362,13 +1711,15 @@ export async function executeAtomicOrderCheckout(
 }
 
 /**
- * Saves Orders to Cloud Firestore
+ * Orders CRUD (Staff ledger + individual /orders/{id} docs)
  */
 export async function saveOrdersToFirestore(
   orders: Order[],
-  adminUserEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = 'settings/orders_data';
   try {
+    await ensureAdminFirebaseAuthSession(adminUserEmail);
     const docRef = doc(db, 'settings', 'orders_data');
     await setDoc(
       docRef,
@@ -1380,15 +1731,15 @@ export async function saveOrdersToFirestore(
       }),
       { merge: true }
     );
-  } catch (err) {
-    console.warn('Failed to save orders to Firestore:', err);
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
   }
 }
 
-/**
- * Saves a single Order to Cloud Firestore
- */
-export async function saveSingleOrderToFirestore(order: Order): Promise<void> {
+export async function saveSingleOrderToFirestore(order: Order): Promise<FirestoreWriteResult> {
+  const path = `orders/${order.id}`;
   try {
     const docRef = doc(db, 'orders', order.id);
     await setDoc(
@@ -1399,34 +1750,46 @@ export async function saveSingleOrderToFirestore(order: Order): Promise<void> {
       }),
       { merge: true }
     );
-  } catch (err) {
-    console.warn('Failed to save single order to Firestore:', err);
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
   }
 }
 
-/**
- * Fetches Orders from Cloud Firestore
- */
 export async function fetchOrdersFromFirestore(): Promise<Order[] | null> {
+  const res = await fetchSettingDocSafe<{ items?: Order[] }>('orders_data');
+  if (res.exists && Array.isArray(res.data?.items)) {
+    return res.data!.items;
+  }
+  return null;
+}
+
+export async function fetchOrdersCollectionFromFirestore(): Promise<Order[]> {
   try {
-    const docRef = doc(db, 'settings', 'orders_data');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists() && Array.isArray(docSnap.data()?.items)) {
-      return docSnap.data().items as Order[];
-    }
-    return null;
+    const snap = await getDocs(collection(db, 'orders'));
+    recordDatabaseRead();
+    return snap.docs.map(d => d.data() as Order);
   } catch (err) {
-    console.warn('Could not fetch orders from Firestore:', err);
-    return null;
+    recordDatabaseError(err);
+    return [];
   }
 }
 
-/**
- * Subscribes to live Orders from Cloud Firestore
- */
-export function subscribeToOrders(
-  onUpdate: (orders: Order[]) => void
-): Unsubscribe {
+export async function fetchCustomerOrdersFromFirestore(uid: string): Promise<Order[]> {
+  if (!uid) return [];
+  try {
+    const q = query(collection(db, 'orders'), where('customerUid', '==', uid));
+    const snap = await getDocs(q);
+    recordDatabaseRead();
+    return snap.docs.map(d => d.data() as Order);
+  } catch (err) {
+    recordDatabaseError(err);
+    return [];
+  }
+}
+
+export function subscribeToOrders(onUpdate: (orders: Order[]) => void): Unsubscribe {
   const docRef = doc(db, 'settings', 'orders_data');
   return onSnapshot(
     docRef,
@@ -1441,94 +1804,107 @@ export function subscribeToOrders(
   );
 }
 
+export function subscribeToOrdersCollection(onUpdate: (orders: Order[]) => void): Unsubscribe {
+  return onSnapshot(
+    collection(db, 'orders'),
+    snapshot => {
+      onUpdate(snapshot.docs.map(d => d.data() as Order));
+    },
+    error => {
+      console.warn('Orders collection subscription error:', error);
+    }
+  );
+}
+
+export function subscribeToCustomerOrders(
+  uid: string,
+  onUpdate: (orders: Order[]) => void
+): Unsubscribe {
+  const q = query(collection(db, 'orders'), where('customerUid', '==', uid));
+  return onSnapshot(
+    q,
+    snapshot => {
+      onUpdate(snapshot.docs.map(d => d.data() as Order));
+    },
+    error => {
+      console.warn('Customer orders subscription error:', error);
+    }
+  );
+}
+
 /**
- * Saves Combo Bundles to Cloud Firestore
+ * Combo Bundles persistence
  */
 export async function saveBundlesToFirestore(
   bundles: BundleOffer[],
-  adminUserEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = 'settings/bundles';
   try {
+    await ensureAdminFirebaseAuthSession(adminUserEmail);
     const docRef = doc(db, 'settings', 'bundles');
     await setDoc(
       docRef,
-      {
+      cleanFirestorePayload({
         items: bundles,
         updatedAt: new Date().toISOString(),
         updatedBy: adminUserEmail,
         projectId: FIREBASE_PROJECT_INFO.projectId,
-      },
+      }),
       { merge: true }
     );
-  } catch (err) {
-    console.warn('Failed to save bundles to Firestore:', err);
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
   }
 }
 
-/**
- * Fetches Combo Bundles from Cloud Firestore
- */
 export async function fetchBundlesFromFirestore(): Promise<BundleOffer[] | null> {
-  try {
-    const docRef = doc(db, 'settings', 'bundles');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists() && Array.isArray(docSnap.data()?.items)) {
-      return docSnap.data().items as BundleOffer[];
-    }
-    return null;
-  } catch (err) {
-    console.warn('Could not fetch bundles from Firestore:', err);
-    return null;
+  const res = await fetchSettingDocSafe<{ items?: BundleOffer[] }>('bundles');
+  if (res.exists && Array.isArray(res.data?.items)) {
+    return res.data!.items;
   }
+  return null;
 }
 
 /**
- * Saves Coupons to Cloud Firestore
+ * Coupons persistence
  */
 export async function saveCouponsToFirestore(
   coupons: Coupon[],
-  adminUserEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = 'settings/coupons';
   try {
+    await ensureAdminFirebaseAuthSession(adminUserEmail);
     const docRef = doc(db, 'settings', 'coupons');
     await setDoc(
       docRef,
-      {
+      cleanFirestorePayload({
         items: coupons,
         updatedAt: new Date().toISOString(),
         updatedBy: adminUserEmail,
         projectId: FIREBASE_PROJECT_INFO.projectId,
-      },
+      }),
       { merge: true }
     );
-  } catch (err) {
-    console.warn('Failed to save coupons to Firestore:', err);
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
   }
 }
 
-/**
- * Fetches Coupons from Cloud Firestore
- */
 export async function fetchCouponsFromFirestore(): Promise<Coupon[] | null> {
-  try {
-    const docRef = doc(db, 'settings', 'coupons');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists() && Array.isArray(docSnap.data()?.items)) {
-      return docSnap.data().items as Coupon[];
-    }
-    return null;
-  } catch (err) {
-    console.warn('Could not fetch coupons from Firestore:', err);
-    return null;
+  const res = await fetchSettingDocSafe<{ items?: Coupon[] }>('coupons');
+  if (res.exists && Array.isArray(res.data?.items)) {
+    return res.data!.items;
   }
+  return null;
 }
 
-/**
- * Subscribes to live Coupons from Cloud Firestore
- */
-export function subscribeToCoupons(
-  onUpdate: (coupons: Coupon[]) => void
-): Unsubscribe {
+export function subscribeToCoupons(onUpdate: (coupons: Coupon[]) => void): Unsubscribe {
   const docRef = doc(db, 'settings', 'coupons');
   return onSnapshot(
     docRef,
@@ -1544,255 +1920,212 @@ export function subscribeToCoupons(
 }
 
 /**
- * Saves Return Policy Settings to Cloud Firestore
+ * Return Policy Settings persistence
  */
 export async function saveReturnPolicyToFirestore(
   settings: ReturnPolicySettings,
-  adminUserEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = 'settings/return_policy';
   try {
+    await ensureAdminFirebaseAuthSession(adminUserEmail);
     const docRef = doc(db, 'settings', 'return_policy');
     await setDoc(
       docRef,
-      {
+      cleanFirestorePayload({
         ...settings,
         updatedAt: new Date().toISOString(),
         updatedBy: adminUserEmail,
         projectId: FIREBASE_PROJECT_INFO.projectId,
-      },
+      }),
       { merge: true }
     );
-  } catch (err) {
-    console.warn('Failed to save return policy settings to Firestore:', err);
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
   }
 }
 
-/**
- * Fetches Return Policy Settings from Cloud Firestore
- */
 export async function fetchReturnPolicyFromFirestore(): Promise<ReturnPolicySettings | null> {
-  try {
-    const docRef = doc(db, 'settings', 'return_policy');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return docSnap.data() as ReturnPolicySettings;
-    }
-    return null;
-  } catch (err) {
-    console.warn('Could not fetch return policy settings from Firestore:', err);
-    return null;
-  }
+  const res = await fetchSettingDocSafe<ReturnPolicySettings>('return_policy');
+  return res.exists ? res.data : null;
 }
 
 /**
- * Saves SEO Settings to Cloud Firestore
+ * SEO Settings persistence
  */
 export async function saveSeoSettingsToFirestore(
   settings: SeoSettings,
-  adminUserEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = 'settings/seo';
   try {
+    await ensureAdminFirebaseAuthSession(adminUserEmail);
     const docRef = doc(db, 'settings', 'seo');
     await setDoc(
       docRef,
-      {
+      cleanFirestorePayload({
         ...settings,
         updatedAt: new Date().toISOString(),
         updatedBy: adminUserEmail,
         projectId: FIREBASE_PROJECT_INFO.projectId,
-      },
+      }),
       { merge: true }
     );
-  } catch (err) {
-    console.warn('Failed to save SEO settings to Firestore:', err);
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
   }
 }
 
-/**
- * Fetches SEO Settings from Cloud Firestore
- */
 export async function fetchSeoSettingsFromFirestore(): Promise<SeoSettings | null> {
-  try {
-    const docRef = doc(db, 'settings', 'seo');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return docSnap.data() as SeoSettings;
-    }
-    return null;
-  } catch (err) {
-    console.warn('Could not fetch SEO settings from Firestore:', err);
-    return null;
-  }
+  const res = await fetchSettingDocSafe<SeoSettings>('seo');
+  return res.exists ? res.data : null;
 }
 
 /**
- * Saves Live Chat Widget Settings to Cloud Firestore
+ * Live Chat Settings persistence
  */
 export async function saveLiveChatSettingsToFirestore(
   settings: LiveChatSettings,
-  adminUserEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = 'settings/livechat';
   try {
+    await ensureAdminFirebaseAuthSession(adminUserEmail);
     const docRef = doc(db, 'settings', 'livechat');
     await setDoc(
       docRef,
-      {
+      cleanFirestorePayload({
         ...settings,
         updatedAt: new Date().toISOString(),
         updatedBy: adminUserEmail,
         projectId: FIREBASE_PROJECT_INFO.projectId,
-      },
+      }),
       { merge: true }
     );
-  } catch (err) {
-    console.warn('Failed to save livechat settings to Firestore:', err);
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
   }
 }
 
-/**
- * Fetches Live Chat Widget Settings from Cloud Firestore
- */
 export async function fetchLiveChatSettingsFromFirestore(): Promise<LiveChatSettings | null> {
-  try {
-    const docRef = doc(db, 'settings', 'livechat');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return docSnap.data() as LiveChatSettings;
-    }
-    return null;
-  } catch (err) {
-    console.warn('Could not fetch livechat settings from Firestore:', err);
-    return null;
-  }
+  const res = await fetchSettingDocSafe<LiveChatSettings>('livechat');
+  return res.exists ? res.data : null;
 }
 
 /**
- * Saves Homepage Section Config to Cloud Firestore
+ * Homepage Section Config persistence
  */
 export async function saveHomepageSectionsToFirestore(
   config: HomepageSectionConfig,
-  adminUserEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = 'settings/homepage_sections';
   try {
+    await ensureAdminFirebaseAuthSession(adminUserEmail);
     const docRef = doc(db, 'settings', 'homepage_sections');
     await setDoc(
       docRef,
-      {
+      cleanFirestorePayload({
         ...config,
         updatedAt: new Date().toISOString(),
         updatedBy: adminUserEmail,
         projectId: FIREBASE_PROJECT_INFO.projectId,
-      },
+      }),
       { merge: true }
     );
-  } catch (err) {
-    console.warn('Failed to save homepage section config to Firestore:', err);
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
   }
 }
 
-/**
- * Fetches Homepage Section Config from Cloud Firestore
- */
 export async function fetchHomepageSectionsFromFirestore(): Promise<HomepageSectionConfig | null> {
-  try {
-    const docRef = doc(db, 'settings', 'homepage_sections');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return docSnap.data() as HomepageSectionConfig;
-    }
-    return null;
-  } catch (err) {
-    console.warn('Could not fetch homepage section config from Firestore:', err);
-    return null;
-  }
+  const res = await fetchSettingDocSafe<HomepageSectionConfig>('homepage_sections');
+  return res.exists ? res.data : null;
 }
 
 /**
- * Saves Order Settings to Cloud Firestore
+ * Order Rules Settings persistence
  */
 export async function saveOrderSettingsToFirestore(
   settings: OrderSettings,
-  adminUserEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = 'settings/order_rules';
   try {
+    await ensureAdminFirebaseAuthSession(adminUserEmail);
     const docRef = doc(db, 'settings', 'order_rules');
     await setDoc(
       docRef,
-      {
+      cleanFirestorePayload({
         ...settings,
         updatedAt: new Date().toISOString(),
         updatedBy: adminUserEmail,
         projectId: FIREBASE_PROJECT_INFO.projectId,
-      },
+      }),
       { merge: true }
     );
-  } catch (err) {
-    console.warn('Failed to save order settings to Firestore:', err);
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
   }
 }
 
-/**
- * Fetches Order Settings from Cloud Firestore
- */
 export async function fetchOrderSettingsFromFirestore(): Promise<OrderSettings | null> {
-  try {
-    const docRef = doc(db, 'settings', 'order_rules');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return docSnap.data() as OrderSettings;
-    }
-    return null;
-  } catch (err) {
-    console.warn('Could not fetch order settings from Firestore:', err);
-    return null;
-  }
+  const res = await fetchSettingDocSafe<OrderSettings>('order_rules');
+  return res.exists ? res.data : null;
 }
 
 /**
- * Saves Staff Accounts to Cloud Firestore
+ * Staff Accounts persistence (passwords strictly stripped before Firestore commit!)
  */
 export async function saveStaffAccountsToFirestore(
   staff: StaffAccount[],
-  adminUserEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = 'settings/staff_accounts';
   try {
+    await ensureAdminFirebaseAuthSession(adminUserEmail);
     const docRef = doc(db, 'settings', 'staff_accounts');
+    const safeStaff = cleanFirestorePayload(stripPasswords(staff));
     await setDoc(
       docRef,
-      {
-        items: staff,
+      cleanFirestorePayload({
+        items: safeStaff,
         updatedAt: new Date().toISOString(),
         updatedBy: adminUserEmail,
         projectId: FIREBASE_PROJECT_INFO.projectId,
-      },
+      }),
       { merge: true }
     );
-  } catch (err) {
-    console.warn('Failed to save staff accounts to Firestore:', err);
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
   }
 }
 
-/**
- * Fetches Staff Accounts from Cloud Firestore
- */
 export async function fetchStaffAccountsFromFirestore(): Promise<StaffAccount[] | null> {
-  try {
-    const docRef = doc(db, 'settings', 'staff_accounts');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists() && Array.isArray(docSnap.data()?.items)) {
-      return docSnap.data().items as StaffAccount[];
-    }
-    return null;
-  } catch (err) {
-    console.warn('Could not fetch staff accounts from Firestore:', err);
-    return null;
+  const res = await fetchSettingDocSafe<{ items?: StaffAccount[] }>('staff_accounts');
+  if (res.exists && Array.isArray(res.data?.items)) {
+    return res.data!.items;
   }
+  return null;
 }
 
 /**
- * Sign in customer using real Google Popup via Firebase Auth
+ * Google Sign-In Popup
  */
 export async function signInWithGooglePopup(): Promise<{
+  uid: string;
   name: string;
   email: string;
   avatarUrl: string;
@@ -1803,6 +2136,7 @@ export async function signInWithGooglePopup(): Promise<{
     const result = await signInWithPopup(auth, provider);
     const user = result.user;
     return {
+      uid: user.uid,
       name: user.displayName || user.email?.split('@')[0] || 'Google User',
       email: user.email || '',
       avatarUrl: user.photoURL || '',
@@ -1814,49 +2148,385 @@ export async function signInWithGooglePopup(): Promise<{
 }
 
 /**
- * Saves Registered Customers to Cloud Firestore
+ * Deterministic email resolution for phone-based customer auth in Firebase Auth.
  */
-export async function saveCustomersToFirestore(
-  customers: RegisteredCustomer[],
-  adminUserEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
+export function resolveCustomerAuthEmail(phone?: string, email?: string): string {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  if (cleanEmail && cleanEmail.includes('@')) {
+    return cleanEmail;
+  }
+  const cleanDigits = (phone || '').replace(/\D/g, '');
+  const normalizedPhone =
+    cleanDigits.startsWith('8801') && cleanDigits.length === 13
+      ? cleanDigits.slice(2)
+      : cleanDigits;
+  return normalizedPhone ? `cust_${normalizedPhone}@customers.jotpotshop.com` : '';
+}
+
+/**
+ * Real Firebase Auth customer registration (Email/Password -> /customers/{uid})
+ */
+export async function registerCustomerWithFirebaseAuth(info: {
+  name: string;
+  phone: string;
+  email?: string;
+  password: string;
+  cart?: any[];
+}): Promise<{
+  success: boolean;
+  uid?: string;
+  customer?: RegisteredCustomer;
+  message: string;
+}> {
+  const authEmail = resolveCustomerAuthEmail(info.phone, info.email);
+  if (!authEmail) {
+    return { success: false, message: 'সঠিক মোবাইল নম্বর অথবা ইমেইল দিন।' };
+  }
+
   try {
-    const docRef = doc(db, 'settings', 'customers');
-    await setDoc(
-      docRef,
-      {
-        items: customers,
-        updatedAt: new Date().toISOString(),
-        updatedBy: adminUserEmail,
-        projectId: FIREBASE_PROJECT_INFO.projectId,
-      },
-      { merge: true }
-    );
-  } catch (err) {
-    console.warn('Failed to save customers to Firestore:', err);
+    const cred = await createUserWithEmailAndPassword(auth, authEmail, info.password);
+    const uid = cred.user.uid;
+    try {
+      await updateProfile(cred.user, { displayName: info.name.trim() });
+    } catch {}
+
+    const customerDoc: RegisteredCustomer = {
+      id: uid,
+      name: info.name.trim(),
+      phone: info.phone.trim(),
+      email: (info.email || '').trim().toLowerCase() || authEmail,
+      isGoogleUser: false,
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      cart: info.cart || [],
+    };
+
+    const writeRes = await saveSingleCustomerToFirestore(customerDoc);
+    if (!writeRes.success) {
+      return {
+        success: false,
+        message: `অ্যাকাউন্ট ডেটা সংরক্ষণে সমস্যা হয়েছে: ${writeRes.error}`,
+      };
+    }
+
+    return {
+      success: true,
+      uid,
+      customer: customerDoc,
+      message: 'কাস্টমার অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে! স্বাগতম।',
+    };
+  } catch (err: any) {
+    const code = err?.code || '';
+    if (code === 'auth/email-already-in-use') {
+      return {
+        success: false,
+        message: 'এই মোবাইল নম্বর বা ইমেইল দিয়ে ইতিমধ্যে অ্যাকাউন্ট তৈরি করা হয়েছে। লগইন করুন।',
+      };
+    }
+    if (code === 'auth/weak-password') {
+      return {
+        success: false,
+        message: 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।',
+      };
+    }
+    return {
+      success: false,
+      message: err?.message || 'রেজিস্ট্রেশন সম্পন্ন করা যায়নি।',
+    };
   }
 }
 
 /**
- * Fetches Registered Customers from Cloud Firestore
+ * Real Firebase Auth customer login (Email or Phone -> signInWithEmailAndPassword -> /customers/{uid})
  */
-export async function fetchCustomersFromFirestore(): Promise<RegisteredCustomer[] | null> {
+export async function loginCustomerWithFirebaseAuth(
+  identifier: string,
+  password: string
+): Promise<{
+  success: boolean;
+  uid?: string;
+  customer?: RegisteredCustomer;
+  message: string;
+}> {
+  const rawId = identifier.trim();
+  const cleanPass = password.trim();
+  if (!rawId || !cleanPass) {
+    return { success: false, message: 'অনুগ্রহ করে মোবাইল নম্বর/ইমেইল এবং পাসওয়ার্ড দিন।' };
+  }
+
+  const candidateEmails: string[] = [];
+  if (rawId.includes('@')) {
+    candidateEmails.push(rawId.toLowerCase());
+  } else {
+    const digits = rawId.replace(/\D/g, '');
+    const normalized =
+      digits.startsWith('8801') && digits.length === 13 ? digits.slice(2) : digits;
+    if (normalized) {
+      candidateEmails.push(`cust_${normalized}@customers.jotpotshop.com`);
+      if (digits && digits !== normalized) {
+        candidateEmails.push(`cust_${digits}@customers.jotpotshop.com`);
+      }
+    }
+  }
+
+  if (candidateEmails.length === 0) {
+    return { success: false, message: 'সঠিক মোবাইল নম্বর বা ইমেইল ঠিকানা দিন।' };
+  }
+
+  let signedUser: User | null = null;
+  let lastAuthErr: any = null;
+
+  for (const emailCandidate of candidateEmails) {
+    try {
+      const cred = await signInWithEmailAndPassword(auth, emailCandidate, cleanPass);
+      signedUser = cred.user;
+      break;
+    } catch (err: any) {
+      lastAuthErr = err;
+    }
+  }
+
+  if (!signedUser) {
+    const code = lastAuthErr?.code || '';
+    if (code === 'auth/too-many-requests') {
+      return {
+        success: false,
+        message: 'অনেকবার ভুল চেষ্টার কারণে অ্যাকাউন্টটি সাময়িকভাবে ব্লক আছে। কিছুক্ষণ পর আবার চেষ্টা করুন।',
+      };
+    }
+    return {
+      success: false,
+      message: 'ভুল মোবাইল নম্বর/ইমেইল অথবা পাসওয়ার্ড! অনুগ্রহ করে সঠিক তথ্য দিন।',
+    };
+  }
+
+  const uid = signedUser.uid;
+  let customer = await fetchCustomerDocFromFirestore(uid);
+  if (!customer) {
+    customer = {
+      id: uid,
+      name: signedUser.displayName || signedUser.email?.split('@')[0] || 'Customer',
+      phone: rawId.includes('@') ? '' : rawId,
+      email: signedUser.email || candidateEmails[0],
+      isGoogleUser: false,
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      cart: [],
+    };
+    await saveSingleCustomerToFirestore(customer);
+  }
+
+  if (customer.status === 'disabled') {
+    await signOut(auth).catch(() => {});
+    return {
+      success: false,
+      message: 'দুঃখিত! আপনার অ্যাকাউন্টটি অ্যাডমিন কর্তৃক নিষ্ক্রিয় (Disabled) করা হয়েছে।',
+    };
+  }
+
+  return {
+    success: true,
+    uid,
+    customer,
+    message: 'লগইন সফল হয়েছে!',
+  };
+}
+
+/**
+ * Syncs Google-signed-in customer to /customers/{uid} and enforces active status
+ */
+export async function loginGoogleCustomerToFirestore(googleUser: {
+  uid?: string;
+  name: string;
+  email: string;
+  avatarUrl?: string;
+  cart?: any[];
+}): Promise<{
+  success: boolean;
+  uid?: string;
+  customer?: RegisteredCustomer;
+  message: string;
+}> {
+  const uid = googleUser.uid || auth.currentUser?.uid || '';
+  if (!uid) {
+    return { success: false, message: 'গুগল সেশন পাওয়া যায়নি। আবার চেষ্টা করুন।' };
+  }
+
+  const existing = await fetchCustomerDocFromFirestore(uid);
+  if (existing && existing.status === 'disabled') {
+    await signOut(auth).catch(() => {});
+    return {
+      success: false,
+      message: 'দুঃখিত! আপনার অ্যাকাউন্টটি অ্যাডমিন কর্তৃক নিষ্ক্রিয় (Disabled) করা হয়েছে।',
+    };
+  }
+
+  const merged: RegisteredCustomer = {
+    id: uid,
+    name: existing?.name || googleUser.name || 'Google User',
+    phone: existing?.phone || '',
+    email: (existing?.email || googleUser.email || '').toLowerCase(),
+    isGoogleUser: true,
+    avatarUrl: existing?.avatarUrl || googleUser.avatarUrl || '',
+    status: existing?.status || 'active',
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    cart: existing?.cart && existing.cart.length > 0 ? existing.cart : googleUser.cart || [],
+  };
+
+  const res = await saveSingleCustomerToFirestore(merged);
+  if (!res.success) {
+    return { success: false, message: res.error || 'কাস্টমার প্রোফাইল সেভ করা যায়নি।' };
+  }
+
+  return { success: true, uid, customer: merged, message: 'গুগল অ্যাকাউন্ট সফলভাবে কানেক্ট হয়েছে!' };
+}
+
+/**
+ * Password Reset via real Firebase Auth
+ */
+export async function resetCustomerPasswordFirebase(
+  emailOrPhone: string,
+  newPass?: string
+): Promise<{ success: boolean; message: string }> {
+  const trimmed = emailOrPhone.trim();
+  const isEmail = trimmed.includes('@');
+
+  // If user is currently signed in with this account and provided a new password, update it directly
+  if (auth.currentUser && newPass && newPass.length >= 6) {
+    try {
+      await updatePassword(auth.currentUser, newPass);
+      return { success: true, message: 'পাসওয়ার্ড সফলভাবে আপডেট করা হয়েছে!' };
+    } catch {
+      // Fallback to password reset email if re-auth required
+    }
+  }
+
+  if (isEmail) {
+    try {
+      await sendPasswordResetEmail(auth, trimmed.toLowerCase());
+      return {
+        success: true,
+        message: 'আপনার ইমেইলে পাসওয়ার্ড রিসেট লিংক পাঠানো হয়েছে। ইনবক্স বা স্প্যাম ফোল্ডার চেক করুন।',
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err?.message || 'পাসওয়ার্ড রিসেট ইমেইল পাঠানো যায়নি।',
+      };
+    }
+  }
+
+  return {
+    success: false,
+    message:
+      'নিরাপত্তার কারণে ফোন নম্বরের সরাসরি পাসওয়ার্ড রিসেট বন্ধ রয়েছে। লগইন করে প্রোফাইল থেকে পরিবর্তন করুন অথবা নিবন্ধিত ইমেইল দিয়ে রিসেট করুন।',
+  };
+}
+
+/**
+ * Saves Single Customer document at /customers/{uid} (NEVER includes plaintext password!)
+ */
+export async function saveSingleCustomerToFirestore(
+  customer: RegisteredCustomer
+): Promise<FirestoreWriteResult> {
+  if (!customer?.id) return { success: false, error: 'Missing customer ID' };
+  const path = `customers/${customer.id}`;
   try {
-    const docRef = doc(db, 'settings', 'customers');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists() && Array.isArray(docSnap.data()?.items)) {
-      return docSnap.data().items as RegisteredCustomer[];
+    const cleanCustomer = cleanFirestorePayload(
+      stripPasswords({
+        ...customer,
+        status: customer.status || 'active',
+        updatedAt: new Date().toISOString(),
+        projectId: FIREBASE_PROJECT_INFO.projectId,
+      })
+    );
+    await setDoc(doc(db, 'customers', customer.id), cleanCustomer, { merge: true });
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
+  }
+}
+
+export async function fetchCustomerDocFromFirestore(
+  uid: string
+): Promise<RegisteredCustomer | null> {
+  if (!uid) return null;
+  try {
+    const snap = await getDoc(doc(db, 'customers', uid));
+    recordDatabaseRead();
+    if (snap.exists()) {
+      return snap.data() as RegisteredCustomer;
     }
     return null;
   } catch (err) {
-    console.warn('Could not fetch customers from Firestore:', err);
+    recordDatabaseError(err);
     return null;
   }
 }
 
+export async function fetchCustomersCollectionFromFirestore(): Promise<RegisteredCustomer[]> {
+  try {
+    const snap = await getDocs(collection(db, 'customers'));
+    recordDatabaseRead();
+    return snap.docs.map(d => d.data() as RegisteredCustomer);
+  } catch (err) {
+    recordDatabaseError(err);
+    return [];
+  }
+}
+
+export function subscribeToCustomersCollection(
+  onUpdate: (customers: RegisteredCustomer[]) => void
+): Unsubscribe {
+  return onSnapshot(
+    collection(db, 'customers'),
+    snapshot => {
+      onUpdate(snapshot.docs.map(d => d.data() as RegisteredCustomer));
+    },
+    error => {
+      console.warn('Customers collection subscription error:', error);
+    }
+  );
+}
+
 /**
- * Subscribes to live Registered Customers from Cloud Firestore
+ * Staff Admin Customers ledger (settings/customers) - strictly strips passwords!
  */
+export async function saveCustomersToFirestore(
+  customers: RegisteredCustomer[],
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = 'settings/customers';
+  try {
+    await ensureAdminFirebaseAuthSession(adminUserEmail);
+    const docRef = doc(db, 'settings', 'customers');
+    const safeCustomers = cleanFirestorePayload(stripPasswords(customers));
+    await setDoc(
+      docRef,
+      cleanFirestorePayload({
+        items: safeCustomers,
+        updatedAt: new Date().toISOString(),
+        updatedBy: adminUserEmail,
+        projectId: FIREBASE_PROJECT_INFO.projectId,
+      }),
+      { merge: true }
+    );
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
+  }
+}
+
+export async function fetchCustomersFromFirestore(): Promise<RegisteredCustomer[] | null> {
+  const res = await fetchSettingDocSafe<{ items?: RegisteredCustomer[] }>('customers');
+  if (res.exists && Array.isArray(res.data?.items)) {
+    return res.data!.items;
+  }
+  return null;
+}
+
 export function subscribeToCustomers(
   onUpdate: (customers: RegisteredCustomer[]) => void
 ): Unsubscribe {
@@ -1888,27 +2558,6 @@ export function formatBDPhoneNumber(phone: string): string {
   return cleaned;
 }
 
-
-/**
- * Ensures an active Firebase Auth session exists for the customer.
- * Uses real Google Auth if already signed in, or initializes anonymous Firebase Auth session for UID-based ABAC isolation.
- */
-export async function ensureCustomerAuthSession(): Promise<string> {
-  if (auth.currentUser?.uid) {
-    return auth.currentUser.uid;
-  }
-  try {
-    const cred = await signInAnonymously(auth);
-    return cred.user.uid;
-  } catch (err) {
-    console.warn('Could not establish Firebase Auth session:', err);
-    return '';
-  }
-}
-
-/**
- * Signs out from Firebase Authentication completely
- */
 export async function logoutFirebaseAuth(): Promise<void> {
   try {
     await signOut(auth);
@@ -1918,13 +2567,16 @@ export async function logoutFirebaseAuth(): Promise<void> {
 }
 
 /**
- * Saves a single private conversation to /conversations/{convId}
+ * Conversations & Live Chat persistence (/conversations/{convId})
  */
 export async function saveSingleConversationToFirestore(
   conversation: UnifiedConversation,
-  authorEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
-  if (!conversation || !conversation.id) return;
+  authorEmail = 'customer@jotpotshop.com'
+): Promise<FirestoreWriteResult> {
+  if (!conversation || !conversation.id) {
+    return { success: false, error: 'Missing conversation ID' };
+  }
+  const path = `conversations/${conversation.id}`;
   try {
     const docRef = doc(db, 'conversations', conversation.id);
     await setDoc(
@@ -1937,14 +2589,13 @@ export async function saveSingleConversationToFirestore(
       }),
       { merge: true }
     );
-  } catch (err) {
-    console.warn('Failed to save individual conversation to Firestore:', err);
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
   }
 }
 
-/**
- * Subscribes to a single customer's isolated conversation in /conversations/{convId}
- */
 export function subscribeToCustomerConversation(
   convId: string,
   onUpdate: (conversation: UnifiedConversation | null) => void
@@ -1965,14 +2616,69 @@ export function subscribeToCustomerConversation(
   );
 }
 
-/**
- * Saves Live Chat Conversations to Cloud Firestore (Global admin ledger)
- */
+export async function fetchCustomerConversationsFromFirestore(
+  uid: string
+): Promise<UnifiedConversation[]> {
+  if (!uid) return [];
+  try {
+    const q = query(collection(db, 'conversations'), where('customerUid', '==', uid));
+    const snap = await getDocs(q);
+    recordDatabaseRead();
+    return snap.docs.map(d => d.data() as UnifiedConversation);
+  } catch (err) {
+    recordDatabaseError(err);
+    return [];
+  }
+}
+
+export function subscribeToCustomerConversations(
+  uid: string,
+  onUpdate: (conversations: UnifiedConversation[]) => void
+): Unsubscribe {
+  const q = query(collection(db, 'conversations'), where('customerUid', '==', uid));
+  return onSnapshot(
+    q,
+    snapshot => {
+      onUpdate(snapshot.docs.map(d => d.data() as UnifiedConversation));
+    },
+    error => {
+      console.warn('Customer conversations live subscription error:', error);
+    }
+  );
+}
+
+export async function fetchConversationsCollectionFromFirestore(): Promise<UnifiedConversation[]> {
+  try {
+    const snap = await getDocs(collection(db, 'conversations'));
+    recordDatabaseRead();
+    return snap.docs.map(d => d.data() as UnifiedConversation);
+  } catch (err) {
+    recordDatabaseError(err);
+    return [];
+  }
+}
+
+export function subscribeToConversationsCollection(
+  onUpdate: (conversations: UnifiedConversation[]) => void
+): Unsubscribe {
+  return onSnapshot(
+    collection(db, 'conversations'),
+    snapshot => {
+      onUpdate(snapshot.docs.map(d => d.data() as UnifiedConversation));
+    },
+    error => {
+      console.warn('Conversations collection subscription error:', error);
+    }
+  );
+}
+
 export async function saveConversationsToFirestore(
   conversations: UnifiedConversation[],
-  adminUserEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = 'settings/live_chat_conversations';
   try {
+    await ensureAdminFirebaseAuthSession(adminUserEmail);
     const docRef = doc(db, 'settings', 'live_chat_conversations');
     await setDoc(
       docRef,
@@ -1984,31 +2690,23 @@ export async function saveConversationsToFirestore(
       }),
       { merge: true }
     );
-  } catch (err) {
-    console.warn('Failed to save conversations to Firestore:', err);
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
   }
 }
 
-/**
- * Fetches Live Chat Conversations from Cloud Firestore
- */
 export async function fetchConversationsFromFirestore(): Promise<UnifiedConversation[] | null> {
-  try {
-    const docRef = doc(db, 'settings', 'live_chat_conversations');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists() && Array.isArray(docSnap.data()?.items)) {
-      return docSnap.data().items;
-    }
-    return null;
-  } catch (err) {
-    console.warn('Could not fetch conversations from Firestore:', err);
-    return null;
+  const res = await fetchSettingDocSafe<{ items?: UnifiedConversation[] }>(
+    'live_chat_conversations'
+  );
+  if (res.exists && Array.isArray(res.data?.items)) {
+    return res.data!.items;
   }
+  return null;
 }
 
-/**
- * Subscribes to live Live Chat Conversations updates from Cloud Firestore
- */
 export function subscribeToConversations(
   onUpdate: (conversations: UnifiedConversation[]) => void
 ): Unsubscribe {
@@ -2027,13 +2725,15 @@ export function subscribeToConversations(
 }
 
 /**
- * Saves Customer Support & Help Center Settings to Cloud Firestore
+ * Help Center Settings persistence
  */
 export async function saveHelpCenterSettingsToFirestore(
   settings: HelpCenterSettings,
-  adminUserEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = 'settings/help_center';
   try {
+    await ensureAdminFirebaseAuthSession(adminUserEmail);
     const docRef = doc(db, 'settings', 'help_center');
     await setDoc(
       docRef,
@@ -2045,32 +2745,18 @@ export async function saveHelpCenterSettingsToFirestore(
       }),
       { merge: true }
     );
-  } catch (err) {
-    console.warn('Failed to save Help Center settings to Firestore:', err);
-    throw err;
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
   }
 }
 
-/**
- * Fetches Customer Support & Help Center Settings from Cloud Firestore
- */
 export async function fetchHelpCenterSettingsFromFirestore(): Promise<HelpCenterSettings | null> {
-  try {
-    const docRef = doc(db, 'settings', 'help_center');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return docSnap.data() as HelpCenterSettings;
-    }
-    return null;
-  } catch (err) {
-    console.warn('Could not fetch Help Center settings from Firestore:', err);
-    return null;
-  }
+  const res = await fetchSettingDocSafe<HelpCenterSettings>('help_center');
+  return res.exists ? res.data : null;
 }
 
-/**
- * Subscribes to live Help Center Settings updates from Cloud Firestore
- */
 export function subscribeToHelpCenterSettings(
   onUpdate: (settings: HelpCenterSettings) => void
 ): Unsubscribe {
@@ -2089,13 +2775,15 @@ export function subscribeToHelpCenterSettings(
 }
 
 /**
- * Saves Trust Section Settings ("নিশ্চিন্ত কেনাকাটা ও বিশ্বস্ত ডেলিভারি সেবা") to Cloud Firestore
+ * Trust Section Settings persistence
  */
 export async function saveTrustSectionSettingsToFirestore(
   settings: TrustSectionSettings,
-  adminUserEmail = 'jotpotshop.official@gmail.com'
-): Promise<void> {
+  adminUserEmail = MASTER_SUPER_ADMIN_EMAIL
+): Promise<FirestoreWriteResult> {
+  const path = 'settings/trust_section';
   try {
+    await ensureAdminFirebaseAuthSession(adminUserEmail);
     const docRef = doc(db, 'settings', 'trust_section');
     await setDoc(
       docRef,
@@ -2107,32 +2795,18 @@ export async function saveTrustSectionSettingsToFirestore(
       }),
       { merge: true }
     );
-  } catch (err) {
-    console.warn('Failed to save Trust Section settings to Firestore:', err);
-    throw err;
+    recordDatabaseWrite();
+    return { success: true };
+  } catch (err: any) {
+    return logFirestoreOperationError(err, OperationType.WRITE, path);
   }
 }
 
-/**
- * Fetches Trust Section Settings from Cloud Firestore
- */
 export async function fetchTrustSectionSettingsFromFirestore(): Promise<TrustSectionSettings | null> {
-  try {
-    const docRef = doc(db, 'settings', 'trust_section');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return docSnap.data() as TrustSectionSettings;
-    }
-    return null;
-  } catch (err) {
-    console.warn('Could not fetch Trust Section settings from Firestore:', err);
-    return null;
-  }
+  const res = await fetchSettingDocSafe<TrustSectionSettings>('trust_section');
+  return res.exists ? res.data : null;
 }
 
-/**
- * Subscribes to live Trust Section Settings updates from Cloud Firestore
- */
 export function subscribeToTrustSectionSettings(
   onUpdate: (settings: TrustSectionSettings) => void
 ): Unsubscribe {

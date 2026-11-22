@@ -52,6 +52,7 @@ export interface Product {
   reviews: ProductReview[];
   sellerName?: string;
   sellerRating?: number;
+  isPublished?: boolean;
 }
 
 export interface ProductReview {
@@ -273,6 +274,7 @@ export interface RegisteredCustomer {
   avatarUrl?: string;
   createdAt: string;
   cart?: CartItem[];
+  status?: 'active' | 'disabled';
 }
 
 export interface StaffAccount {

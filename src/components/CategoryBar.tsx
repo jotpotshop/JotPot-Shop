@@ -1,19 +1,20 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Package } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 
 export const CategoryBar: React.FC = () => {
   const { language, selectedCategory, setSelectedCategory, setSelectedNeed, setSelectedMaxBudget, categories } = useShop();
+  const [failedIcons, setFailedIcons] = useState<Record<string, boolean>>({});
 
   const isImageIcon = (icon: string) => {
     return icon && (icon.startsWith('http://') || icon.startsWith('https://') || icon.startsWith('data:image/') || icon.startsWith('/'));
   };
 
   return (
-    <div id="categories-section" className="my-6">
-      <div className="flex items-center justify-between mb-3 px-1">
-        <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center space-x-2">
-          <span>🏷️</span>
-          <span>{language === 'bn' ? 'ক্যাটাগরি অনুযায়ী কিনুন' : 'Shop by Category'}</span>
+    <section id="categories-section" className="my-7">
+      <div className="flex items-center justify-between mb-3.5 px-0.5">
+        <h2 className="text-base sm:text-lg font-semibold text-[#111827]">
+          {language === 'bn' ? 'ক্যাটাগরি অনুযায়ী ব্রাউজ করুন' : 'Browse by Category'}
         </h2>
         {selectedCategory && (
           <button
@@ -22,17 +23,17 @@ export const CategoryBar: React.FC = () => {
               setSelectedNeed(null);
               setSelectedMaxBudget(null);
             }}
-            className="text-xs text-rose-600 font-semibold hover:underline cursor-pointer"
+            className="text-xs text-[#881337] font-medium hover:underline cursor-pointer"
           >
             {language === 'bn' ? 'সব ক্যাটাগরি দেখুন' : 'Show All'}
           </button>
         )}
       </div>
 
-      <div className="grid grid-cols-5 sm:grid-cols-5 md:grid-cols-10 gap-2 sm:gap-3">
+      <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-10 gap-2.5 sm:gap-3">
         {categories.map(cat => {
           const isSelected = selectedCategory === cat.id;
-          const hasImage = isImageIcon(cat.icon);
+          const hasImage = isImageIcon(cat.icon) && !failedIcons[cat.id];
           return (
             <button
               key={cat.id}
@@ -40,30 +41,34 @@ export const CategoryBar: React.FC = () => {
                 setSelectedCategory(isSelected ? null : cat.id);
                 setSelectedNeed(null);
               }}
-              className={`flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-2xl border transition-all text-center group cursor-pointer ${
+              className={`flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl border transition-colors text-center group cursor-pointer ${
                 isSelected
-                  ? 'bg-rose-50 border-rose-500 shadow-sm shadow-rose-500/10 -translate-y-0.5'
-                  : 'bg-white border-gray-100 hover:border-rose-200 hover:bg-gray-50/80 hover:shadow-xs'
+                  ? 'bg-[#111827] border-[#111827] text-white'
+                  : 'bg-white border-[#e6e3dd] hover:border-gray-400 text-[#111827]'
               }`}
             >
               <div
-                className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-xl sm:text-2xl mb-1.5 transition-transform group-hover:scale-110 overflow-hidden ${
-                  isSelected ? 'bg-rose-600 text-white shadow-xs' : 'bg-gray-100 text-gray-800'
+                className={`w-10 h-10 sm:w-11 sm:h-11 rounded-lg flex items-center justify-center text-lg sm:text-xl mb-1.5 overflow-hidden ${
+                  isSelected ? 'bg-white/15 text-white' : 'bg-[#faf9f7] text-gray-700'
                 }`}
               >
                 {hasImage ? (
                   <img
                     src={cat.icon}
                     alt={cat.name}
-                    className="w-7 h-7 sm:w-8 sm:h-8 object-contain"
+                    referrerPolicy="no-referrer"
+                    onError={() => setFailedIcons(prev => ({ ...prev, [cat.id]: true }))}
+                    className="w-7 h-7 object-contain"
                   />
+                ) : cat.icon && !isImageIcon(cat.icon) ? (
+                  <span aria-hidden="true">{cat.icon}</span>
                 ) : (
-                  <span>{cat.icon || '🛍️'}</span>
+                  <Package className="w-5 h-5 text-gray-500" />
                 )}
               </div>
               <span
-                className={`text-[11px] sm:text-xs font-semibold line-clamp-1 ${
-                  isSelected ? 'text-rose-600 font-bold' : 'text-gray-700 group-hover:text-rose-600'
+                className={`text-[11px] sm:text-xs font-medium line-clamp-1 ${
+                  isSelected ? 'text-white' : 'text-gray-700 group-hover:text-[#111827]'
                 }`}
               >
                 {language === 'bn' ? cat.nameBn : cat.name}
@@ -72,6 +77,6 @@ export const CategoryBar: React.FC = () => {
           );
         })}
       </div>
-    </div>
+    </section>
   );
 };

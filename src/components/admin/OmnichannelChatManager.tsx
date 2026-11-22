@@ -4,20 +4,14 @@ import {
   Send,
   Bot,
   User,
-  Phone,
-  Clock,
-  Sparkles,
   ShoppingBag,
-  ExternalLink,
   Search,
   CheckCircle2,
-  AlertCircle,
-  RefreshCw,
   Power,
   PowerOff,
 } from 'lucide-react';
 import { useShop } from '../../context/ShopContext';
-import { MessageChannel, UnifiedConversation } from '../../types';
+import { MessageChannel } from '../../types';
 
 export const OmnichannelChatManager: React.FC = () => {
   const {
@@ -79,26 +73,22 @@ export const OmnichannelChatManager: React.FC = () => {
       case 'livechat':
         return {
           label: 'ওয়েব লাইভ চ্যাট',
-          bgColor: 'bg-rose-100 text-rose-800 border-rose-200',
-          dotColor: 'bg-rose-500',
+          bgColor: 'bg-[#faf9f7] text-[#881337] border-[#e6e3dd]',
         };
       case 'whatsapp':
         return {
           label: 'হোয়াটসঅ্যাপ',
-          bgColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-          dotColor: 'bg-emerald-500',
+          bgColor: 'bg-[#f0fdf4] text-[#15803d] border-[#bbf7d0]',
         };
       case 'messenger':
         return {
           label: 'মেসেঞ্জার',
-          bgColor: 'bg-blue-100 text-blue-800 border-blue-200',
-          dotColor: 'bg-blue-500',
+          bgColor: 'bg-[#faf9f7] text-[#111827] border-[#e6e3dd]',
         };
       default:
         return {
           label: 'চ্যাট',
-          bgColor: 'bg-gray-100 text-gray-800 border-gray-200',
-          dotColor: 'bg-gray-500',
+          bgColor: 'bg-[#faf9f7] text-gray-800 border-[#e6e3dd]',
         };
     }
   };
@@ -108,34 +98,34 @@ export const OmnichannelChatManager: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* Top Banner: Omnichannel Hub & AI Sales Toggle */}
-      <div className="bg-gradient-to-r from-slate-900 via-rose-950 to-slate-900 rounded-3xl p-5 text-white shadow-md border border-rose-900/40">
+      <div className="bg-[#111827] rounded-3xl p-5 text-white shadow-sm border border-[#1f2937]">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="flex items-center space-x-2">
-              <span className="bg-rose-600 text-white text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="bg-[#881337] text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">
                 Unified Omnichannel Inbox
               </span>
               {totalUnread > 0 && (
-                <span className="bg-amber-400 text-gray-950 text-[10px] font-black px-2 py-0.5 rounded-full">
+                <span className="bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0] text-[10px] font-bold px-2.5 py-0.5 rounded-full tabular-nums">
                   {totalUnread}টি নতুন মেসেজ
                 </span>
               )}
             </div>
-            <h2 className="text-lg sm:text-xl font-black text-white">
+            <h2 className="text-lg sm:text-xl font-bold text-white">
               {t('লাইভ চ্যাট, মেসেঞ্জার ও হোয়াটসঅ্যাপ কাস্টমার ইনবক্স', 'Live Chat, Messenger & WhatsApp Inbox')}
             </h2>
-            <p className="text-xs text-slate-300">
+            <p className="text-xs text-gray-300 leading-relaxed">
               সকল চ্যানেলের মেসেজ এক জায়গায় জমা হচ্ছে। এখান থেকে সুপার এডমিন, এডমিন, ম্যানেজার ও স্টাফ সহজে উত্তর দিতে পারবেন।
             </p>
           </div>
 
           {/* AI Sales Assistant ON/OFF Switch */}
-          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3.5 border border-white/15 flex items-center justify-between gap-4 min-w-[280px]">
+          <div className="bg-[#1f2937] rounded-2xl p-3.5 border border-gray-700 flex items-center justify-between gap-4 min-w-[280px]">
             <div className="flex items-center space-x-2.5">
               <div
-                className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
                   liveChatSettings.enableAiSalesAgent
-                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                    ? 'bg-[#15803d] text-white'
                     : 'bg-gray-700 text-gray-300'
                 }`}
               >
@@ -143,20 +133,20 @@ export const OmnichannelChatManager: React.FC = () => {
               </div>
               <div>
                 <div className="flex items-center space-x-1.5">
-                  <span className="text-xs font-black">
+                  <span className="text-xs font-bold">
                     {liveChatSettings.aiSalesAgentName || 'এআই সেলস সহকারী'}
                   </span>
                   <span
-                    className={`text-[9px] font-black px-1.5 py-0.2 rounded ${
+                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
                       liveChatSettings.enableAiSalesAgent
-                        ? 'bg-emerald-400 text-gray-950'
-                        : 'bg-gray-600 text-gray-200'
+                        ? 'bg-[#f0fdf4] text-[#15803d]'
+                        : 'bg-gray-700 text-gray-300'
                     }`}
                   >
                     {liveChatSettings.enableAiSalesAgent ? 'চালু (Active)' : 'বন্ধ (Off)'}
                   </span>
                 </div>
-                <p className="text-[10px] text-slate-300">
+                <p className="text-[10px] text-gray-300">
                   {liveChatSettings.enableAiSalesAgent
                     ? 'স্বয়ংক্রিয়ভাবে কথা বলে পণ্য বিক্রি করছে'
                     : 'ম্যানুয়াল উত্তর মোড সক্রিয়'}
@@ -167,10 +157,10 @@ export const OmnichannelChatManager: React.FC = () => {
             <button
               type="button"
               onClick={() => toggleAiSalesAgent()}
-              className={`px-3 py-1.5 rounded-xl text-xs font-black cursor-pointer transition-all flex items-center space-x-1.5 ${
+              className={`px-3 py-1.5 min-h-[38px] rounded-xl text-xs font-bold cursor-pointer transition-colors flex items-center space-x-1.5 shrink-0 ${
                 liveChatSettings.enableAiSalesAgent
-                  ? 'bg-emerald-500 hover:bg-emerald-400 text-gray-950 shadow-md'
-                  : 'bg-white/20 hover:bg-white/30 text-white'
+                  ? 'bg-[#15803d] hover:bg-emerald-800 text-white'
+                  : 'bg-[#881337] hover:bg-[#6d0f2c] text-white'
               }`}
             >
               {liveChatSettings.enableAiSalesAgent ? (
@@ -192,51 +182,48 @@ export const OmnichannelChatManager: React.FC = () => {
       {/* Main Inbox Two-Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Left Column: Conversation Directory & Channel Filters */}
-        <div className="lg:col-span-4 bg-white rounded-3xl border border-gray-200 shadow-xs p-3 space-y-3 flex flex-col h-[650px]">
-          {/* Channel Filter Pills */}
-          <div className="flex items-center gap-1 overflow-x-auto pb-1 text-xs font-bold scrollbar-none">
+        <div className="lg:col-span-4 bg-white rounded-3xl border border-[#e6e3dd] shadow-xs p-3 space-y-3 flex flex-col h-[650px]">
+          {/* Channel Filter Buttons */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-bold scrollbar-none">
             <button
               onClick={() => setChannelFilter('all')}
-              className={`px-2.5 py-1.5 rounded-xl cursor-pointer whitespace-nowrap transition-colors ${
+              className={`px-3 py-1.5 min-h-[36px] rounded-xl cursor-pointer whitespace-nowrap transition-colors tabular-nums ${
                 channelFilter === 'all'
-                  ? 'bg-gray-900 text-white shadow-xs'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-[#111827] text-white'
+                  : 'bg-[#faf9f7] border border-[#e6e3dd] text-gray-700 hover:bg-gray-100'
               }`}
             >
               সব ({conversations.length})
             </button>
             <button
               onClick={() => setChannelFilter('livechat')}
-              className={`px-2.5 py-1.5 rounded-xl cursor-pointer whitespace-nowrap transition-colors flex items-center space-x-1 ${
+              className={`px-3 py-1.5 min-h-[36px] rounded-xl cursor-pointer whitespace-nowrap transition-colors ${
                 channelFilter === 'livechat'
-                  ? 'bg-rose-600 text-white shadow-xs'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-[#881337] text-white'
+                  : 'bg-[#faf9f7] border border-[#e6e3dd] text-gray-700 hover:bg-gray-100'
               }`}
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-              <span>লাইভ চ্যাট</span>
+              লাইভ চ্যাট
             </button>
             <button
               onClick={() => setChannelFilter('whatsapp')}
-              className={`px-2.5 py-1.5 rounded-xl cursor-pointer whitespace-nowrap transition-colors flex items-center space-x-1 ${
+              className={`px-3 py-1.5 min-h-[36px] rounded-xl cursor-pointer whitespace-nowrap transition-colors ${
                 channelFilter === 'whatsapp'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-[#15803d] text-white'
+                  : 'bg-[#faf9f7] border border-[#e6e3dd] text-gray-700 hover:bg-gray-100'
               }`}
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <span>WhatsApp</span>
+              WhatsApp
             </button>
             <button
               onClick={() => setChannelFilter('messenger')}
-              className={`px-2.5 py-1.5 rounded-xl cursor-pointer whitespace-nowrap transition-colors flex items-center space-x-1 ${
+              className={`px-3 py-1.5 min-h-[36px] rounded-xl cursor-pointer whitespace-nowrap transition-colors ${
                 channelFilter === 'messenger'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-[#111827] text-white'
+                  : 'bg-[#faf9f7] border border-[#e6e3dd] text-gray-700 hover:bg-gray-100'
               }`}
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-              <span>Messenger</span>
+              Messenger
             </button>
           </div>
 
@@ -248,14 +235,14 @@ export const OmnichannelChatManager: React.FC = () => {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="গ্রাহকের নাম, নম্বর বা মেসেজ খুঁজুন..."
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-gray-800 focus:bg-white focus:border-rose-500"
+              className="w-full bg-[#faf9f7] border border-[#e6e3dd] rounded-xl pl-8 pr-3 py-1.5 text-xs text-[#111827] focus:bg-white focus:border-[#881337] focus:outline-none"
             />
           </div>
 
           {/* Conversations Scroll List */}
           <div className="flex-1 overflow-y-auto space-y-2 pr-1">
             {filteredConversations.length === 0 ? (
-              <div className="text-center py-12 text-gray-400 text-xs">
+              <div className="text-center py-12 text-gray-500 text-xs">
                 কোনো বার্তা পাওয়া যায়নি
               </div>
             ) : (
@@ -266,30 +253,34 @@ export const OmnichannelChatManager: React.FC = () => {
                   <button
                     key={conv.id}
                     onClick={() => setSelectedConvId(conv.id)}
-                    className={`w-full text-left p-3 rounded-2xl border transition-all cursor-pointer relative ${
+                    className={`w-full text-left p-3 rounded-2xl border transition-colors cursor-pointer relative ${
                       isSelected
-                        ? 'border-rose-500 bg-rose-50/60 shadow-xs ring-1 ring-rose-400/30'
-                        : 'border-gray-100 bg-white hover:bg-gray-50'
+                        ? 'border-[#881337] bg-[#faf9f7]'
+                        : 'border-[#e6e3dd] bg-white hover:bg-[#faf9f7]'
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center space-x-1.5 min-w-0">
-                        <span className={`w-2 h-2 rounded-full ${badge.dotColor} shrink-0`} />
-                        <span className="font-extrabold text-xs text-gray-900 truncate">
-                          {conv.customerName}
+                    <div className="flex items-center justify-between mb-1 gap-2">
+                      <span className="font-bold text-xs text-[#111827] truncate">
+                        {conv.customerName}
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {conv.unreadCount > 0 && (
+                          <span className="bg-[#881337] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full tabular-nums">
+                            নতুন {conv.unreadCount}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-gray-500 font-medium tabular-nums">
+                          {conv.lastMessageTime}
                         </span>
                       </div>
-                      <span className="text-[10px] text-gray-400 shrink-0 font-medium">
-                        {conv.lastMessageTime}
-                      </span>
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${badge.bgColor}`}>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${badge.bgColor}`}>
                         {badge.label}
                       </span>
                       {conv.customerPhone && (
-                        <span className="text-[10px] text-gray-500 font-mono">
+                        <span className="text-[10px] text-gray-500 font-mono tabular-nums">
                           {conv.customerPhone}
                         </span>
                       )}
@@ -298,10 +289,6 @@ export const OmnichannelChatManager: React.FC = () => {
                     <p className="text-xs text-gray-600 line-clamp-1 mt-1 font-normal">
                       {conv.lastMessage}
                     </p>
-
-                    {conv.unreadCount > 0 && (
-                      <span className="absolute top-2 right-2 w-2 h-2 bg-rose-600 rounded-full" />
-                    )}
                   </button>
                 );
               })
@@ -310,18 +297,18 @@ export const OmnichannelChatManager: React.FC = () => {
         </div>
 
         {/* Right Column: Chat History & Reply Workspace */}
-        <div className="lg:col-span-8 bg-white rounded-3xl border border-gray-200 shadow-xs flex flex-col h-[650px] overflow-hidden">
+        <div className="lg:col-span-8 bg-white rounded-3xl border border-[#e6e3dd] shadow-xs flex flex-col h-[650px] overflow-hidden">
           {activeConv ? (
             <>
               {/* Header Bar */}
-              <div className="p-4 border-b border-gray-100 bg-gray-50/70 flex items-center justify-between gap-3 shrink-0">
+              <div className="p-4 border-b border-[#e6e3dd] bg-[#faf9f7] flex flex-wrap items-center justify-between gap-3 shrink-0">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white font-extrabold text-sm flex items-center justify-center shadow-xs">
+                  <div className="w-10 h-10 rounded-2xl bg-[#881337] text-white font-bold text-sm flex items-center justify-center shrink-0">
                     {activeConv.customerName.charAt(0)}
                   </div>
                   <div>
                     <div className="flex items-center space-x-2">
-                      <h3 className="font-extrabold text-sm text-gray-900">
+                      <h3 className="font-bold text-sm text-[#111827]">
                         {activeConv.customerName}
                       </h3>
                       <span
@@ -332,25 +319,24 @@ export const OmnichannelChatManager: React.FC = () => {
                         {getChannelBadge(activeConv.channel).label}
                       </span>
                     </div>
-                    <div className="text-[11px] text-gray-500 flex items-center space-x-2 mt-0.5">
+                    <div className="text-[11px] text-gray-600 flex items-center space-x-2 mt-0.5">
                       {activeConv.customerPhone && (
-                        <span className="font-mono">{activeConv.customerPhone}</span>
+                        <span className="font-mono tabular-nums">{activeConv.customerPhone}</span>
                       )}
                       <span>•</span>
-                      <span className="text-emerald-600 font-semibold flex items-center space-x-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-                        <span>সরাসরি কথোপকথন চলমান</span>
+                      <span className="text-[#15803d] font-semibold">
+                        সরাসরি কথোপকথন চলমান
                       </span>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {activeConv.unreadCount > 0 && (
                     <button
                       type="button"
                       onClick={() => markConversationAsRead(activeConv.id)}
-                      className="bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 text-[10px] font-bold px-2.5 py-1 rounded-xl cursor-pointer transition-colors"
+                      className="bg-white hover:bg-gray-100 text-[#111827] border border-[#e6e3dd] text-[10px] font-bold px-2.5 py-1.5 rounded-xl cursor-pointer transition-colors"
                       title="পঠিত হিসেবে চিহ্নিত করুন"
                     >
                       পঠিত চিহ্নিত করুন
@@ -361,16 +347,17 @@ export const OmnichannelChatManager: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => updateConversationStatus(activeConv.id, 'resolved')}
-                      className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-bold px-2.5 py-1 rounded-xl cursor-pointer transition-colors"
+                      className="bg-[#f0fdf4] hover:bg-emerald-100 text-[#15803d] border border-[#bbf7d0] text-[10px] font-bold px-2.5 py-1.5 rounded-xl cursor-pointer transition-colors flex items-center space-x-1"
                       title="সমস্যা সমাধান হলে ক্লোজ করুন"
                     >
-                      ✓ সমাধান চিহ্নিত করুন
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>সমাধান চিহ্নিত করুন</span>
                     </button>
                   ) : (
                     <button
                       type="button"
                       onClick={() => updateConversationStatus(activeConv.id, 'open')}
-                      className="bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 text-[10px] font-bold px-2.5 py-1 rounded-xl cursor-pointer transition-colors"
+                      className="bg-white hover:bg-gray-100 text-[#111827] border border-[#e6e3dd] text-[10px] font-bold px-2.5 py-1.5 rounded-xl cursor-pointer transition-colors"
                       title="কথোপকথন পুনরায় চালু করুন"
                     >
                       পুনরায় ওপেন করুন
@@ -378,12 +365,12 @@ export const OmnichannelChatManager: React.FC = () => {
                   )}
 
                   <span
-                    className={`text-[10px] font-bold px-2.5 py-1 rounded-xl ${
+                    className={`text-[10px] font-bold px-2.5 py-1 rounded-xl border ${
                       activeConv.status === 'open'
-                        ? 'bg-amber-100 text-amber-800'
+                        ? 'bg-amber-50 text-amber-800 border-amber-200'
                         : activeConv.status === 'waiting'
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-emerald-100 text-emerald-800'
+                        ? 'bg-white text-[#111827] border-[#e6e3dd]'
+                        : 'bg-[#f0fdf4] text-[#15803d] border-[#bbf7d0]'
                     }`}
                   >
                     {activeConv.status === 'open'
@@ -396,7 +383,7 @@ export const OmnichannelChatManager: React.FC = () => {
               </div>
 
               {/* Chat Thread Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50">
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#faf9f7]">
                 {activeConv.messages.map(msg => {
                   const isCustomer = msg.sender === 'customer';
                   const isAi = msg.sender === 'ai';
@@ -407,33 +394,33 @@ export const OmnichannelChatManager: React.FC = () => {
                       key={msg.id}
                       className={`flex flex-col ${isCustomer ? 'items-start' : 'items-end'}`}
                     >
-                      <div className="flex items-center space-x-1 text-[10px] text-gray-400 mb-0.5 px-1">
+                      <div className="flex items-center space-x-1 text-[10px] text-gray-500 mb-0.5 px-1">
                         {isAi && (
-                          <span className="text-purple-600 font-bold flex items-center space-x-0.5">
+                          <span className="text-[#111827] font-bold flex items-center space-x-0.5">
                             <Bot className="w-3 h-3" />
                             <span>{msg.senderName}</span>
                           </span>
                         )}
                         {isStaff && (
-                          <span className="text-rose-600 font-bold flex items-center space-x-0.5">
+                          <span className="text-[#881337] font-bold flex items-center space-x-0.5">
                             <User className="w-3 h-3" />
                             <span>{msg.senderName}</span>
                           </span>
                         )}
                         {isCustomer && (
-                          <span className="font-semibold text-gray-600">{msg.senderName}</span>
+                          <span className="font-semibold text-gray-700">{msg.senderName}</span>
                         )}
                         <span>•</span>
-                        <span>{msg.timestamp}</span>
+                        <span className="tabular-nums">{msg.timestamp}</span>
                       </div>
 
                       <div
-                        className={`max-w-[85%] sm:max-w-[70%] p-3.5 rounded-2xl text-xs shadow-2xs whitespace-pre-line leading-relaxed ${
+                        className={`max-w-[85%] sm:max-w-[70%] p-3.5 rounded-2xl text-xs whitespace-pre-line leading-relaxed ${
                           isCustomer
-                            ? 'bg-white text-gray-800 border border-gray-200 rounded-tl-xs'
+                            ? 'bg-white text-[#111827] border border-[#e6e3dd] rounded-tl-xs'
                             : isAi
-                            ? 'bg-gradient-to-br from-purple-700 via-indigo-700 to-purple-800 text-white rounded-tr-xs shadow-purple-900/10'
-                            : 'bg-rose-600 text-white rounded-tr-xs shadow-rose-600/20'
+                            ? 'bg-[#111827] text-white border border-[#1f2937] rounded-tr-xs'
+                            : 'bg-[#881337] text-white rounded-tr-xs'
                         }`}
                       >
                         <p>{msg.text}</p>
@@ -443,28 +430,33 @@ export const OmnichannelChatManager: React.FC = () => {
                           <div
                             className={`mt-2.5 p-2 rounded-xl flex items-center space-x-2.5 border ${
                               isCustomer
-                                ? 'bg-gray-50 border-gray-200 text-gray-900'
-                                : 'bg-white/10 border-white/20 text-white'
+                                ? 'bg-[#faf9f7] border-[#e6e3dd] text-[#111827]'
+                                : 'bg-[#1f2937] border-gray-700 text-white'
                             }`}
                           >
-                            {msg.productImage && (
+                            {msg.productImage ? (
                               <img
                                 src={msg.productImage}
                                 alt={msg.productName}
+                                referrerPolicy="no-referrer"
                                 className="w-10 h-10 object-cover rounded-lg shrink-0"
                               />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-[#faf9f7] border border-[#e6e3dd] flex items-center justify-center shrink-0 text-gray-400">
+                                <ShoppingBag className="w-4 h-4" />
+                              </div>
                             )}
                             <div className="min-w-0 flex-1">
                               <span className="font-bold text-[11px] block truncate">
                                 {msg.productName}
                               </span>
                               {msg.productPrice && (
-                                <span className="font-black text-amber-300 text-xs">
+                                <span className="font-bold text-amber-300 text-xs tabular-nums">
                                   {formatPrice(msg.productPrice)}
                                 </span>
                               )}
                             </div>
-                            <span className="text-[10px] font-bold bg-white text-gray-900 px-2 py-0.5 rounded-lg shrink-0 shadow-2xs">
+                            <span className="text-[10px] font-bold bg-white text-[#111827] px-2 py-0.5 rounded-lg shrink-0">
                               পণ্য সুপারিশ
                             </span>
                           </div>
@@ -476,12 +468,12 @@ export const OmnichannelChatManager: React.FC = () => {
               </div>
 
               {/* Quick Preset Buttons Strip */}
-              <div className="px-4 py-2 border-t border-gray-100 bg-white flex items-center gap-1.5 overflow-x-auto text-[11px] scrollbar-none shrink-0">
-                <span className="text-[10px] text-gray-400 font-bold shrink-0">কুইক রিপ্লাই:</span>
+              <div className="px-4 py-2 border-t border-[#e6e3dd] bg-white flex items-center gap-1.5 overflow-x-auto text-[11px] scrollbar-none shrink-0">
+                <span className="text-[10px] text-gray-500 font-bold shrink-0">কুইক রিপ্লাই:</span>
                 <button
                   type="button"
                   onClick={() => handleQuickInsert('জী, পণ্যটি বর্তমানে স্টকে এভেইলেবল রয়েছে।')}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-2.5 py-1 rounded-lg shrink-0 cursor-pointer transition-colors"
+                  className="bg-[#faf9f7] hover:bg-gray-100 border border-[#e6e3dd] text-[#111827] px-2.5 py-1 rounded-lg shrink-0 cursor-pointer transition-colors"
                 >
                   স্টকে আছে
                 </button>
@@ -492,9 +484,9 @@ export const OmnichannelChatManager: React.FC = () => {
                       'আজকের জন্য চট্টগ্রাম সিটিতে ডেলিভারি চার্জ সম্পূর্ণ ফ্রি! এখনই অর্ডার করুন।'
                     )
                   }
-                  className="bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold px-2.5 py-1 rounded-lg shrink-0 cursor-pointer transition-colors"
+                  className="bg-[#f0fdf4] hover:bg-emerald-100 border border-[#bbf7d0] text-[#15803d] font-bold px-2.5 py-1 rounded-lg shrink-0 cursor-pointer transition-colors"
                 >
-                  🎉 চট্টগ্রামে ফ্রি ডেলিভারি
+                  চট্টগ্রামে ফ্রি ডেলিভারি
                 </button>
                 <button
                   type="button"
@@ -503,7 +495,7 @@ export const OmnichannelChatManager: React.FC = () => {
                       'আমরা সারা দেশে ক্যাশ অন ডেলিভারিতে পাঠাচ্ছি। আপনার নাম, ঠিকানা ও নম্বর দিলে অর্ডার কনফার্ম করে দিচ্ছি।'
                     )
                   }
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-2.5 py-1 rounded-lg shrink-0 cursor-pointer transition-colors"
+                  className="bg-[#faf9f7] hover:bg-gray-100 border border-[#e6e3dd] text-[#111827] px-2.5 py-1 rounded-lg shrink-0 cursor-pointer transition-colors"
                 >
                   ক্যাশ অন ডেলিভারি
                 </button>
@@ -512,21 +504,21 @@ export const OmnichannelChatManager: React.FC = () => {
                   onClick={() =>
                     handleQuickInsert('আপনার পছন্দের সাইজ ও কালার জানিয়ে আমাদের নিশ্চিত করুন।')
                   }
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-2.5 py-1 rounded-lg shrink-0 cursor-pointer transition-colors"
+                  className="bg-[#faf9f7] hover:bg-gray-100 border border-[#e6e3dd] text-[#111827] px-2.5 py-1 rounded-lg shrink-0 cursor-pointer transition-colors"
                 >
                   সাইজ ও কালার
                 </button>
               </div>
 
               {/* Reply Form */}
-              <form onSubmit={handleSendReply} className="p-3 border-t border-gray-200 bg-gray-50/50 space-y-2 shrink-0">
+              <form onSubmit={handleSendReply} className="p-3 border-t border-[#e6e3dd] bg-[#faf9f7] space-y-2 shrink-0">
                 {/* Product Attachment Dropdown */}
                 <div className="flex items-center space-x-2">
-                  <ShoppingBag className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                  <ShoppingBag className="w-3.5 h-3.5 text-gray-500 shrink-0" />
                   <select
                     value={selectedProductAttachment}
                     onChange={e => setSelectedProductAttachment(e.target.value)}
-                    className="bg-white border border-gray-200 rounded-xl px-2.5 py-1 text-[11px] text-gray-700 cursor-pointer focus:border-rose-500"
+                    className="bg-white border border-[#e6e3dd] rounded-xl px-2.5 py-1 text-[11px] text-gray-700 cursor-pointer focus:border-[#881337] tabular-nums"
                   >
                     <option value="">পণ্য লিঙ্ক/কার্ড যুক্ত করুন (ঐচ্ছিক)...</option>
                     {products.map(p => (
@@ -544,11 +536,11 @@ export const OmnichannelChatManager: React.FC = () => {
                     value={replyText}
                     onChange={e => setReplyText(e.target.value)}
                     placeholder="কাস্টমারকে সরাসরি রিপ্লাই লিখুন (সুপার এডমিন, এডমিন, ম্যানেজার ও স্টাফ যে কেউ উত্তর দিতে পারেন)..."
-                    className="flex-1 bg-white border border-gray-200 rounded-2xl p-2.5 text-xs text-gray-900 focus:outline-hidden focus:border-rose-500 resize-none shadow-2xs"
+                    className="flex-1 bg-white border border-[#e6e3dd] rounded-2xl p-2.5 text-xs text-[#111827] focus:outline-hidden focus:border-[#881337] resize-none leading-relaxed"
                   />
                   <button
                     type="submit"
-                    className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-3 rounded-2xl flex items-center space-x-1.5 cursor-pointer shadow-md shadow-rose-600/20 active:scale-95 transition-all self-end"
+                    className="bg-[#881337] hover:bg-[#6d0f2c] text-white font-bold px-4 py-3 min-h-[38px] rounded-2xl flex items-center space-x-1.5 cursor-pointer transition-colors self-end"
                   >
                     <Send className="w-4 h-4" />
                     <span className="text-xs">পাঠান</span>
@@ -558,11 +550,11 @@ export const OmnichannelChatManager: React.FC = () => {
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-gray-400 space-y-2">
-              <div className="w-14 h-14 rounded-3xl bg-gray-50 flex items-center justify-center mx-auto text-gray-300">
+              <div className="w-14 h-14 rounded-3xl bg-[#faf9f7] border border-[#e6e3dd] flex items-center justify-center mx-auto text-gray-400">
                 <MessageSquare className="w-8 h-8" />
               </div>
-              <h4 className="font-bold text-gray-700 text-sm">কোনো বার্তা নির্বাচন করা হয়নি</h4>
-              <p className="text-xs text-gray-400 max-w-xs mx-auto leading-relaxed">
+              <h4 className="font-bold text-[#111827] text-sm">কোনো বার্তা নির্বাচন করা হয়নি</h4>
+              <p className="text-xs text-gray-500 max-w-xs mx-auto leading-relaxed">
                 বামপাশের তালিকা থেকে যেকোনো কাস্টমার কথোপকথন নির্বাচন করুন অথবা নতুন কোনো বার্তা আসলে এখানে স্বয়ংক্রিয়ভাবে ভেসে উঠবে।
               </p>
             </div>

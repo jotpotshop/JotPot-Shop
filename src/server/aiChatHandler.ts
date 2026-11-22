@@ -1,7 +1,7 @@
 /**
  * Server-side AI Chat Handler for JotPotShop Live Customer Support
  * Powered by Google Gemini (@google/genai)
- * Model: gemini-3.8-flash (Latest production conversational model)
+ * Model: gemini-4-hydrogen (Verified production conversational Flash model)
  *
  * All API keys are kept strictly on the server:
  * - process.env.GEMINI_API_KEY / env.GEMINI_API_KEY
@@ -226,7 +226,7 @@ ${catalogSnippet || 'বর্তমানে ক্যাটালগে পণ
     }));
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
+      model: 'gemini-4-hydrogen',
       contents: [
         ...history,
         {

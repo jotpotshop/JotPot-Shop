@@ -196,24 +196,24 @@ const CourierDispatchModalContent: React.FC<CourierDispatchModalContentProps> = 
   ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-      <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden my-auto border border-gray-100 flex flex-col max-h-[94vh]">
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+      <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden my-auto border border-[#e6e3dd] flex flex-col max-h-[94vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-emerald-50/70">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+        <div className="px-6 py-4 border-b border-[#1f2937] flex items-center justify-between bg-[#111827] text-white">
+          <div className="flex items-center space-x-3">
+            <div className="w-9 h-9 rounded-xl bg-[#1f2937] border border-gray-700 text-white flex items-center justify-center">
               <Truck className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h3 className="font-extrabold text-base sm:text-lg text-gray-900">
+                <h3 className="font-extrabold text-base sm:text-lg text-white">
                   {t('কুরিয়ারে পার্সেল বুকিং (Send to Courier)', 'Send to Courier Dispatch')}
                 </h3>
-                <span className="font-mono text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded">
+                <span className="font-mono text-xs bg-[#1f2937] border border-gray-700 text-gray-200 font-bold px-2 py-0.5 rounded tabular-nums">
                   #{order.id}
                 </span>
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-400">
                 {t('পছন্দের কুরিয়ার পার্টনার নির্বাচন করুন ও ট্র্যাকিং আইডি জেনারেট করুন', 'Select courier service provider and generate consignment ID')}
               </p>
             </div>
@@ -221,7 +221,7 @@ const CourierDispatchModalContent: React.FC<CourierDispatchModalContentProps> = 
 
           <button
             onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+            className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-[#1f2937] transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -230,25 +230,25 @@ const CourierDispatchModalContent: React.FC<CourierDispatchModalContentProps> = 
         {/* Modal Form */}
         <form onSubmit={handleDispatch} className="p-6 overflow-y-auto space-y-5 text-xs">
           {/* Order Snapshot */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-[#faf9f7] p-4 rounded-2xl border border-[#e6e3dd]">
             <div>
-              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">গ্রাহকের নাম ও ফোন:</span>
-              <p className="font-bold text-gray-900 mt-0.5">{recipientName}</p>
-              <p className="font-mono text-gray-600">{recipientPhone}</p>
+              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">গ্রাহকের নাম ও ফোন:</span>
+              <p className="font-bold text-[#111827] mt-0.5">{recipientName}</p>
+              <p className="font-mono text-gray-600 tabular-nums">{recipientPhone}</p>
             </div>
 
             <div>
-              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">গন্তব্য জেলা ও এলাকা:</span>
-              <p className="font-bold text-gray-900 mt-0.5">{order.address.district}</p>
+              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">গন্তব্য জেলা ও এলাকা:</span>
+              <p className="font-bold text-[#111827] mt-0.5">{order.address.district}</p>
               <p className="text-gray-600 truncate">{recipientAddress}</p>
             </div>
 
             <div>
-              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">ক্যাশ অন ডেলিভারি (COD):</span>
-              <p className="font-extrabold text-sm text-rose-600 mt-0.5">
+              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">ক্যাশ অন ডেলিভারি (COD):</span>
+              <p className="font-extrabold text-sm text-[#881337] mt-0.5 tabular-nums">
                 {order.paymentMethod === 'cod' ? formatPrice(codToCollect) : '৳০ (প্রিপেইড/পরিশোধিত)'}
               </p>
-              <span className="text-[10px] text-gray-500">পণ্য সংখ্যা: {order.items.length}টি</span>
+              <span className="text-[10px] text-gray-500 tabular-nums">পণ্য সংখ্যা: {order.items.length}টি</span>
             </div>
           </div>
 
@@ -343,10 +343,10 @@ const CourierDispatchModalContent: React.FC<CourierDispatchModalContentProps> = 
                   <div
                     key={c.id}
                     onClick={() => setSelectedCourier(c.id)}
-                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                    className={`p-3.5 rounded-2xl border cursor-pointer transition-colors ${
                       isSelected
-                        ? 'border-emerald-500 bg-emerald-50/50 shadow-xs ring-2 ring-emerald-500/20'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
+                        ? 'border-2 border-[#111827] bg-[#faf9f7]'
+                        : 'border-[#e6e3dd] bg-white hover:border-gray-300'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
@@ -354,16 +354,16 @@ const CourierDispatchModalContent: React.FC<CourierDispatchModalContentProps> = 
                         {c.id}
                       </span>
                       {isSelected && (
-                        <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <CheckCircle className="w-4 h-4 text-[#15803d] shrink-0" />
                       )}
                     </div>
 
-                    <h4 className="font-bold text-gray-900 text-xs">{c.name}</h4>
+                    <h4 className="font-bold text-[#111827] text-xs">{c.name}</h4>
                     <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-1">{c.tag}</p>
 
-                    <div className="mt-2.5 pt-2 border-t border-gray-100 flex items-center justify-between text-[10px]">
+                    <div className="mt-2.5 pt-2 border-t border-[#e6e3dd] flex items-center justify-between text-[10px]">
                       <span className="text-gray-500">ডেলিভারি সময়:</span>
-                      <span className="font-bold text-gray-800">{c.deliverySpeed}</span>
+                      <span className="font-bold text-[#111827] tabular-nums">{c.deliverySpeed}</span>
                     </div>
                   </div>
                 );
@@ -372,7 +372,7 @@ const CourierDispatchModalContent: React.FC<CourierDispatchModalContentProps> = 
           </div>
 
           {/* Parcel Weight and Delivery Charges */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-[#faf9f7] p-4 rounded-2xl border border-[#e6e3dd]">
             <div>
               <label className="block font-semibold text-gray-700 mb-1">
                 পার্সেলের আনুমানিক ওজন (Weight Kg) *
@@ -384,7 +384,7 @@ const CourierDispatchModalContent: React.FC<CourierDispatchModalContentProps> = 
                 required
                 value={weightKg}
                 onChange={e => setWeightKg(Number(e.target.value))}
-                className="w-full bg-white border border-gray-200 rounded-xl p-2.5 text-xs font-bold focus:border-emerald-500"
+                className="w-full bg-white border border-[#e6e3dd] rounded-xl p-2.5 text-xs font-bold tabular-nums focus:border-[#881337]"
               />
             </div>
 
@@ -396,7 +396,7 @@ const CourierDispatchModalContent: React.FC<CourierDispatchModalContentProps> = 
                 type="text"
                 disabled
                 value={`৳${calculatedCourierCharge} (${isInsideDhaka ? 'ঢাকার ভেতরে' : 'ঢাকার বাইরে'})`}
-                className="w-full bg-gray-100 border border-gray-200 rounded-xl p-2.5 text-xs font-bold text-gray-700"
+                className="w-full bg-gray-100 border border-[#e6e3dd] rounded-xl p-2.5 text-xs font-bold text-gray-700 tabular-nums"
               />
             </div>
 
@@ -408,7 +408,7 @@ const CourierDispatchModalContent: React.FC<CourierDispatchModalContentProps> = 
                 type="text"
                 disabled
                 value={formatPrice(codToCollect)}
-                className="w-full bg-gray-100 border border-gray-200 rounded-xl p-2.5 text-xs font-black text-rose-600"
+                className="w-full bg-gray-100 border border-[#e6e3dd] rounded-xl p-2.5 text-xs font-black text-[#881337] tabular-nums"
               />
             </div>
           </div>
@@ -450,11 +450,11 @@ const CourierDispatchModalContent: React.FC<CourierDispatchModalContentProps> = 
 
           {/* Booking Success Banner */}
           {bookingSuccess && (
-            <div className="bg-emerald-50 p-3.5 rounded-xl border border-emerald-300 flex items-center space-x-2.5 text-emerald-900 text-xs font-bold animate-in fade-in">
-              <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+            <div className="bg-[#f0fdf4] p-3.5 rounded-xl border border-[#bbf7d0] flex items-center space-x-2.5 text-[#15803d] text-xs font-bold">
+              <CheckCircle className="w-5 h-5 text-[#15803d] shrink-0" />
               <div>
-                <p className="text-emerald-900 font-extrabold">🎉 Steadfast কুরিয়ারে বুকিং সফল হয়েছে!</p>
-                <p className="text-emerald-700 text-[11px] font-mono mt-0.5">
+                <p className="text-[#15803d] font-extrabold">Steadfast কুরিয়ারে বুকিং সফল হয়েছে!</p>
+                <p className="text-[#15803d] text-[11px] font-mono tabular-nums mt-0.5">
                   কনসাইনমেন্ট আইডি: #{bookingSuccess.consignmentId} • ট্র্যাকিং কোড: {bookingSuccess.trackingCode}
                 </p>
               </div>
@@ -462,20 +462,20 @@ const CourierDispatchModalContent: React.FC<CourierDispatchModalContentProps> = 
           )}
 
           {/* API Info Notice */}
-          <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-200 flex items-center space-x-2 text-emerald-800 text-[11px]">
-            <Zap className="w-4 h-4 shrink-0 text-emerald-600" />
+          <div className="bg-[#faf9f7] p-3 rounded-xl border border-[#e6e3dd] flex items-center space-x-2 text-gray-700 text-[11px]">
+            <Zap className="w-4 h-4 shrink-0 text-[#111827]" />
             <span>
               {selectedCourier} সার্ভার এপিআই সক্রিয়। কনফার্ম করার সাথে সাথে ক্লাউডফ্লেয়ার সার্ভারের মাধ্যমে সরাসরি Steadfast Merchant পোর্টালে রিয়েল কনসাইনমেন্ট বুকিং হবে।
             </span>
           </div>
 
           {/* Buttons */}
-          <div className="flex items-center justify-end space-x-2 pt-2 border-t border-gray-100">
+          <div className="flex items-center justify-end space-x-2 pt-2 border-t border-[#e6e3dd]">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 font-bold px-4 py-2.5 rounded-xl text-xs cursor-pointer transition-colors"
+              className="bg-[#faf9f7] hover:bg-gray-100 border border-[#e6e3dd] disabled:opacity-50 text-gray-700 font-bold px-4 py-2.5 min-h-[40px] rounded-xl text-xs cursor-pointer transition-colors"
             >
               {t('বাতিল', 'Cancel')}
             </button>
@@ -483,7 +483,7 @@ const CourierDispatchModalContent: React.FC<CourierDispatchModalContentProps> = 
             <button
               type="submit"
               disabled={isSubmitting || isAlreadyBooked}
-              className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold px-5 py-2.5 rounded-xl text-xs flex items-center space-x-1.5 shadow-md cursor-pointer transition-colors"
+              className="bg-[#881337] hover:bg-[#6d0f2c] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold px-5 py-2.5 min-h-[40px] rounded-xl text-xs flex items-center space-x-1.5 cursor-pointer transition-colors"
             >
               {isSubmitting ? (
                 <>

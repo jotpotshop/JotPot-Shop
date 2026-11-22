@@ -32,6 +32,7 @@ import {
   Search,
   Filter,
   Eye,
+  EyeOff,
   PauseCircle,
   XCircle,
   ExternalLink,
@@ -45,10 +46,10 @@ import {
   Target,
   Sliders,
   HelpCircle,
+  AlertCircle,
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { Product, Order, OrderStatus, CourierPartner, UserRole, NeedTag } from '../types';
-import { CATEGORIES } from '../data/mockData';
 import { OCCASIONS_LIST, detectProductOccasions } from '../data/occasionsData';
 import { RolePermissionManager } from './admin/RolePermissionManager';
 import { BusinessSettingsManager } from './admin/BusinessSettingsManager';
@@ -189,6 +190,7 @@ export const AdminPanel: React.FC = () => {
     dismissNewOrderAlert,
     conversations,
     registeredCustomers,
+    updateCustomerStatus,
     adminUser,
     purgeAllDemoData,
     t,
@@ -255,6 +257,7 @@ export const AdminPanel: React.FC = () => {
   // Edit & Delete Product Modals State
   const [productToEdit, setProductToEdit] = useState<Product | null>(null);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [confirmOrderPurgeDemo, setConfirmOrderPurgeDemo] = useState(false);
   const [adminToast, setAdminToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   // Auto-dismiss toast
@@ -320,24 +323,43 @@ export const AdminPanel: React.FC = () => {
     setSelectedProductIds([]);
   };
 
-  const handleBulkDeleteConfirm = (productIds: string[]) => {
-    bulkDeleteProducts(productIds);
-    setSelectedProductIds([]);
-    setShowBulkDeleteModal(false);
-    setAdminToast({
-      message: `নির্বাচিত ${productIds.length}টি পণ্য সফলভাবে মুছে ফেলা হয়েছে!`,
-      type: 'success',
-    });
+  const handleBulkDeleteConfirm = async (productIds: string[]) => {
+    const res = await bulkDeleteProducts(productIds);
+    if (res.success) {
+      setSelectedProductIds([]);
+      setShowBulkDeleteModal(false);
+      setAdminToast({
+        message: `নির্বাচিত ${productIds.length}টি পণ্য সফলভাবে Firebase থেকে মুছে ফেলা হয়েছে!`,
+        type: 'success',
+      });
+    } else {
+      setAdminToast({
+        message: `বাল্ক ডিলিট ব্যর্থ: ${res.error || 'Firebase-এ মুছে ফেলা যায়নি'}`,
+        type: 'error',
+      });
+    }
   };
 
-  const handleBulkEditSave = (productIds: string[], updates: Partial<Product>) => {
-    bulkUpdateProducts(productIds, updates);
-    setSelectedProductIds([]);
-    setShowBulkEditModal(false);
-    setAdminToast({
-      message: `নির্বাচিত ${productIds.length}টি পণ্যের তথ্য সফলভাবে আপডেট করা হয়েছে!`,
-      type: 'success',
-    });
+  const handleBulkEditSave = async (
+    productIds: string[],
+    updates: Partial<Product>,
+    perProductUpdates?: Record<string, Partial<Product>>
+  ): Promise<{ success: boolean; error?: string }> => {
+    const res = await bulkUpdateProducts(productIds, updates, perProductUpdates);
+    if (res.success) {
+      setSelectedProductIds([]);
+      setShowBulkEditModal(false);
+      setAdminToast({
+        message: `নির্বাচিত ${productIds.length}টি পণ্যের তথ্য সফলভাবে Firebase-এ আপডেট করা হয়েছে!`,
+        type: 'success',
+      });
+    } else {
+      setAdminToast({
+        message: `বাল্ক আপডেট ব্যর্থ: ${res.error || 'Firebase-এ সেভ করা যায়নি'}`,
+        type: 'error',
+      });
+    }
+    return res;
   };
 
   const handleRoleSwitch = (newRole: UserRole) => {
@@ -396,11 +418,11 @@ export const AdminPanel: React.FC = () => {
   });
 
 
-  const handleCreateCoupon = (e: React.FormEvent) => {
+  const handleCreateCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCouponCode.trim()) return;
 
-    addCoupon({
+    const res = await addCoupon({
       code: newCouponCode.trim().toUpperCase(),
       discountType: newCouponType,
       discountValue: Number(newCouponVal),
@@ -411,8 +433,13 @@ export const AdminPanel: React.FC = () => {
       expiryDate: '2026-12-31',
     });
 
-    setShowAddCouponModal(false);
-    setNewCouponCode('');
+    if (res.success) {
+      setShowAddCouponModal(false);
+      setNewCouponCode('');
+      setAdminToast({ message: 'নতুন কুপন সফলভাবে সংরক্ষণ করা হয়েছে!', type: 'success' });
+    } else {
+      setAdminToast({ message: `কুপন সেভ ব্যর্থ: ${res.error || 'Firebase ত্রুটি'}`, type: 'error' });
+    }
   };
 
   const handleExportCSV = () => {
@@ -438,11 +465,20 @@ export const AdminPanel: React.FC = () => {
     window.open(`https://wa.me/${intlPhone}?text=${textMsg}`, '_blank');
   };
 
+  const roleLabelBn =
+    currentRole === 'SUPER_ADMIN'
+      ? 'সুপার এডমিন'
+      : currentRole === 'ADMIN'
+      ? 'স্টোর এডমিন'
+      : currentRole === 'MANAGER'
+      ? 'অপারেশন ম্যানেজার'
+      : 'সাপোর্ট স্টাফ';
+
   return (
-    <div className="min-h-screen bg-gray-100/80 p-3 sm:p-6 text-gray-900">
-      {/* Top Super Admin Navigation Header */}
-      <div className="max-w-7xl mx-auto bg-white rounded-3xl p-4 sm:p-5 shadow-xs border border-gray-200 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center space-x-3.5">
+    <div className="min-h-screen bg-[#faf9f7] p-3 sm:p-6 text-[#111827]">
+      {/* Top Business Control Header */}
+      <div className="max-w-7xl mx-auto bg-white rounded-2xl p-4 sm:px-6 sm:py-4 border border-[#e6e3dd] mb-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5 min-w-0">
           <button
             onClick={() => {
               setIsAdminView(false);
@@ -451,218 +487,120 @@ export const AdminPanel: React.FC = () => {
                 window.dispatchEvent(new PopStateEvent('popstate'));
               }
             }}
-            className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-2xl text-gray-700 transition-colors cursor-pointer"
+            className="min-h-[38px] p-2.5 bg-[#faf9f7] hover:bg-[#f3f1ed] border border-[#e6e3dd] rounded-xl text-[#374151] hover:text-[#111827] transition-colors cursor-pointer shrink-0"
             title={t('গ্রাহক স্টোরে ফিরে যান', 'Back to Storefront')}
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4" />
           </button>
           {websiteSettings.logoUrl && (
-            <div className="h-10 max-w-[120px] hidden sm:flex items-center justify-center p-1 bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
+            <div className="h-10 max-w-[120px] hidden sm:flex items-center justify-center p-1.5 bg-[#faf9f7] border border-[#e6e3dd] rounded-xl overflow-hidden shrink-0">
               <img
                 src={websiteSettings.logoUrl}
                 alt={websiteSettings.storeName}
-                className="max-h-8 max-w-[100px] object-contain"
+                referrerPolicy="no-referrer"
+                className="max-h-7 max-w-[100px] object-contain"
               />
             </div>
           )}
-          <div>
-            <div className="flex items-center space-x-2">
-              <span
-                className={`text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider ${
-                  currentRole === 'SUPER_ADMIN'
-                    ? 'bg-rose-600 text-white shadow-xs'
-                    : currentRole === 'ADMIN'
-                    ? 'bg-purple-600 text-white shadow-xs'
-                    : currentRole === 'MANAGER'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-emerald-600 text-white shadow-xs'
-                }`}
-              >
-                {currentRole === 'SUPER_ADMIN'
-                  ? '👑 সুপার এডমিন'
-                  : currentRole === 'ADMIN'
-                  ? '🛡️ স্টোর এডমিন'
-                  : currentRole === 'MANAGER'
-                  ? '📋 অপারেশন ম্যানেজার'
-                  : '💼 সাপোর্ট স্টাফ'}
-              </span>
-              <h1 className="text-lg sm:text-xl font-black text-gray-900">
-                {websiteSettings.storeName} কন্ট্রোল সেন্টার
-              </h1>
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl font-bold text-[#111827] truncate">
+              {websiteSettings.storeName} কন্ট্রোল সেন্টার
+            </h1>
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-[#6b7280] mt-0.5 tabular-nums">
+              <ShieldCheck className="w-3.5 h-3.5 text-[#15803d] shrink-0" />
+              <span className="font-semibold text-[#111827]">{adminUser?.name || 'অ্যাডমিন'}</span>
+              <span aria-hidden="true">·</span>
+              <span className="font-medium text-[#881337]">{roleLabelBn}</span>
+              <span aria-hidden="true">·</span>
+              <span>অনুমোদিত মডিউল: {ROLE_PERMITTED_TABS[currentRole].length}/{ROLE_PERMITTED_TABS.SUPER_ADMIN.length}টি</span>
             </div>
-            <p className="text-xs text-gray-500 mt-0.5 font-medium">
-              {currentRole === 'SUPER_ADMIN'
-                ? 'সুপার এডমিন ফুল কন্ট্রোল • আর্থিক প্রতিবেদন • কুরিয়ার এপিআই • টিম পারমিশন ও সিস্টেম সেটিংস'
-                : currentRole === 'ADMIN'
-                ? 'স্টোর অপারেশনস • পণ্য ক্যাটালগ নিয়ন্ত্রণ • কুপন ও ক্যাম্পেইন • গ্রাহক ডিরেক্টরি ও অফার'
-                : currentRole === 'MANAGER'
-                ? 'লজিস্টিকস ও ইনভেন্টরি • অর্ডার প্যাকেজিং • কুরিয়ার চালান হস্তান্তর • ওয়্যারহাউজ স্টক'
-                : 'কাস্টমার সাপোর্ট ডেস্ক • জরুরি কল ভেরিফিকেশন • লাইভ চ্যাট/হোয়াটসঅ্যাপ • স্টক ও মূল্য লুকআপ'}
-            </p>
           </div>
         </div>
 
-        {/* Action Controls & Role Switcher */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* New Order Alert Bell indicator */}
+        {/* Action Controls */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           {hasNewOrderAlert && (
-            <div
+            <button
+              type="button"
               onClick={dismissNewOrderAlert}
-              className="bg-rose-50 border border-rose-300 text-rose-700 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 animate-pulse cursor-pointer shadow-xs"
-              title="নতুন অর্ডার এসেছে! ক্লিক করে অ্যালার্ট বন্ধ করুন"
+              className="min-h-[38px] bg-[#fef2f2] border border-[#fecaca] text-[#991b1b] px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer tabular-nums"
+              title="নতুন অর্ডার এসেছে — ক্লিক করে অ্যালার্ট বন্ধ করুন"
             >
-              <Bell className="w-4 h-4 text-rose-600" />
-              <span>নতুন অর্ডার এসেছে! ({pendingOrdersCount})</span>
-            </div>
+              <Bell className="w-4 h-4 text-[#881337]" />
+              <span>নতুন অর্ডার ({pendingOrdersCount})</span>
+            </button>
           )}
 
-          {/* Active Authenticated User & Role Clearance Badge */}
-          <div className="flex items-center space-x-2 bg-white px-3.5 py-1.5 rounded-2xl text-xs font-bold border border-gray-200 text-gray-700 shadow-xs">
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <span>
-              লগইনকৃত: <strong className="text-gray-900">{adminUser?.name || 'অ্যাডমিন'}</strong>
-            </span>
-            <span
-              className={`text-[10px] px-2.5 py-0.5 rounded-full font-black border ${
-                currentRole === 'SUPER_ADMIN'
-                  ? 'bg-rose-50 text-rose-800 border-rose-200'
-                  : currentRole === 'ADMIN'
-                  ? 'bg-purple-50 text-purple-800 border-purple-200'
-                  : currentRole === 'MANAGER'
-                  ? 'bg-blue-50 text-blue-800 border-blue-200'
-                  : 'bg-emerald-50 text-emerald-800 border-emerald-200'
-              }`}
-            >
-              {currentRole === 'SUPER_ADMIN'
-                ? '👑 সুপার এডমিন'
-                : currentRole === 'ADMIN'
-                ? '🛡️ এডমিন'
-                : currentRole === 'MANAGER'
-                ? '📋 ম্যানেজার'
-                : '💼 স্টাফ'}
-            </span>
-          </div>
-
-          {/* Add Product Button (Permission gated) */}
           {hasPermission('products', 'create') && (
             <button
               onClick={() => setShowAddProductModal(true)}
-              className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center space-x-1.5 shadow-xs cursor-pointer transition-colors"
+              className="min-h-[38px] bg-[#881337] hover:bg-[#6d0f2c] text-white text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap"
             >
               <Plus className="w-4 h-4" />
-              <span>{t('পণ্য যোগ', 'Add Product')}</span>
+              <span>{t('নতুন পণ্য যোগ', 'Add Product')}</span>
             </button>
           )}
 
-          {/* Export CSV (Permission gated) */}
           {hasPermission('orders', 'export') && (
             <button
               onClick={handleExportCSV}
-              className="bg-gray-900 hover:bg-black text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center space-x-1.5 cursor-pointer transition-colors"
+              className="min-h-[38px] bg-[#111827] hover:bg-black text-white text-xs font-semibold px-3.5 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap"
               title={t('সব অর্ডার এক্সপোর্ট করুন', 'Export Orders CSV')}
             >
               <Download className="w-4 h-4" />
-              <span>CSV</span>
+              <span>CSV এক্সপোর্ট</span>
             </button>
           )}
-        </div>
-      </div>
-
-      {/* RBAC Role Access & Permissions Banner */}
-      <div className={`max-w-7xl mx-auto rounded-3xl p-4 sm:p-5 mb-6 border shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 ${
-        currentRole === 'SUPER_ADMIN'
-          ? 'bg-gradient-to-r from-gray-950 via-slate-900 to-rose-950 text-white border-rose-900/40'
-          : currentRole === 'ADMIN'
-          ? 'bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-900 text-white border-purple-800/40'
-          : currentRole === 'MANAGER'
-          ? 'bg-gradient-to-r from-blue-950 via-slate-900 to-teal-950 text-white border-blue-800/40'
-          : 'bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 text-white border-emerald-800/40'
-      }`}>
-        <div className="space-y-1">
-          <div className="flex items-center space-x-2">
-            <span className="text-xs uppercase font-mono tracking-wider px-2.5 py-0.5 rounded-full bg-white/20 font-black">
-              {currentRole === 'SUPER_ADMIN' ? '👑 মাস্টার এক্সিকিউটিভ সুইট' :
-               currentRole === 'ADMIN' ? '🛡️ স্টোর ম্যানেজমেন্ট' :
-               currentRole === 'MANAGER' ? '📋 অপারেশনস ও লজিস্টিকস' :
-               '💼 কাস্টমার সাপোর্ট ডেস্ক'}
-            </span>
-            <span className="text-xs opacity-60">•</span>
-            <span className="text-xs font-semibold opacity-90">
-              বর্তমান ইউজার: <strong className="text-white">{adminUser?.name || 'Md Mahmudul Hashan'}</strong> ({adminUser?.email || 'admin@jotpotshop.com'})
-            </span>
-          </div>
-
-          <p className="text-xs opacity-90 leading-relaxed max-w-3xl">
-            {currentRole === 'SUPER_ADMIN' && '🔓 পূর্ণ মাস্টার এক্সেস: প্ল্যাটফর্মের সব মডিউল, মোট লাভ ও রাজস্ব, স্টাফ অ্যাকাউন্ট ও পাসওয়ার্ড তৈরি, বিকাশ/নগদ মার্চেন্ট কনফিগ ও সিস্টেম ডেটাবেজ।'}
-            {currentRole === 'ADMIN' && 'অনুমোদিত: পণ্য ক্যাটালগ যোগ/এডিট/ডিলিট, কুপন তৈরি, গ্রাহক তালিকা, ডেলিভারি চার্জ। 🔒 সীমাবদ্ধতা: মূল বিজনেস সেটিংস ও স্টাফ পারমিশন সুরক্ষিত।'}
-            {currentRole === 'MANAGER' && 'অনুমোদিত: অর্ডার প্যাকেজিং, কুরিয়ার বুকিং, চালান লেবেল প্রিন্ট, ইনভেন্টরি লো-স্টক। 🔒 সীমাবদ্ধতা: গ্রাহক ব্যক্তিগত ডেটা, কুপন ও মোট লাভ সুরক্ষিত।'}
-            {currentRole === 'STAFF' && 'অনুমোদিত: পেন্ডিং গ্রাহকদের ফোন কল করা, ঠিকানা যাচাই ও লাইভ চ্যাট ইনবক্স। 🔒 সীমাবদ্ধতা: কোনো আর্থিক ডেটা, কুরিয়ার ডিসপ্যাচ বা পণ্য ডিলিট নিষিদ্ধ।'}
-          </p>
-        </div>
-
-        <div className="flex items-center space-x-2 shrink-0">
-          <span className="text-[11px] bg-white/10 px-3 py-1.5 rounded-xl border border-white/20 font-mono font-bold">
-            মডিউল এক্সেস: {ROLE_PERMITTED_TABS[currentRole].length}/13 টি
-          </span>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-6">
         {/* Left Sidebar Menu tailored by User Role */}
-        <div className="md:col-span-3 bg-white rounded-3xl p-3 border border-gray-200 shadow-xs h-fit space-y-1 text-xs font-bold text-gray-700">
-          {/* Active Role Header Pill */}
-          <div className="p-2.5 mb-2 rounded-2xl bg-gradient-to-r from-gray-900 via-slate-800 to-gray-900 text-white flex items-center justify-between shadow-xs">
+        <aside className="md:col-span-3 bg-white rounded-2xl p-3 border border-[#e6e3dd] h-fit space-y-1 text-xs font-semibold text-[#374151]">
+          <div className="px-3 py-2.5 mb-2 rounded-xl bg-[#faf9f7] border border-[#e6e3dd] flex items-center justify-between">
             <div>
-              <span className="text-[9px] uppercase tracking-wider text-rose-400 font-mono block">ড্যাশবোর্ড রোল:</span>
-              <span className="text-xs font-black">
-                {currentRole === 'SUPER_ADMIN'
-                  ? '👑 সুপার এডমিন'
-                  : currentRole === 'ADMIN'
-                  ? '🛡️ এডমিন'
-                  : currentRole === 'MANAGER'
-                  ? '📋 ম্যানেজার'
-                  : '💼 স্টাফ'}
-              </span>
+              <span className="text-[10px] text-[#6b7280] block">বর্তমান রোল</span>
+              <span className="text-xs font-bold text-[#111827]">{roleLabelBn}</span>
             </div>
-            <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-mono">
+            <span className="text-[10px] font-mono text-[#6b7280]">
               {currentRole}
             </span>
           </div>
 
-          {/* 1. Dashboard Overview (Staff gets focused view, others get analytics) */}
+          {/* 1. Dashboard Overview */}
           <button
             onClick={() => setAdminTab('dashboard')}
-            className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center space-x-2.5 transition-colors cursor-pointer ${
-              adminTab === 'dashboard' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+            className={`w-full text-left px-3.5 py-2.5 rounded-xl flex items-center gap-2.5 transition-colors cursor-pointer ${
+              adminTab === 'dashboard' ? 'bg-[#111827] text-white' : 'hover:bg-[#faf9f7] hover:text-[#111827]'
             }`}
           >
-            <TrendingUp className="w-4 h-4" />
-            <span>
+            <TrendingUp className="w-4 h-4 shrink-0" />
+            <span className="truncate">
               {currentRole === 'STAFF'
-                ? t('স্টাফ ড্যাশবোর্ড ও টাস্ক', 'Staff Dashboard')
+                ? t('স্টাফ ড্যাশবোর্ড', 'Staff Dashboard')
                 : currentRole === 'MANAGER'
                 ? t('ম্যানেজার ড্যাশবোর্ড', 'Manager Dashboard')
                 : currentRole === 'ADMIN'
                 ? t('এডমিন ড্যাশবোর্ড', 'Admin Dashboard')
-                : t('সুপার এডমিন ড্যাশবোর্ড', 'Super Admin Suite')}
+                : t('সুপার এডমিন ড্যাশবোর্ড', 'Executive Dashboard')}
             </span>
           </button>
 
-          {/* 2. Orders & Call Verification Hub (All roles) */}
+          {/* 2. Orders & Call Verification Hub */}
           <button
             onClick={() => setAdminTab('orders')}
-            className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center justify-between transition-colors cursor-pointer ${
-              adminTab === 'orders' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+            className={`w-full text-left px-3.5 py-2.5 rounded-xl flex items-center justify-between transition-colors cursor-pointer ${
+              adminTab === 'orders' ? 'bg-[#111827] text-white' : 'hover:bg-[#faf9f7] hover:text-[#111827]'
             }`}
           >
-            <div className="flex items-center space-x-2.5">
-              <ShoppingCart className="w-4 h-4" />
-              <span>{t('অর্ডার কনফার্মেশন ও কল হাব', 'Orders & Call Hub')}</span>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <ShoppingCart className="w-4 h-4 shrink-0" />
+              <span className="truncate">{t('অর্ডার ও কল হাব', 'Orders & Call Hub')}</span>
             </div>
             {pendingOrdersCount > 0 && (
               <span
-                className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
-                  adminTab === 'orders' ? 'bg-white text-rose-600' : 'bg-rose-100 text-rose-700'
+                className={`text-[11px] font-bold tabular-nums shrink-0 ${
+                  adminTab === 'orders' ? 'text-[#fb7185]' : 'text-[#881337]'
                 }`}
               >
                 {pendingOrdersCount}
@@ -670,235 +608,221 @@ export const AdminPanel: React.FC = () => {
             )}
           </button>
 
-          {/* 3. Omnichannel Customer Live Chat, WhatsApp & Messenger (All roles: Super Admin, Admin, Manager, Staff) */}
+          {/* 3. Omnichannel Customer Live Chat */}
           <button
             onClick={() => setAdminTab('livechat')}
-            className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center justify-between transition-colors cursor-pointer ${
-              adminTab === 'livechat' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+            className={`w-full text-left px-3.5 py-2.5 rounded-xl flex items-center justify-between transition-colors cursor-pointer ${
+              adminTab === 'livechat' ? 'bg-[#111827] text-white' : 'hover:bg-[#faf9f7] hover:text-[#111827]'
             }`}
           >
-            <div className="flex items-center space-x-2.5">
-              <MessageSquare className="w-4 h-4 text-emerald-500" />
-              <span>{t('কাস্টমার চ্যাট ইনবক্স (Live/WA/FB)', 'Customer Chat Inbox')}</span>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <MessageSquare className="w-4 h-4 shrink-0" />
+              <span className="truncate">{t('লাইভ চ্যাট ইনবক্স', 'Customer Chat Inbox')}</span>
             </div>
-            {unreadChatCount > 0 ? (
-              <span className="bg-amber-400 text-gray-950 text-[10px] font-black px-1.5 py-0.5 rounded-full">
+            {unreadChatCount > 0 && (
+              <span className="text-[11px] font-bold tabular-nums text-[#881337] shrink-0">
                 {unreadChatCount}
               </span>
-            ) : (
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
             )}
           </button>
 
-          {/* 4. Couriers Logistics (Manager, Admin, Super Admin) */}
+          {/* 4. Couriers Logistics */}
           {ROLE_PERMITTED_TABS[currentRole].includes('couriers') && (
             <button
               onClick={() => setAdminTab('couriers')}
-              className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center space-x-2.5 transition-colors cursor-pointer ${
-                adminTab === 'couriers' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl flex items-center gap-2.5 transition-colors cursor-pointer ${
+                adminTab === 'couriers' ? 'bg-[#111827] text-white' : 'hover:bg-[#faf9f7] hover:text-[#111827]'
               }`}
             >
-              <Truck className="w-4 h-4" />
-              <span>{t('কুরিয়ার ডেলিভারি ও চালান', 'Courier Logistics')}</span>
+              <Truck className="w-4 h-4 shrink-0" />
+              <span className="truncate">{t('কুরিয়ার ও চালান', 'Courier Logistics')}</span>
             </button>
           )}
 
-          {/* 5. Products Catalog (All roles) */}
+          {/* 5. Products Catalog */}
           {ROLE_PERMITTED_TABS[currentRole].includes('products') && (
             <button
               onClick={() => setAdminTab('products')}
-              className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center justify-between transition-colors cursor-pointer ${
-                adminTab === 'products' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl flex items-center justify-between transition-colors cursor-pointer ${
+                adminTab === 'products' ? 'bg-[#111827] text-white' : 'hover:bg-[#faf9f7] hover:text-[#111827]'
               }`}
             >
-              <div className="flex items-center space-x-2.5">
-                <Package className="w-4 h-4" />
-                <span>{t('পণ্য তালিকা ও স্টক', 'Products Catalog')}</span>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Package className="w-4 h-4 shrink-0" />
+                <span className="truncate">{t('পণ্য তালিকা ও স্টক', 'Products Catalog')}</span>
               </div>
-              <span className="text-[10px] text-gray-400 font-mono">({products.length})</span>
+              <span className="text-[11px] opacity-60 font-mono tabular-nums shrink-0">{products.length}</span>
             </button>
           )}
 
-          {/* 6. Inventory Low Stock Alerts (Manager, Admin, Super Admin) */}
+          {/* 6. Inventory Low Stock Alerts */}
           {ROLE_PERMITTED_TABS[currentRole].includes('inventory') && (
             <button
               onClick={() => setAdminTab('inventory')}
-              className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center justify-between transition-colors cursor-pointer ${
-                adminTab === 'inventory' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl flex items-center justify-between transition-colors cursor-pointer ${
+                adminTab === 'inventory' ? 'bg-[#111827] text-white' : 'hover:bg-[#faf9f7] hover:text-[#111827]'
               }`}
             >
-              <div className="flex items-center space-x-2.5">
-                <AlertTriangle className="w-4 h-4" />
-                <span>{t('লো স্টক সতর্কবার্তা', 'Low Stock Alerts')}</span>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span className="truncate">{t('লো স্টক সতর্কবার্তা', 'Low Stock Alerts')}</span>
               </div>
               {lowStockProducts.length > 0 && (
-                <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-1.5 py-0.5 rounded-full">
+                <span className={`text-[11px] font-bold tabular-nums shrink-0 ${adminTab === 'inventory' ? 'text-[#fb7185]' : 'text-[#b91c1c]'}`}>
                   {lowStockProducts.length}
                 </span>
               )}
             </button>
           )}
 
-          {/* 7. Categories (Manager, Admin, Super Admin) */}
+          {/* 7. Categories */}
           {ROLE_PERMITTED_TABS[currentRole].includes('categories') && (
             <button
               onClick={() => setAdminTab('categories')}
-              className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center space-x-2.5 transition-colors cursor-pointer ${
-                adminTab === 'categories' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl flex items-center gap-2.5 transition-colors cursor-pointer ${
+                adminTab === 'categories' ? 'bg-[#111827] text-white' : 'hover:bg-[#faf9f7] hover:text-[#111827]'
               }`}
             >
-              <Layers className="w-4 h-4" />
-              <span>{t('ক্যাটাগরি ও সাব-ক্যাটাগরি', 'Categories & Brands')}</span>
+              <Layers className="w-4 h-4 shrink-0" />
+              <span className="truncate">{t('ক্যাটাগরি ও ব্র্যান্ডস', 'Categories & Brands')}</span>
             </button>
           )}
 
-          {/* 7b. Complete The Look (Combo Bundles) (Admin, Super Admin) */}
+          {/* 7b. Complete The Look (Combo Bundles) */}
           {ROLE_PERMITTED_TABS[currentRole].includes('bundles') && (
             <button
               onClick={() => setAdminTab('bundles')}
-              className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center justify-between transition-colors cursor-pointer ${
-                adminTab === 'bundles' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl flex items-center gap-2.5 transition-colors cursor-pointer ${
+                adminTab === 'bundles' ? 'bg-[#111827] text-white' : 'hover:bg-[#faf9f7] hover:text-[#111827]'
               }`}
             >
-              <div className="flex items-center space-x-2.5">
-                <Sparkles className="w-4 h-4 text-amber-500" />
-                <span>{t('কম্বো বান্ডেল (Complete The Look)', 'Combo Bundles')}</span>
-              </div>
-              <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-1.5 py-0.2 rounded-full">
-                অফার
-              </span>
+              <Sparkles className="w-4 h-4 shrink-0" />
+              <span className="truncate">{t('কম্বো বান্ডেল', 'Combo Bundles')}</span>
             </button>
           )}
 
-          {/* 7c. Occasions & Need Collections (Admin, Super Admin) */}
+          {/* 7c. Occasions & Need Collections */}
           {ROLE_PERMITTED_TABS[currentRole].includes('occasions') && (
             <button
               onClick={() => setAdminTab('occasions')}
-              className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center justify-between transition-colors cursor-pointer ${
-                adminTab === 'occasions' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl flex items-center gap-2.5 transition-colors cursor-pointer ${
+                adminTab === 'occasions' ? 'bg-[#111827] text-white' : 'hover:bg-[#faf9f7] hover:text-[#111827]'
               }`}
             >
-              <div className="flex items-center space-x-2.5">
-                <Target className="w-4 h-4 text-indigo-500" />
-                <span>{t('উপলক্ষ কালেকশন (Shop By Need)', 'Occasions & Needs')}</span>
-              </div>
-              <span className="bg-indigo-100 text-indigo-900 text-[10px] font-black px-1.5 py-0.2 rounded-full">
-                🎯
-              </span>
+              <Target className="w-4 h-4 shrink-0" />
+              <span className="truncate">{t('উপলক্ষ কালেকশন', 'Occasions & Needs')}</span>
             </button>
           )}
 
-          {/* 8. Customers Directory (Admin, Super Admin) */}
+          {/* 8. Customers Directory */}
           {ROLE_PERMITTED_TABS[currentRole].includes('customers') && (
             <button
               onClick={() => setAdminTab('customers')}
-              className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center space-x-2.5 transition-colors cursor-pointer ${
-                adminTab === 'customers' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl flex items-center gap-2.5 transition-colors cursor-pointer ${
+                adminTab === 'customers' ? 'bg-[#111827] text-white' : 'hover:bg-[#faf9f7] hover:text-[#111827]'
               }`}
             >
-              <Users className="w-4 h-4" />
-              <span>{t('গ্রাহক ডিরেক্টরি', 'Customers Directory')}</span>
+              <Users className="w-4 h-4 shrink-0" />
+              <span className="truncate">{t('গ্রাহক ডিরেক্টরি', 'Customers Directory')}</span>
             </button>
           )}
 
-          {/* 9. Coupons & Discounts (Admin, Super Admin) */}
+          {/* 9. Coupons & Discounts */}
           {ROLE_PERMITTED_TABS[currentRole].includes('coupons') && (
             <button
               onClick={() => setAdminTab('coupons')}
-              className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center space-x-2.5 transition-colors cursor-pointer ${
-                adminTab === 'coupons' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl flex items-center gap-2.5 transition-colors cursor-pointer ${
+                adminTab === 'coupons' ? 'bg-[#111827] text-white' : 'hover:bg-[#faf9f7] hover:text-[#111827]'
               }`}
             >
-              <Tag className="w-4 h-4" />
-              <span>{t('কুপন ও ডিসকাউন্ট', 'Coupons & Deals')}</span>
+              <Tag className="w-4 h-4 shrink-0" />
+              <span className="truncate">{t('কুপন ও ডিসকাউন্ট', 'Coupons & Deals')}</span>
             </button>
           )}
 
-          {/* 10. Delivery & Chattogram Offer (Admin, Super Admin) */}
+          {/* 10. Delivery & Chattogram Offer */}
           {ROLE_PERMITTED_TABS[currentRole].includes('delivery') && (
             <button
               onClick={() => setAdminTab('delivery')}
-              className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center justify-between transition-colors cursor-pointer ${
-                adminTab === 'delivery' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl flex items-center justify-between transition-colors cursor-pointer ${
+                adminTab === 'delivery' ? 'bg-[#111827] text-white' : 'hover:bg-[#faf9f7] hover:text-[#111827]'
               }`}
             >
-              <div className="flex items-center space-x-2.5">
-                <Truck className="w-4 h-4" />
-                <span>{t('ডেলিভারি চার্জ ও চট্টগ্রাম অফার', 'Delivery & Chattogram')}</span>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Truck className="w-4 h-4 shrink-0" />
+                <span className="truncate">{t('ডেলিভারি চার্জ ও অফার', 'Delivery Policies')}</span>
               </div>
               {deliverySettings.chattogramFreeDeliveryOffer && (
-                <span className="bg-amber-400 text-gray-900 text-[9px] font-black px-1.5 py-0.5 rounded-full">
-                  অফার
-                </span>
+                <span className="text-[10px] font-bold text-[#15803d] shrink-0">চালু</span>
               )}
             </button>
           )}
 
-          {/* 11. Reports (Admin, Super Admin Only) */}
+          {/* 11. Reports */}
           {ROLE_PERMITTED_TABS[currentRole].includes('reports') && (
             <button
               onClick={() => setAdminTab('reports')}
-              className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center space-x-2.5 transition-colors cursor-pointer ${
-                adminTab === 'reports' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl flex items-center gap-2.5 transition-colors cursor-pointer ${
+                adminTab === 'reports' ? 'bg-[#111827] text-white' : 'hover:bg-[#faf9f7] hover:text-[#111827]'
               }`}
             >
-              <FileText className="w-4 h-4" />
-              <span>{t('বিক্রয় ও একাউন্টিং রিপোর্ট', 'Sales & Reports')}</span>
+              <FileText className="w-4 h-4 shrink-0" />
+              <span className="truncate">{t('বিক্রয় ও রিপোর্ট', 'Sales & Reports')}</span>
             </button>
           )}
 
-          {/* 11b. Customer Support & Help Center (Super Admin & Admin) */}
+          {/* 11b. Customer Support & Help Center */}
           {ROLE_PERMITTED_TABS[currentRole].includes('helpcenter') && (
             <button
               onClick={() => setAdminTab('helpcenter')}
-              className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center space-x-2.5 transition-colors cursor-pointer ${
-                adminTab === 'helpcenter' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl flex items-center gap-2.5 transition-colors cursor-pointer ${
+                adminTab === 'helpcenter' ? 'bg-[#111827] text-white' : 'hover:bg-[#faf9f7] hover:text-[#111827]'
               }`}
             >
-              <HelpCircle className="w-4 h-4 text-rose-500" />
-              <span>{t('হেল্প সেন্টার ও FAQ কন্ট্রোল', 'Help Center & Support')}</span>
+              <HelpCircle className="w-4 h-4 shrink-0" />
+              <span className="truncate">{t('হেল্প সেন্টার ও FAQ', 'Help Center & FAQ')}</span>
             </button>
           )}
 
-          {/* 11c. Section Management: নিশ্চিন্ত কেনাকাটা ও বিশ্বস্ত ডেলিভারি সেবা */}
+          {/* 11c. Section Management */}
           {ROLE_PERMITTED_TABS[currentRole].includes('trustsection') && (
             <button
               onClick={() => setAdminTab('trustsection')}
-              className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center space-x-2.5 transition-colors cursor-pointer ${
-                adminTab === 'trustsection' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl flex items-center gap-2.5 transition-colors cursor-pointer ${
+                adminTab === 'trustsection' ? 'bg-[#111827] text-white' : 'hover:bg-[#faf9f7] hover:text-[#111827]'
               }`}
             >
-              <ShieldCheck className="w-4 h-4 text-emerald-500" />
-              <span>{t('সেকশন: নিশ্চিন্ত কেনাকাটা', 'Trust Section Editor')}</span>
+              <ShieldCheck className="w-4 h-4 shrink-0" />
+              <span className="truncate">{t('নিশ্চিন্ত কেনাকাটা সেকশন', 'Trust Section Editor')}</span>
             </button>
           )}
 
-          {/* 12. RBAC Roles & Team Matrix (Super Admin Only) */}
+          {/* 12. RBAC Roles & Team Matrix */}
           {ROLE_PERMITTED_TABS[currentRole].includes('roles') && (
             <button
               onClick={() => setAdminTab('roles')}
-              className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center space-x-2.5 transition-colors cursor-pointer ${
-                adminTab === 'roles' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl flex items-center gap-2.5 transition-colors cursor-pointer ${
+                adminTab === 'roles' ? 'bg-[#111827] text-white' : 'hover:bg-[#faf9f7] hover:text-[#111827]'
               }`}
             >
-              <ShieldCheck className="w-4 h-4 text-amber-500" />
-              <span>{t('রোল ও পারমিশন কন্ট্রোল', 'Roles & RBAC Matrix')}</span>
+              <ShieldCheck className="w-4 h-4 shrink-0" />
+              <span className="truncate">{t('রোল ও পারমিশন', 'Roles & RBAC')}</span>
             </button>
           )}
 
-          {/* 13. All Business & Payment Settings (Super Admin Only) */}
+          {/* 13. All Business & Payment Settings */}
           {ROLE_PERMITTED_TABS[currentRole].includes('settings') && (
             <button
               onClick={() => setAdminTab('settings')}
-              className={`w-full text-left px-3.5 py-2.5 rounded-2xl flex items-center space-x-2.5 transition-colors cursor-pointer ${
-                adminTab === 'settings' ? 'bg-rose-600 text-white shadow-xs' : 'hover:bg-gray-100'
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl flex items-center gap-2.5 transition-colors cursor-pointer ${
+                adminTab === 'settings' ? 'bg-[#111827] text-white' : 'hover:bg-[#faf9f7] hover:text-[#111827]'
               }`}
             >
-              <Settings className="w-4 h-4 text-rose-500" />
-              <span>{t('বিজনেস ও পেমেন্ট সেটিংস', 'All Business Settings')}</span>
+              <Settings className="w-4 h-4 shrink-0" />
+              <span className="truncate">{t('বিজনেস ও পেমেন্ট সেটিংস', 'Business Settings')}</span>
             </button>
           )}
-        </div>
+        </aside>
 
         {/* Right Dynamic Tab Content */}
         <div className="md:col-span-9 space-y-6">
@@ -941,32 +865,54 @@ export const AdminPanel: React.FC = () => {
                   </div>
 
                   {/* Search Order input & Super Admin demo cleaner */}
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                     {currentRole === 'SUPER_ADMIN' && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (window.confirm('সকল ডেমো অর্ডার ও ডেমো ডেটা মুছে ফেলতে চান? এটি শুধুমাত্র ডেমো ডেটা ডিলিট করবে, রিয়েল কাস্টমারের কোনো অর্ডার ক্ষতি হবে না।')) {
-                            const res = purgeAllDemoData();
-                            alert(res.message);
-                          }
-                        }}
-                        className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs px-3 py-2 rounded-xl flex items-center space-x-1.5 cursor-pointer transition-colors shrink-0 shadow-2xs"
-                        title="সিস্টেমের সমস্ত ডেমো অর্ডার ডিলিট করুন"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                        <span>{t('ডেমো অর্ডার ক্লিন করুন', 'Purge Demo Data')}</span>
-                      </button>
+                      !confirmOrderPurgeDemo ? (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmOrderPurgeDemo(true)}
+                          className="min-h-[38px] bg-[#faf9f7] hover:bg-[#f3f1ed] text-[#881337] border border-[#e6e3dd] font-semibold text-xs px-3 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors shrink-0"
+                          title="সিস্টেমের সমস্ত ডেমো অর্ডার ডিলিট করুন"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>{t('ডেমো অর্ডার ক্লিন', 'Purge Demo')}</span>
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-1.5 bg-[#fef2f2] border border-[#fecaca] rounded-xl px-2.5 py-1.5">
+                          <span className="text-xs font-semibold text-[#991b1b]">নিশ্চিত?</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const res = purgeAllDemoData();
+                              setConfirmOrderPurgeDemo(false);
+                              setAdminToast({
+                                message: res.message,
+                                type: res.success ? 'success' : 'error',
+                              });
+                            }}
+                            className="bg-[#991b1b] hover:bg-[#7f1d1d] text-white font-semibold text-xs px-2.5 py-1 rounded-lg cursor-pointer"
+                          >
+                            হ্যাঁ
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmOrderPurgeDemo(false)}
+                            className="bg-white border border-[#e6e3dd] text-[#374151] text-xs px-2 py-1 rounded-lg cursor-pointer"
+                          >
+                            না
+                          </button>
+                        </div>
+                      )
                     )}
 
                     <div className="relative w-full sm:w-72">
-                      <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <Search className="w-4 h-4 text-[#6b7280] absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="text"
                         value={orderSearchQuery}
                         onChange={e => setOrderSearchQuery(e.target.value)}
                         placeholder={t('আইডি, নাম, ফোন বা জেলা দিয়ে খুঁজুন...', 'Search ID, name, phone, district...')}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-xs focus:border-rose-500"
+                        className="w-full min-h-[38px] bg-[#faf9f7] border border-[#e6e3dd] rounded-xl pl-9 pr-3 py-2 text-xs text-[#111827] focus:bg-white focus:border-[#881337] focus:outline-hidden"
                       />
                     </div>
                   </div>
@@ -1072,27 +1018,28 @@ export const AdminPanel: React.FC = () => {
                               <span className="font-bold text-gray-900 text-sm">{order.customerName}</span>
                             </div>
 
-                            <div className="space-y-0.5 font-mono text-xs">
-                              <div className="flex items-center space-x-1.5 text-gray-700 font-bold">
-                                <span>📞 {order.phone}</span>
+                            <div className="space-y-0.5 font-mono text-xs tabular-nums">
+                              <div className="flex items-center gap-1.5 text-[#111827] font-semibold">
+                                <Phone className="w-3.5 h-3.5 text-[#6b7280] shrink-0" />
+                                <span>{order.phone}</span>
                               </div>
                               {order.alternativePhone && (
-                                <div className="text-gray-500 text-[11px]">
+                                <div className="text-[#6b7280] text-[11px] pl-5">
                                   <span>Alt: {order.alternativePhone}</span>
                                 </div>
                               )}
                             </div>
 
-                            <p className="text-gray-600 leading-snug text-[11px] pt-1">
-                              📍 <strong className="text-gray-800">{order.address.district}</strong>, {order.address.area}
+                            <p className="text-[#4b5563] leading-relaxed text-[11px] pt-1">
+                              <strong className="text-[#111827]">{order.address.district}</strong> · {order.address.area}
                               <br />
-                              <span className="text-gray-500">{order.address.fullAddress}</span>
+                              <span className="text-[#6b7280]">{order.address.fullAddress}</span>
                             </p>
 
-                            {/* Customer Note alert */}
+                            {/* Customer Note */}
                             {order.customerNote && (
-                              <div className="bg-amber-50 text-amber-900 border border-amber-200 p-2 rounded-xl text-[10px] mt-1 italic">
-                                💬 <strong>গ্রাহকের নোট:</strong> "{order.customerNote}"
+                              <div className="bg-[#faf9f7] text-[#374151] border border-[#e6e3dd] p-2.5 rounded-xl text-[11px] mt-1">
+                                <strong>গ্রাহকের নোট:</strong> "{order.customerNote}"
                               </div>
                             )}
                           </div>
@@ -1357,71 +1304,66 @@ export const AdminPanel: React.FC = () => {
                 </div>
               </div>
 
-              {/* Staff / Manager Role Awareness Banner */}
+              {/* Staff / Manager Role Awareness Notice */}
               {currentRole === 'STAFF' && (
-                <div className="bg-blue-50 border border-blue-200 text-blue-900 rounded-2xl p-3 flex items-center space-x-2 text-xs">
-                  <Eye className="w-4 h-4 text-blue-600 shrink-0" />
+                <div className="bg-[#faf9f7] border border-[#e6e3dd] text-[#374151] rounded-xl p-3 flex items-center gap-2 text-xs">
+                  <Eye className="w-4 h-4 text-[#111827] shrink-0" />
                   <span>
-                    <strong>💼 স্টাফ ভিউ (রিড-অনলি):</strong> কাস্টমার প্রশ্নের উত্তর দিতে স্টক ও মূল্য অনুসন্ধান করুন। পণ্য তৈরি, মূল্য পরিবর্তন বা ডিলিট করার অনুমতি নেই।
+                    <strong>স্টাফ ভিউ (রিড-অনলি):</strong> কাস্টমার প্রশ্নের উত্তর দিতে স্টক ও মূল্য অনুসন্ধান করুন। পণ্য তৈরি বা মূল্য পরিবর্তন অনুমোদিত নয়।
                   </span>
                 </div>
               )}
               {currentRole === 'MANAGER' && (
-                <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-2xl p-3 flex items-center space-x-2 text-xs">
-                  <Package className="w-4 h-4 text-emerald-600 shrink-0" />
+                <div className="bg-[#faf9f7] border border-[#e6e3dd] text-[#374151] rounded-xl p-3 flex items-center gap-2 text-xs">
+                  <Package className="w-4 h-4 text-[#15803d] shrink-0" />
                   <span>
-                    <strong>📋 ম্যানেজার ভিউ:</strong> ক্যাটালগ ও ওয়্যারহাউজ স্টক নিরীক্ষণ। নতুন পণ্য তৈরি, বিক্রয় মূল্য পরিবর্তন ও ডিলিট করা স্টোর এডমিনের ক্ষমতা।
+                    <strong>ম্যানেজার ভিউ:</strong> ক্যাটালগ ও ওয়্যারহাউজ স্টক নিরীক্ষণ। নতুন পণ্য তৈরি ও মূল্য পরিবর্তন স্টোর এডমিনের ক্ষমতা।
                   </span>
                 </div>
               )}
 
               {/* Bulk Actions Bar */}
               {(currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN') && selectedProductIds.length > 0 && (
-                <div className="bg-gradient-to-r from-rose-50 via-pink-50 to-amber-50 border border-rose-200 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-fade-in">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 rounded-xl bg-rose-600 text-white flex items-center justify-center font-black text-xs shadow-xs">
+                <div className="bg-[#faf9f7] border border-[#881337]/30 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#881337] text-white flex items-center justify-center font-bold text-xs tabular-nums">
                       {selectedProductIds.length}
                     </div>
                     <div>
-                      <span className="font-extrabold text-xs text-gray-900 block">
-                        {selectedProductIds.length}টি পণ্য নির্বাচিত (Selected Products)
+                      <span className="font-bold text-xs text-[#111827] block tabular-nums">
+                        {selectedProductIds.length}টি পণ্য নির্বাচিত
                       </span>
-                      <span className="text-[11px] text-gray-500">
-                        একসাথে একাধিক পণ্যের মূল্য, স্টক, ক্যাটাগরি এডিট করুন অথবা এক ক্লিকে মুছে ফেলুন
+                      <span className="text-[11px] text-[#6b7280]">
+                        একসাথে একাধিক পণ্যের মূল্য, স্টক, ক্যাটাগরি পরিবর্তন বা মুছে ফেলুন
                       </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-2">
-                    {/* Bulk Edit Button */}
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setShowBulkEditModal(true)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3.5 py-1.5 rounded-xl text-xs flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer"
-                      title="নির্বাচিত সব পণ্যের মূল্য, স্টক বা ক্যাটাগরি একসাথে পরিবর্তন করুন"
+                      className="min-h-[36px] bg-[#111827] hover:bg-black text-white font-semibold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
                       <Sliders className="w-3.5 h-3.5" />
                       <span>বাল্ক এডিট ({selectedProductIds.length})</span>
                     </button>
 
-                    {/* Bulk Delete Button */}
                     <button
                       type="button"
                       onClick={() => setShowBulkDeleteModal(true)}
-                      className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-3.5 py-1.5 rounded-xl text-xs flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer"
-                      title="নির্বাচিত সব পণ্য একসাথে মুছে ফেলুন"
+                      className="min-h-[36px] bg-[#881337] hover:bg-[#6d0f2c] text-white font-semibold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>বাল্ক ডিলিট ({selectedProductIds.length})</span>
                     </button>
 
-                    {/* Clear selection */}
                     <button
                       type="button"
                       onClick={handleClearSelection}
-                      className="bg-white hover:bg-gray-100 text-gray-600 font-bold px-3 py-1.5 rounded-xl text-xs border border-gray-200 transition-colors cursor-pointer"
+                      className="min-h-[36px] bg-white hover:bg-[#f3f1ed] text-[#374151] font-semibold px-3 py-1.5 rounded-xl text-xs border border-[#e6e3dd] transition-colors cursor-pointer"
                     >
-                      নির্বাচন বাতিল
+                      বাতিল
                     </button>
                   </div>
                 </div>
@@ -1429,8 +1371,8 @@ export const AdminPanel: React.FC = () => {
 
               {/* Table */}
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border border-gray-100 rounded-2xl overflow-hidden">
-                  <thead className="bg-gray-50 text-gray-500 border-b border-gray-200 font-bold uppercase text-[10px]">
+                <table className="w-full text-left text-xs border border-[#e6e3dd] rounded-xl overflow-hidden">
+                  <thead className="bg-[#faf9f7] text-[#6b7280] border-b border-[#e6e3dd] font-semibold text-[11px]">
                     <tr>
                       {(currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN') && (
                         <th className="py-2.5 px-3 w-10 text-center">
@@ -1465,26 +1407,26 @@ export const AdminPanel: React.FC = () => {
                                 );
                               }
                             }}
-                            className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 cursor-pointer accent-rose-600"
+                            className="w-4 h-4 rounded text-[#881337] focus:ring-[#881337] cursor-pointer accent-[#881337]"
                             title="সবগুলো ফিল্টার্ড পণ্য নির্বাচন করুন"
                           />
                         </th>
                       )}
-                      <th className="py-2.5 px-3">Product</th>
+                      <th className="py-2.5 px-3">পণ্য</th>
                       <th className="py-2.5 px-3">SKU</th>
-                      <th className="py-2.5 px-3">Category</th>
-                      <th className="py-2.5 px-3">Price</th>
-                      <th className="py-2.5 px-3">Stock</th>
-                      <th className="py-2.5 px-3 text-right">Actions</th>
+                      <th className="py-2.5 px-3">ক্যাটাগরি</th>
+                      <th className="py-2.5 px-3">মূল্য</th>
+                      <th className="py-2.5 px-3">স্টক</th>
+                      <th className="py-2.5 px-3 text-right">অ্যাকশন</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-[#f3f1ed]">
                     {filteredProducts.map(p => {
                       const isSelected = selectedProductIds.includes(p.id);
                       return (
                         <tr
                           key={p.id}
-                          className={isSelected ? 'bg-rose-50/70 border-l-4 border-rose-500 transition-colors' : 'hover:bg-gray-50/50 transition-colors'}
+                          className={isSelected ? 'bg-[#881337]/5 transition-colors' : 'hover:bg-[#faf9f7] transition-colors'}
                         >
                           {(currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN') && (
                             <td className="py-2.5 px-3 text-center">
@@ -1492,46 +1434,87 @@ export const AdminPanel: React.FC = () => {
                                 type="checkbox"
                                 checked={isSelected}
                                 onChange={() => handleToggleSelectProduct(p.id)}
-                                className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 cursor-pointer accent-rose-600"
+                                className="w-4 h-4 rounded text-[#881337] focus:ring-[#881337] cursor-pointer accent-[#881337]"
                               />
                             </td>
                           )}
                           <td className="py-2.5 px-3">
-                            <div className="flex items-center space-x-2.5">
-                              <img src={p.images[0]} alt={p.name} className="w-10 h-10 object-cover rounded-xl shrink-0" />
+                            <div className="flex items-center gap-2.5">
+                              {p.images?.[0] ? (
+                                <img
+                                  src={p.images[0]}
+                                  alt={p.name}
+                                  referrerPolicy="no-referrer"
+                                  className="w-10 h-10 object-cover rounded-lg border border-[#e6e3dd] shrink-0 bg-[#faf9f7]"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-lg bg-[#faf9f7] border border-[#e6e3dd] flex items-center justify-center text-[#9ca3af] shrink-0">
+                                  <Package className="w-4 h-4" />
+                                </div>
+                              )}
                               <div className="min-w-0">
-                                <span className="font-bold text-gray-900 block truncate max-w-xs">{p.name}</span>
-                                <span className="text-[10px] text-gray-500">{p.nameBn}</span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-semibold text-[#111827] block truncate max-w-[200px]">{p.name}</span>
+                                  <span className="text-[11px] text-[#6b7280]">·</span>
+                                  <span className={`text-[11px] font-medium ${p.isPublished === false ? 'text-[#6b7280]' : 'text-[#15803d]'}`}>
+                                    {p.isPublished === false ? 'লুকানো' : 'লাইভ'}
+                                  </span>
+                                </div>
+                                <span className="text-[11px] text-[#6b7280]">{p.nameBn}</span>
                               </div>
                             </div>
                           </td>
-                          <td className="py-2.5 px-3 font-mono font-bold text-gray-500">{p.sku}</td>
-                          <td className="py-2.5 px-3">{p.category}</td>
-                          <td className="py-2.5 px-3 font-bold text-rose-600">{formatPrice(p.price)}</td>
-                          <td className="py-2.5 px-3">
+                          <td className="py-2.5 px-3 font-mono font-medium text-[#6b7280] tabular-nums">{p.sku}</td>
+                          <td className="py-2.5 px-3 text-[#374151]">{p.category}</td>
+                          <td className="py-2.5 px-3 font-bold text-[#111827] tabular-nums">{formatPrice(p.price)}</td>
+                          <td className="py-2.5 px-3 tabular-nums">
                             <span
-                              className={`font-black ${
-                                p.stock <= p.lowStockThreshold ? 'text-rose-600 bg-rose-50 px-2 py-0.5 rounded' : 'text-gray-900'
+                              className={`font-semibold ${
+                                p.stock <= p.lowStockThreshold ? 'text-[#b91c1c]' : 'text-[#111827]'
                               }`}
                             >
-                              {p.stock} pcs
+                              {p.stock} পিস
                             </span>
                           </td>
                           <td className="py-2.5 px-3 text-right">
-                            <div className="flex items-center justify-end space-x-1.5">
+                            <div className="flex items-center justify-end gap-1.5">
                               {(currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN') && (
                                 <>
                                   <button
+                                    onClick={async () => {
+                                      const nextPublished = !(p.isPublished !== false);
+                                      const res = await updateProduct({ ...p, isPublished: nextPublished });
+                                      if (res.success) {
+                                        setAdminToast({
+                                          message: nextPublished
+                                            ? `"${p.nameBn || p.name}" স্টোরে প্রকাশিত হয়েছে।`
+                                            : `"${p.nameBn || p.name}" স্টোর থেকে লুকানো হয়েছে।`,
+                                          type: 'success',
+                                        });
+                                      } else {
+                                        setAdminToast({ message: `ত্রুটি: ${res.error}`, type: 'error' });
+                                      }
+                                    }}
+                                    className={`p-1.5 rounded-lg border border-transparent cursor-pointer transition-colors ${
+                                      p.isPublished === false
+                                        ? 'text-[#6b7280] hover:bg-[#f3f1ed]'
+                                        : 'text-[#15803d] hover:bg-[#f0fdf4]'
+                                    }`}
+                                    title={p.isPublished === false ? 'স্টোরে প্রকাশ করুন' : 'স্টোর থেকে লুকান'}
+                                  >
+                                    {p.isPublished === false ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                  </button>
+                                  <button
                                     onClick={() => setProductToEdit(p)}
-                                    className="p-1.5 rounded-xl text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-200 cursor-pointer transition-colors shadow-2xs"
-                                    title="পণ্য সম্পাদনা করুন (Edit Product Details)"
+                                    className="p-1.5 rounded-lg text-[#111827] hover:bg-[#faf9f7] border border-transparent hover:border-[#e6e3dd] cursor-pointer transition-colors"
+                                    title="পণ্য সম্পাদনা করুন"
                                   >
                                     <Edit className="w-4 h-4" />
                                   </button>
                                   <button
                                     onClick={() => setProductToDelete(p)}
-                                    className="p-1.5 rounded-xl text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 cursor-pointer transition-colors shadow-2xs"
-                                    title="পণ্য মুছে ফেলুন (Delete Product)"
+                                    className="p-1.5 rounded-lg text-[#b91c1c] hover:bg-[#fef2f2] border border-transparent cursor-pointer transition-colors"
+                                    title="পণ্য মুছে ফেলুন"
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </button>
@@ -1539,13 +1522,13 @@ export const AdminPanel: React.FC = () => {
                               )}
 
                               {currentRole === 'MANAGER' && (
-                                <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md font-medium">
+                                <span className="text-[11px] text-[#15803d] font-medium">
                                   ওয়্যারহাউজ ভিউ
                                 </span>
                               )}
 
                               {currentRole === 'STAFF' && (
-                                <span className="text-[10px] text-gray-400 italic">লুকআপ অনলি</span>
+                                <span className="text-[11px] text-[#6b7280]">লুকআপ অনলি</span>
                               )}
                             </div>
                           </td>
@@ -1560,31 +1543,42 @@ export const AdminPanel: React.FC = () => {
 
           {/* TAB: INVENTORY & LOW STOCK */}
           {adminTab === 'inventory' && (
-            <div className="bg-white rounded-3xl p-6 border border-gray-200 shadow-xs space-y-4 text-xs">
-              <div className="flex items-center space-x-2 text-rose-600">
+            <div className="bg-white rounded-2xl p-6 border border-[#e6e3dd] space-y-4 text-xs">
+              <div className="flex items-center gap-2 text-[#b91c1c]">
                 <AlertTriangle className="w-5 h-5" />
-                <h3 className="font-extrabold text-base text-gray-900">
-                  লো স্টক ইনভেন্টরি এলার্ট (৫টি বা তার কম বাকি)
+                <h3 className="font-bold text-base text-[#111827]">
+                  লো স্টক ইনভেন্টরি অ্যালার্ট (৫টি বা তার কম বাকি)
                 </h3>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {lowStockProducts.map(p => (
-                  <div key={p.id} className="p-4 bg-rose-50/70 border border-rose-200 rounded-2xl flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <img src={p.images[0]} alt={p.name} className="w-12 h-12 object-cover rounded-xl" />
-                      <div>
-                        <h4 className="font-bold text-gray-900 line-clamp-1">{p.name}</h4>
-                        <span className="text-[10px] text-gray-500 font-mono">SKU: {p.sku}</span>
-                        <div className="text-rose-600 font-black mt-0.5">⚠️ মাত্র {p.stock}টি স্টকে বাকি</div>
+                  <div key={p.id} className="p-4 bg-[#fef2f2]/60 border border-[#fecaca] rounded-xl flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {p.images?.[0] ? (
+                        <img
+                          src={p.images[0]}
+                          alt={p.name}
+                          referrerPolicy="no-referrer"
+                          className="w-12 h-12 object-cover rounded-xl border border-[#fecaca] shrink-0 bg-white"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-xl bg-white border border-[#fecaca] flex items-center justify-center text-[#b91c1c] shrink-0">
+                          <Package className="w-5 h-5" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-[#111827] truncate">{p.name}</h4>
+                        <span className="text-[11px] text-[#6b7280] font-mono tabular-nums block">SKU: {p.sku}</span>
+                        <div className="text-[#b91c1c] font-bold mt-0.5 tabular-nums">মাত্র {p.stock}টি স্টকে বাকি</div>
                       </div>
                     </div>
 
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       {(currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN') && (
                         <button
                           onClick={() => setProductToEdit(p)}
-                          className="bg-white hover:bg-blue-50 border border-blue-200 text-blue-700 font-bold px-2.5 py-1.5 rounded-xl cursor-pointer transition-colors text-xs flex items-center space-x-1"
+                          className="bg-white hover:bg-[#faf9f7] border border-[#e6e3dd] text-[#111827] font-semibold px-2.5 py-1.5 rounded-xl cursor-pointer transition-colors text-xs flex items-center gap-1"
                           title="পণ্য সম্পাদনা করুন"
                         >
                           <Edit className="w-3.5 h-3.5" />
@@ -1592,19 +1586,27 @@ export const AdminPanel: React.FC = () => {
                         </button>
                       )}
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           const nextVariantStocks = p.variantStocks ? { ...p.variantStocks } : undefined;
                           if (nextVariantStocks) {
                             Object.keys(nextVariantStocks).forEach(k => {
                               nextVariantStocks[k] = (nextVariantStocks[k] || 0) + 20;
                             });
                           }
-                          updateProduct({ ...p, stock: p.stock + 20, variantStocks: nextVariantStocks });
-                          setAdminToast({ message: `"${p.name}" স্টকে ২০টি যোগ করা হয়েছে!`, type: 'success' });
+                          const res = await updateProduct({
+                            ...p,
+                            stock: p.stock + 20,
+                            variantStocks: nextVariantStocks,
+                          });
+                          if (res.success) {
+                            setAdminToast({ message: `"${p.name}" স্টকে ২০টি যোগ করা হয়েছে!`, type: 'success' });
+                          } else {
+                            setAdminToast({ message: `স্টক আপডেট ব্যর্থ: ${res.error}`, type: 'error' });
+                          }
                         }}
-                        className="bg-white hover:bg-rose-600 hover:text-white border border-rose-300 text-rose-700 font-bold px-3 py-1.5 rounded-xl cursor-pointer transition-colors shadow-xs"
+                        className="bg-[#881337] hover:bg-[#6d0f2c] text-white font-semibold px-3 py-1.5 rounded-xl cursor-pointer transition-colors tabular-nums"
                       >
-                        +২০ যোগ করুন
+                        +২০ যোগ
                       </button>
                     </div>
                   </div>
@@ -1647,43 +1649,193 @@ export const AdminPanel: React.FC = () => {
           )}
 
           {/* TAB: CUSTOMERS */}
-          {adminTab === 'customers' && (
-            <div className="bg-white rounded-3xl p-6 border border-gray-200 shadow-xs space-y-4 text-xs">
-              <h3 className="font-extrabold text-base text-gray-900">গ্রাহক ডিরেক্টরি ও যোগাযোগ</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border border-gray-100 rounded-2xl overflow-hidden">
-                  <thead className="bg-gray-50 text-gray-500 border-b border-gray-200 uppercase text-[10px] font-bold">
-                    <tr>
-                      <th className="py-2.5 px-3">Customer</th>
-                      <th className="py-2.5 px-3">Phone</th>
-                      <th className="py-2.5 px-3">District</th>
-                      <th className="py-2.5 px-3">Total Orders</th>
-                      <th className="py-2.5 px-3">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {orders.map((o, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50/50">
-                        <td className="py-2.5 px-3 font-bold text-gray-900">{o.customerName}</td>
-                        <td className="py-2.5 px-3 font-mono text-gray-600">{o.phone}</td>
-                        <td className="py-2.5 px-3">{o.address.district}</td>
-                        <td className="py-2.5 px-3 font-bold text-rose-600">{formatPrice(o.totalAmount)}</td>
-                        <td className="py-2.5 px-3">
-                          <button
-                            onClick={() => openWhatsAppCustomer(o)}
-                            className="text-green-600 font-bold hover:underline cursor-pointer flex items-center space-x-1"
-                          >
-                            <MessageCircle className="w-3.5 h-3.5" />
-                            <span>WhatsApp</span>
-                          </button>
-                        </td>
+          {adminTab === 'customers' && (() => {
+            // Merge registered customer accounts with aggregated order metrics
+            const customerRows = registeredCustomers.map(c => {
+              const cOrders = orders.filter(
+                o =>
+                  o.customerUid === c.id ||
+                  (c.phone && o.phone === c.phone) ||
+                  (c.email && o.email && o.email.toLowerCase() === c.email.toLowerCase())
+              );
+              const totalSpent = cOrders
+                .filter(o => o.status !== 'Cancelled')
+                .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+              return {
+                id: c.id,
+                name: c.name,
+                phone: c.phone,
+                email: c.email,
+                isRegistered: true,
+                status: c.status || 'active',
+                createdAt: c.createdAt,
+                orderCount: cOrders.length,
+                totalSpent,
+                district: cOrders[0]?.address?.district || '—',
+                sampleOrder: cOrders[0],
+              };
+            });
+
+            // Append guest customers from orders who do not match any registered profile
+            const seenKeys = new Set<string>();
+            customerRows.forEach(r => {
+              if (r.phone) seenKeys.add(r.phone.replace(/\D/g, ''));
+              if (r.email) seenKeys.add(r.email.toLowerCase());
+            });
+            const guestMap = new Map<string, typeof customerRows[number]>();
+            orders.forEach(o => {
+              const cleanPh = (o.phone || '').replace(/\D/g, '');
+              const cleanEm = (o.email || '').toLowerCase();
+              if ((cleanPh && seenKeys.has(cleanPh)) || (cleanEm && seenKeys.has(cleanEm))) return;
+              const key = cleanPh || cleanEm || o.id;
+              const existing = guestMap.get(key);
+              if (existing) {
+                existing.orderCount += 1;
+                if (o.status !== 'Cancelled') existing.totalSpent += o.totalAmount || 0;
+              } else {
+                guestMap.set(key, {
+                  id: `guest-${key}`,
+                  name: o.customerName,
+                  phone: o.phone,
+                  email: o.email || '',
+                  isRegistered: false,
+                  status: 'active',
+                  createdAt: o.orderDate,
+                  orderCount: 1,
+                  totalSpent: o.status !== 'Cancelled' ? o.totalAmount || 0 : 0,
+                  district: o.address?.district || '—',
+                  sampleOrder: o,
+                });
+              }
+            });
+
+            const allCustomers = [...customerRows, ...Array.from(guestMap.values())];
+
+            return (
+              <div className="bg-white rounded-3xl p-6 border border-gray-200 shadow-xs space-y-4 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="font-extrabold text-base text-gray-900">গ্রাহক ডিরেক্টরি ও অ্যাকাউন্ট নিয়ন্ত্রণ</h3>
+                    <p className="text-[11px] text-gray-500">
+                      মোট {registeredCustomers.length} জন নিবন্ধিত কাস্টমার এবং {guestMap.size} জন গেস্ট অর্ডারকারী
+                    </p>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border border-gray-100 rounded-2xl overflow-hidden">
+                    <thead className="bg-gray-50 text-gray-500 border-b border-gray-200 uppercase text-[10px] font-bold">
+                      <tr>
+                        <th className="py-2.5 px-3">Customer</th>
+                        <th className="py-2.5 px-3">Contact</th>
+                        <th className="py-2.5 px-3">District</th>
+                        <th className="py-2.5 px-3">Orders / Spent</th>
+                        <th className="py-2.5 px-3">Status</th>
+                        <th className="py-2.5 px-3 text-right">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {allCustomers.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-gray-400 font-semibold">
+                            এখনো কোনো গ্রাহকের তথ্য পাওয়া যায়নি।
+                          </td>
+                        </tr>
+                      ) : (
+                        allCustomers.map(c => (
+                          <tr key={c.id} className="hover:bg-gray-50/50">
+                            <td className="py-2.5 px-3">
+                              <span className="font-bold text-gray-900 block">{c.name}</span>
+                              <span className="text-[10px] text-gray-400">
+                                {c.isRegistered ? 'নিবন্ধিত অ্যাকাউন্ট' : 'গেস্ট অর্ডার'}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              {c.phone && <span className="font-mono text-gray-700 block">{c.phone}</span>}
+                              {c.email && <span className="text-[10px] text-gray-500 block">{c.email}</span>}
+                            </td>
+                            <td className="py-2.5 px-3">{c.district}</td>
+                            <td className="py-2.5 px-3">
+                              <span className="font-bold text-gray-900">{c.orderCount} টি</span>
+                              <span className="text-rose-600 font-bold ml-1.5">({formatPrice(c.totalSpent)})</span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              {c.isRegistered ? (
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                    c.status === 'disabled'
+                                      ? 'bg-rose-100 text-rose-700'
+                                      : 'bg-emerald-100 text-emerald-700'
+                                  }`}
+                                >
+                                  {c.status === 'disabled' ? 'নিষ্ক্রিয় (Disabled)' : 'সক্রিয় (Active)'}
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-600">
+                                  Guest
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              <div className="flex items-center justify-end space-x-2">
+                                {c.phone && (
+                                  <button
+                                    onClick={() =>
+                                      openWhatsAppCustomer(
+                                        c.sampleOrder ||
+                                          ({
+                                            id: 'SUPPORT',
+                                            customerName: c.name,
+                                            phone: c.phone,
+                                            totalAmount: c.totalSpent,
+                                          } as Order)
+                                      )
+                                    }
+                                    className="text-green-600 font-bold hover:underline cursor-pointer flex items-center space-x-1"
+                                  >
+                                    <MessageCircle className="w-3.5 h-3.5" />
+                                    <span>WhatsApp</span>
+                                  </button>
+                                )}
+                                {c.isRegistered && (currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN') && (
+                                  <button
+                                    onClick={async () => {
+                                      const nextStatus = c.status === 'disabled' ? 'active' : 'disabled';
+                                      const res = await updateCustomerStatus(c.id, nextStatus);
+                                      if (res.success) {
+                                        setAdminToast({
+                                          message:
+                                            nextStatus === 'disabled'
+                                              ? `"${c.name}"-এর অ্যাকাউন্ট নিষ্ক্রিয় করা হয়েছে।`
+                                              : `"${c.name}"-এর অ্যাকাউন্ট পুনরায় সক্রিয় করা হয়েছে।`,
+                                          type: 'success',
+                                        });
+                                      } else {
+                                        setAdminToast({
+                                          message: `স্ট্যাটাস পরিবর্তন ব্যর্থ: ${res.error || 'Firebase ত্রুটি'}`,
+                                          type: 'error',
+                                        });
+                                      }
+                                    }}
+                                    className={`px-2.5 py-1 rounded-xl font-bold cursor-pointer transition-colors text-[10px] border ${
+                                      c.status === 'disabled'
+                                        ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                                        : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                                    }`}
+                                  >
+                                    {c.status === 'disabled' ? 'সক্রিয় করুন' : 'নিষ্ক্রিয় করুন'}
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* TAB: COUPONS */}
           {adminTab === 'coupons' && (
@@ -1710,7 +1862,14 @@ export const AdminPanel: React.FC = () => {
                     </div>
                     {hasPermission('coupons', 'delete') && (
                       <button
-                        onClick={() => deleteCoupon(c.code)}
+                        onClick={async () => {
+                          const res = await deleteCoupon(c.code);
+                          if (res.success) {
+                            setAdminToast({ message: `কুপন "${c.code}" মুছে ফেলা হয়েছে!`, type: 'success' });
+                          } else {
+                            setAdminToast({ message: `কুপন ডিলিট ব্যর্থ: ${res.error}`, type: 'error' });
+                          }
+                        }}
                         className="text-gray-400 hover:text-rose-600 p-1 cursor-pointer"
                         title="কুপন মুছুন"
                       >
@@ -1771,42 +1930,42 @@ export const AdminPanel: React.FC = () => {
               .sort((a, b) => b.amount - a.amount);
 
             return (
-              <div className="bg-white rounded-3xl p-6 border border-gray-200 shadow-xs space-y-5 text-xs">
+              <div className="bg-white rounded-2xl p-6 border border-[#e6e3dd] space-y-5 text-xs">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-extrabold text-base text-gray-900">বিক্রয় পারফরম্যান্স ও রিপোর্ট</h3>
-                    <p className="text-gray-500 text-xs">বাস্তব অর্ডার অনুযায়ী ক্যাটাগরি ভিত্তিক বিক্রয় ও রাজস্ব বিশ্লেষণ</p>
+                    <h3 className="font-bold text-base text-[#111827]">বিক্রয় পারফরম্যান্স ও রিপোর্ট</h3>
+                    <p className="text-[#6b7280] text-xs">বাস্তব অর্ডার অনুযায়ী ক্যাটাগরি ভিত্তিক বিক্রয় ও রাজস্ব বিশ্লেষণ</p>
                   </div>
                   <button
                     onClick={handleExportCSV}
-                    className="bg-gray-900 hover:bg-black text-white font-bold px-3.5 py-2 rounded-xl flex items-center space-x-1.5 cursor-pointer"
+                    className="bg-[#111827] hover:bg-black text-white font-semibold px-3.5 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer"
                   >
                     <Download className="w-4 h-4" />
-                    <span>Download Full CSV</span>
+                    <span>CSV ডাউনলোড</span>
                   </button>
                 </div>
 
                 <div className="space-y-3">
-                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  <h4 className="text-xs font-semibold text-[#6b7280]">
                     ক্যাটাগরি ভিত্তিক প্রকৃত বিক্রয়:
                   </h4>
                   {categoryStats.length === 0 ? (
-                    <div className="py-8 text-center border-2 border-dashed border-gray-200 rounded-2xl">
-                      <p className="text-sm font-bold text-gray-600">কোনো সম্পন্ন বা সক্রিয় অর্ডারের ডেটা নেই</p>
-                      <p className="text-xs text-gray-400 mt-1">কাস্টমার অর্ডার প্লেস করলে স্বয়ংক্রিয়ভাবে পরিসংখ্যান আপডেট হবে।</p>
+                    <div className="py-8 text-center border border-dashed border-[#e6e3dd] rounded-2xl">
+                      <p className="text-sm font-bold text-[#374151]">কোনো সম্পন্ন বা সক্রিয় অর্ডারের ডেটা নেই</p>
+                      <p className="text-xs text-[#6b7280] mt-1">কাস্টমার অর্ডার প্লেস করলে স্বয়ংক্রিয়ভাবে পরিসংখ্যান আপডেট হবে।</p>
                     </div>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-3 tabular-nums">
                       {categoryStats.map((stat, idx) => {
-                        const colors = ['bg-rose-600', 'bg-blue-600', 'bg-amber-500', 'bg-emerald-600', 'bg-purple-600'];
+                        const colors = ['bg-[#881337]', 'bg-[#111827]', 'bg-[#15803d]', 'bg-[#4b5563]', 'bg-[#9f1239]'];
                         const barColor = colors[idx % colors.length];
                         return (
                           <div key={stat.catKey}>
-                            <div className="flex justify-between font-bold mb-1">
+                            <div className="flex justify-between font-semibold mb-1 text-[#111827]">
                               <span>{stat.name}</span>
                               <span>{stat.percent}% ({formatPrice(stat.amount)})</span>
                             </div>
-                            <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+                            <div className="w-full bg-[#faf9f7] border border-[#e6e3dd] h-2.5 rounded-full overflow-hidden">
                               <div className={`${barColor} h-full`} style={{ width: `${stat.percent}%` }} />
                             </div>
                           </div>
@@ -1832,8 +1991,8 @@ export const AdminPanel: React.FC = () => {
 
       {/* Modal: Add Coupon */}
       {showAddCouponModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl p-6 border border-gray-100 space-y-4 text-xs">
+        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl p-6 border border-[#e6e3dd] space-y-4 text-xs">
             <div className="flex items-center justify-between pb-2 border-b border-gray-100">
               <h3 className="font-extrabold text-base text-gray-900">নতুন কুপন কোড তৈরি</h3>
               <button onClick={() => setShowAddCouponModal(false)} className="text-gray-400 hover:text-gray-900 cursor-pointer">
@@ -1925,12 +2084,22 @@ export const AdminPanel: React.FC = () => {
 
       {/* Admin Toast Notification */}
       {adminToast && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-2.5 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-slate-700 text-xs animate-in slide-in-from-bottom-5">
-          <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+        <div
+          className={`fixed bottom-6 right-6 z-50 flex items-center space-x-2.5 text-white px-4 py-3 rounded-2xl shadow-2xl border text-xs animate-in slide-in-from-bottom-5 ${
+            adminToast.type === 'error'
+              ? 'bg-rose-900 border-rose-700'
+              : 'bg-slate-900 border-slate-700'
+          }`}
+        >
+          {adminToast.type === 'error' ? (
+            <AlertCircle className="w-4 h-4 text-rose-300 shrink-0" />
+          ) : (
+            <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+          )}
           <span className="font-semibold">{adminToast.message}</span>
           <button
             onClick={() => setAdminToast(null)}
-            className="text-gray-400 hover:text-white p-0.5 cursor-pointer ml-1"
+            className="text-gray-300 hover:text-white p-0.5 cursor-pointer ml-1"
           >
             <X className="w-3.5 h-3.5" />
           </button>

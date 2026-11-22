@@ -26,52 +26,56 @@ export const AdminLoginModal: React.FC = () => {
 
   if (!showAdminLoginModal) return null;
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setIsLoading(true);
 
-    setTimeout(() => {
-      const res = adminLogin(identifier, password);
-      setIsLoading(false);
+    try {
+      const res = await adminLogin(identifier, password);
       if (!res.success) {
         setErrorMsg(res.message);
       }
-    }, 250);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'লগইন প্রক্রিয়ায় ত্রুটি হয়েছে।');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
-        {/* Clean Header */}
-        <div className="bg-slate-900 p-5 text-white flex items-center justify-between">
-          <h2 className="text-base font-extrabold text-white">
+    <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl overflow-hidden border border-[#e6e3dd]">
+        {/* Header */}
+        <div className="bg-[#111827] px-5 py-4 text-white flex items-center justify-between">
+          <h2 className="text-base font-bold text-white">
             {t('এডমিন লগইন প্যানেল', 'Admin Login Panel')}
           </h2>
           <button
             onClick={() => setShowAdminLoginModal(false)}
-            className="p-1 rounded-full bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors cursor-pointer"
+            aria-label="বন্ধ করুন"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Form Body */}
         <form onSubmit={handleLogin} autoComplete="off" className="p-6 space-y-4">
           {errorMsg && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-start space-x-2 text-xs text-red-700 animate-in shake duration-200">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+            <div className="p-3 bg-[#fef2f2] border border-[#fecaca] rounded-xl flex items-start gap-2 text-xs text-[#991b1b]">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-[#b91c1c]" />
               <span>{errorMsg}</span>
             </div>
           )}
 
-          {/* ইমেইল বা ইউজারনেম */}
+          {/* Email or Username */}
           <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1.5">
+            <label className="block text-xs font-semibold text-[#111827] mb-1.5">
               {t('ইমেইল বা ইউজারনেম:', 'Email or Username:')}
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
+              <Mail className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 required
@@ -80,18 +84,18 @@ export const AdminLoginModal: React.FC = () => {
                 placeholder="ইমেইল বা ইউজারনেম লিখুন"
                 autoComplete="off"
                 name="admin_modal_identifier"
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-xs text-gray-900 focus:bg-white focus:border-rose-500 focus:ring-1 focus:ring-rose-500 transition-all font-mono"
+                className="w-full min-h-[42px] bg-[#faf9f7] border border-[#e6e3dd] rounded-xl pl-10 pr-4 py-2 text-xs text-[#111827] focus:bg-white focus:border-[#881337] focus:outline-hidden transition-colors font-mono"
               />
             </div>
           </div>
 
-          {/* পাসওয়ার্ড */}
+          {/* Password */}
           <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1.5">
+            <label className="block text-xs font-semibold text-[#111827] mb-1.5">
               {t('পাসওয়ার্ড:', 'Password:')}
             </label>
             <div className="relative">
-              <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
+              <Lock className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
@@ -100,34 +104,33 @@ export const AdminLoginModal: React.FC = () => {
                 placeholder="পাসওয়ার্ড লিখুন"
                 autoComplete="new-password"
                 name="admin_modal_password"
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-10 py-2.5 text-xs text-gray-900 focus:bg-white focus:border-rose-500 focus:ring-1 focus:ring-rose-500 transition-all font-mono"
+                className="w-full min-h-[42px] bg-[#faf9f7] border border-[#e6e3dd] rounded-xl pl-10 pr-10 py-2 text-xs text-[#111827] focus:bg-white focus:border-[#881337] focus:outline-hidden transition-colors font-mono"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 cursor-pointer"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7280] hover:text-[#111827] cursor-pointer p-1"
+                aria-label={showPassword ? 'পাসওয়ার্ড লুকান' : 'পাসওয়ার্ড দেখুন'}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
           </div>
 
-          {/* এডমিন প্যানেলে প্রবেশ করুন */}
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 rounded-2xl flex items-center justify-center space-x-2 cursor-pointer shadow-lg shadow-rose-600/25 hover:shadow-rose-600/35 active:scale-[0.99] transition-all disabled:opacity-70 mt-2"
+            className="w-full min-h-[42px] bg-[#881337] hover:bg-[#6d0f2c] text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-colors disabled:opacity-70 mt-2"
           >
             {isLoading ? (
               <span className="text-xs">{t('যাচাই করা হচ্ছে...', 'Verifying...')}</span>
             ) : (
               <>
                 <LogIn className="w-4 h-4" />
-                <span className="text-xs font-black">{t('এডমিন প্যানেলে প্রবেশ করুন', 'Enter Admin Panel')}</span>
+                <span className="text-xs font-semibold">{t('এডমিন প্যানেলে প্রবেশ করুন', 'Enter Admin Panel')}</span>
               </>
             )}
           </button>
-
         </form>
       </div>
     </div>

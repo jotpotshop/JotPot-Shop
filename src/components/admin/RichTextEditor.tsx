@@ -116,55 +116,55 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       {/* Header & Tabs */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1">
         {label && (
-          <label className="block font-bold text-gray-800 text-xs">
+          <label className="block font-semibold text-[#111827] text-xs">
             {label}
           </label>
         )}
-        <div className="flex items-center space-x-1 self-end sm:self-auto bg-gray-100 p-0.5 rounded-xl border border-gray-200">
+        <div className="flex items-center gap-1 self-end sm:self-auto bg-[#faf9f7] p-1 rounded-xl border border-[#e6e3dd]">
           <button
             type="button"
             onClick={() => setActiveTab('visual')}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center space-x-1 cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors flex items-center gap-1 cursor-pointer ${
               activeTab === 'visual'
-                ? 'bg-white text-gray-900 shadow-xs'
-                : 'text-gray-500 hover:text-gray-900'
+                ? 'bg-[#111827] text-white'
+                : 'text-[#6b7280] hover:text-[#111827]'
             }`}
           >
-            <Edit3 className="w-3 h-3 text-rose-600" />
+            <Edit3 className="w-3 h-3" />
             <span>এডিটর</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('preview')}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center space-x-1 cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors flex items-center gap-1 cursor-pointer ${
               activeTab === 'preview'
-                ? 'bg-white text-gray-900 shadow-xs'
-                : 'text-gray-500 hover:text-gray-900'
+                ? 'bg-[#111827] text-white'
+                : 'text-[#6b7280] hover:text-[#111827]'
             }`}
           >
-            <Eye className="w-3 h-3 text-blue-600" />
+            <Eye className="w-3 h-3" />
             <span>প্রিভিউ</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('html')}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center space-x-1 cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors flex items-center gap-1 cursor-pointer ${
               activeTab === 'html'
-                ? 'bg-white text-gray-900 shadow-xs'
-                : 'text-gray-500 hover:text-gray-900'
+                ? 'bg-[#111827] text-white'
+                : 'text-[#6b7280] hover:text-[#111827]'
             }`}
           >
-            <Code className="w-3 h-3 text-emerald-600" />
+            <Code className="w-3 h-3" />
             <span>HTML</span>
           </button>
         </div>
       </div>
 
       {/* Editor Box */}
-      <div className="border border-gray-200 rounded-2xl bg-white overflow-hidden shadow-2xs focus-within:border-rose-500 focus-within:ring-1 focus-within:ring-rose-500/20 transition-all">
+      <div className="border border-[#e6e3dd] rounded-xl bg-white overflow-hidden focus-within:border-[#881337] transition-colors">
         {/* Toolbar (Visible when Visual tab is active) */}
         {activeTab === 'visual' && (
-          <div className="bg-gray-50/90 border-b border-gray-200 p-1.5 flex flex-wrap items-center gap-1 text-gray-700 select-none">
+          <div className="bg-[#faf9f7] border-b border-[#e6e3dd] p-1.5 flex flex-wrap items-center gap-1 text-[#374151] select-none">
             {/* Bold */}
             <button
               type="button"
@@ -352,21 +352,20 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         )}
 
         {/* Bottom bar with stats & guide */}
-        <div className="px-3 py-1.5 bg-gray-50/80 border-t border-gray-100 flex items-center justify-between text-[10px] text-gray-500">
-          <div className="flex items-center space-x-2">
+        <div className="px-3 py-1.5 bg-[#faf9f7] border-t border-[#e6e3dd] flex items-center justify-between text-[11px] text-[#6b7280] tabular-nums">
+          <div className="flex items-center gap-2">
             <span>{charCount} অক্ষর</span>
-            <span>•</span>
+            <span aria-hidden="true">·</span>
             <span>{wordCount} শব্দ</span>
           </div>
-          <div className="flex items-center space-x-1.5 text-gray-400">
-            <Sparkles className="w-3 h-3 text-amber-500" />
+          <div className="flex items-center gap-1.5 text-[#6b7280]">
             <span>বাংলা ও ইংরেজি ইউনিকোড সমর্থিত</span>
           </div>
         </div>
       </div>
 
       {helperText && (
-        <p className="text-[10px] text-gray-500">{helperText}</p>
+        <p className="text-xs text-[#6b7280]">{helperText}</p>
       )}
 
       {/* Editor Styles */}
@@ -378,7 +377,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         }
         .rich-editor-content h2, .rich-description-preview h2 {
           font-size: 1rem;
-          font-weight: 800;
+          font-weight: 700;
           color: #111827;
           margin-top: 0.75rem;
           margin-bottom: 0.35rem;
@@ -391,7 +390,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           margin-bottom: 0.25rem;
         }
         .rich-editor-content p, .rich-description-preview p {
-          margin-bottom: 0.4rem;
+          margin-bottom: 0.45rem;
+          line-height: 1.7;
         }
         .rich-editor-content ul, .rich-description-preview ul {
           list-style-type: disc;
@@ -406,17 +406,18 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           margin-bottom: 0.5rem;
         }
         .rich-editor-content li, .rich-description-preview li {
-          margin-bottom: 0.15rem;
+          margin-bottom: 0.2rem;
+          line-height: 1.65;
         }
         .rich-editor-content blockquote, .rich-description-preview blockquote {
-          border-left: 3px solid #e11d48;
+          border-left: 2px solid #881337;
           padding-left: 0.75rem;
-          color: #4b5563;
+          color: #374151;
           font-style: italic;
           margin: 0.5rem 0;
-          background-color: #fff1f2;
-          padding-top: 0.25rem;
-          padding-bottom: 0.25rem;
+          background-color: #faf9f7;
+          padding-top: 0.3rem;
+          padding-bottom: 0.3rem;
           border-radius: 0 0.5rem 0.5rem 0;
         }
       `}</style>

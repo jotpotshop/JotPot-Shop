@@ -74,13 +74,15 @@ export const CourierManager: React.FC = () => {
   const [consignmentSearch, setConsignmentSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  // Success toast
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  // Success/Error toast
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+  const showToast = (msg: string, explicitType?: 'success' | 'error') => {
+    const inferredType =
+      explicitType || (msg.includes('ব্যর্থ') || msg.includes('সমস্যা') || msg.includes('বিচ্ছিন্ন') ? 'error' : 'success');
+    setToastMessage({ text: msg, type: inferredType });
+    setTimeout(() => setToastMessage(null), 3500);
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -166,7 +168,7 @@ export const CourierManager: React.FC = () => {
           accountBalance: newBalance,
         });
         setLastUpdateFailed(null);
-        showToast(`✅ ব্যালেন্স সফলভাবে রিফ্রেশ হয়েছে: ৳${newBalance.toLocaleString('bn-BD')}`);
+        showToast(`ব্যালেন্স সফলভাবে রিফ্রেশ হয়েছে: ৳${newBalance.toLocaleString('bn-BD')}`, 'success');
       } else {
         // PRESERVE previous successful balance — do NOT wipe to 0 or null!
         updateCourierConfig('Steadfast', {
@@ -174,12 +176,12 @@ export const CourierManager: React.FC = () => {
         });
         const failMessage = result.messageBn || 'ব্যালেন্স আপডেট ব্যর্থ হয়েছে';
         setLastUpdateFailed(failMessage);
-        showToast(`⚠️ সর্বশেষ আপডেট ব্যর্থ: ${failMessage} (পূর্বের ব্যালেন্স অক্ষত রাখা হয়েছে)`);
+        showToast(`সর্বশেষ আপডেট ব্যর্থ: ${failMessage} (পূর্বের ব্যালেন্স অক্ষত রাখা হয়েছে)`, 'error');
       }
     } catch (err: any) {
       const failMessage = err?.message || 'সার্ভারে সংযোগ ব্যর্থ হয়েছে';
       setLastUpdateFailed(failMessage);
-      showToast(`⚠️ ব্যালেন্স রিফ্রেশ ব্যর্থ: ${failMessage}`);
+      showToast(`ব্যালেন্স রিফ্রেশ ব্যর্থ: ${failMessage}`, 'error');
     } finally {
       setIsLiveChecking(false);
     }
@@ -196,9 +198,9 @@ export const CourierManager: React.FC = () => {
         message: res.messageBn || res.message || 'Webhook রেসপন্স এসেছে',
       });
       if (res.success) {
-        showToast(`✅ ${res.messageBn || 'Webhook এন্ডপয়েন্ট সক্রিয় ও সফলভাবে রেসপন্স করেছে!'}`);
+        showToast(`${res.messageBn || 'Webhook এন্ডপয়েন্ট সক্রিয় ও সফলভাবে রেসপন্স করেছে!'}`, 'success');
       } else {
-        showToast(`❌ ${res.messageBn || 'Webhook এন্ডপয়েন্টে সংযোগ ব্যর্থ'}`);
+        showToast(`${res.messageBn || 'Webhook এন্ডপয়েন্টে সংযোগ ব্যর্থ'}`, 'error');
       }
     } catch (err: any) {
       setWebhookTestResult({
@@ -206,7 +208,7 @@ export const CourierManager: React.FC = () => {
         success: false,
         message: err?.message || 'Webhook পিং ব্যর্থ',
       });
-      showToast(`❌ Webhook পিং ব্যর্থ: ${err?.message}`);
+      showToast(`Webhook পিং ব্যর্থ: ${err?.message}`, 'error');
     } finally {
       setPingingWebhook(false);
     }
@@ -228,9 +230,9 @@ export const CourierManager: React.FC = () => {
       });
 
       if (result.success) {
-        showToast(`✅ ${config.nameBn} এপিআই টেস্ট সফল! ব্যালেন্স: ৳${(result.balance || 0).toLocaleString('bn-BD')}`);
+        showToast(`${config.nameBn} এপিআই টেস্ট সফল! ব্যালেন্স: ৳${(result.balance || 0).toLocaleString('bn-BD')}`, 'success');
       } else {
-        showToast(`❌ ${result.messageBn}`);
+        showToast(`${result.messageBn}`, 'error');
       }
     } finally {
       setTestingCourierId(null);
@@ -283,29 +285,39 @@ export const CourierManager: React.FC = () => {
     <div className="space-y-6">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-gray-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center space-x-2.5 text-xs font-bold border border-gray-700 animate-fade-in">
-          <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>{toastMessage}</span>
+        <div
+          className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-2xl shadow-lg flex items-center space-x-2.5 text-xs font-bold border animate-fade-in ${
+            toastMessage.type === 'error'
+              ? 'bg-[#fef2f2] text-[#b91c1c] border-[#fecaca]'
+              : 'bg-[#111827] text-white border-[#1f2937]'
+          }`}
+        >
+          {toastMessage.type === 'error' ? (
+            <AlertCircle className="w-4 h-4 shrink-0 text-[#b91c1c]" />
+          ) : (
+            <CheckCircle className="w-4 h-4 shrink-0 text-emerald-400" />
+          )}
+          <span>{toastMessage.text}</span>
         </div>
       )}
 
       {/* Top Banner & Sub-Tabs */}
-      <div className="bg-white rounded-3xl p-6 border border-gray-200 shadow-xs space-y-4">
+      <div className="bg-white rounded-2xl p-6 border border-[#e6e3dd] space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 text-white flex items-center justify-center shadow-md">
+            <div className="w-12 h-12 rounded-2xl bg-[#111827] text-white flex items-center justify-center shrink-0">
               <Truck className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h2 className="text-lg font-black text-gray-900">
+                <h2 className="text-lg font-bold text-[#111827]">
                   {t('কুরিয়ার সার্ভিস এপিআই ইন্টিগ্রেশন ও লজিস্টিকস হাব', 'Courier Service API Integration & Logistics Hub')}
                 </h2>
-                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase">
+                <span className="bg-[#f0fdf4] border border-[#bbf7d0] text-[#15803d] text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase">
                   Live API
                 </span>
               </div>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-xs text-[#4b5563] mt-0.5 leading-[1.6]">
                 Steadfast, Pathao, RedX, Paperfly, Sundarban ও eCourier-এর অফিসিয়াল API কানেক্ট করুন এবং পার্সেল বুকিং অটোমেট করুন
               </p>
             </div>
@@ -313,9 +325,10 @@ export const CourierManager: React.FC = () => {
 
           {/* Quick Sync Button */}
           <button
+            type="button"
             onClick={handleSyncAllOrders}
             disabled={isSyncingAll}
-            className="flex items-center space-x-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-2xs disabled:opacity-50"
+            className="flex items-center space-x-2 bg-[#faf9f7] text-[#111827] hover:bg-[#e6e3dd]/60 border border-[#e6e3dd] px-4 py-2 min-h-[38px] rounded-xl text-xs font-bold cursor-pointer transition-colors disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isSyncingAll ? 'animate-spin' : ''}`} />
             <span>{isSyncingAll ? 'সিঙ্ক হচ্ছে...' : 'কুরিয়ার স্ট্যাটাস সিঙ্ক'}</span>
@@ -323,13 +336,14 @@ export const CourierManager: React.FC = () => {
         </div>
 
         {/* Sub-Navigation Tabs */}
-        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100">
+        <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-[#e6e3dd]">
           <button
+            type="button"
             onClick={() => setActiveSubTab('configs')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center space-x-2 px-4 py-2 min-h-[38px] rounded-xl text-xs font-bold transition-colors cursor-pointer ${
               activeSubTab === 'configs'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ? 'bg-[#111827] text-white'
+                : 'bg-[#faf9f7] text-[#374151] hover:bg-[#e6e3dd]/60 border border-[#e6e3dd]'
             }`}
           >
             <Key className="w-3.5 h-3.5" />
@@ -337,11 +351,12 @@ export const CourierManager: React.FC = () => {
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveSubTab('guides')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center space-x-2 px-4 py-2 min-h-[38px] rounded-xl text-xs font-bold transition-colors cursor-pointer ${
               activeSubTab === 'guides'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ? 'bg-[#111827] text-white'
+                : 'bg-[#faf9f7] text-[#374151] hover:bg-[#e6e3dd]/60 border border-[#e6e3dd]'
             }`}
           >
             <HelpCircle className="w-3.5 h-3.5" />
@@ -349,11 +364,12 @@ export const CourierManager: React.FC = () => {
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveSubTab('consignments')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center space-x-2 px-4 py-2 min-h-[38px] rounded-xl text-xs font-bold transition-colors cursor-pointer tabular-nums ${
               activeSubTab === 'consignments'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ? 'bg-[#111827] text-white'
+                : 'bg-[#faf9f7] text-[#374151] hover:bg-[#e6e3dd]/60 border border-[#e6e3dd]'
             }`}
           >
             <Package className="w-3.5 h-3.5" />
@@ -363,11 +379,12 @@ export const CourierManager: React.FC = () => {
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveSubTab('analytics')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center space-x-2 px-4 py-2 min-h-[38px] rounded-xl text-xs font-bold transition-colors cursor-pointer ${
               activeSubTab === 'analytics'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ? 'bg-[#111827] text-white'
+                : 'bg-[#faf9f7] text-[#374151] hover:bg-[#e6e3dd]/60 border border-[#e6e3dd]'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
@@ -398,82 +415,77 @@ export const CourierManager: React.FC = () => {
             })();
 
             return (
-              <div className="bg-gradient-to-br from-emerald-900 via-teal-900 to-gray-900 text-white rounded-3xl p-6 sm:p-7 shadow-xl border border-emerald-500/40 relative overflow-hidden">
-                <div className="absolute -right-10 -bottom-10 w-60 h-60 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-
-                <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+              <div className="bg-[#111827] text-white rounded-2xl p-6 sm:p-7 border border-[#1f2937]">
+                <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
                   {/* Left: Status info */}
                   <div className="space-y-3 max-w-2xl">
                     <div className="flex flex-wrap items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center font-black text-sm shadow-md">
+                      <div className="w-10 h-10 rounded-xl bg-[#881337] text-white flex items-center justify-center font-bold text-sm">
                         STF
                       </div>
                       <div>
-                        <div className="flex items-center space-x-2">
-                          <h3 className="text-xl font-black text-white">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-lg font-bold text-white">
                             Steadfast Courier (স্টেডফাস্ট কুরিয়ার)
                           </h3>
                           <span
-                            className={`font-black text-[11px] px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center space-x-1 shadow-xs ${
+                            className={`font-bold text-[11px] px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
                               isConnected
-                                ? 'bg-emerald-400 text-emerald-950'
-                                : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                                ? 'bg-[#f0fdf4] text-[#15803d]'
+                                : 'bg-[#fef2f2] text-[#b91c1c]'
                             }`}
                           >
-                            {isConnected && <span className="w-2 h-2 rounded-full bg-emerald-950 animate-ping inline-block" />}
-                            <span>
-                              {isLiveChecking
-                                ? 'যাচাই হচ্ছে...'
-                                : isConnected
-                                ? 'সফলভাবে সংযুক্ত (CONNECTED)'
-                                : 'সংযোগ বিচ্ছিন্ন / আনকনফিগারড'}
-                            </span>
+                            {isLiveChecking
+                              ? 'যাচাই হচ্ছে...'
+                              : isConnected
+                              ? 'সফলভাবে সংযুক্ত (CONNECTED)'
+                              : 'সংযোগ বিচ্ছিন্ন / আনকনফিগারড'}
                           </span>
                         </div>
-                        <p className="text-xs text-emerald-200 mt-0.5">
+                        <p className="text-xs text-gray-300 mt-0.5 leading-[1.6]">
                           সার্ভার-সাইড API ইন্টিগ্রেশন • সারাদেশে ক্যাশ অন ডেলিভারি (COD) ও হোম ডেলিভারি
                         </p>
                       </div>
                     </div>
 
-                    {/* Stats pills */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 text-xs">
-                      <div className="bg-white/10 backdrop-blur-xs p-2.5 rounded-2xl border border-white/10">
-                        <span className="text-[10px] text-emerald-300 block font-bold uppercase">মার্চেন্ট আইডি</span>
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 text-xs tabular-nums">
+                      <div className="bg-[#1f2937] p-3 rounded-xl border border-white/10">
+                        <span className="text-[10px] text-gray-400 block font-bold uppercase">মার্চেন্ট আইডি</span>
                         <span className="font-mono font-bold text-white text-xs truncate block" title={steadfast.merchantId || 'কনফিগার করা হয়নি'}>
                           {steadfast.merchantId ? steadfast.merchantId : 'সেট করা হয়নি'}
                         </span>
-                        <span className="text-[9px] text-emerald-300/70 block mt-0.5">মার্চেন্ট প্রোফাইল</span>
+                        <span className="text-[9px] text-gray-400 block mt-0.5">মার্চেন্ট প্রোফাইল</span>
                       </div>
 
-                      <div className="bg-white/10 backdrop-blur-xs p-2.5 rounded-2xl border border-white/10">
-                        <span className="text-[10px] text-emerald-300 block font-bold uppercase">লেজার ব্যালেন্স</span>
-                        <span className="font-mono font-black text-amber-300 text-sm">
+                      <div className="bg-[#1f2937] p-3 rounded-xl border border-white/10">
+                        <span className="text-[10px] text-gray-400 block font-bold uppercase">লেজার ব্যালেন্স</span>
+                        <span className="font-mono font-bold text-white text-sm tabular-nums">
                           {formatPrice(steadfast.accountBalance || 0)}
                         </span>
                         {lastUpdateFailed ? (
-                          <span className="text-[9px] text-amber-200 block font-medium mt-0.5 truncate" title={lastUpdateFailed}>
-                            ⚠️ সর্বশেষ আপডেট ব্যর্থ (পূর্বের ব্যালেন্স)
+                          <span className="text-[9px] text-amber-300 block font-medium mt-0.5 truncate" title={lastUpdateFailed}>
+                            সর্বশেষ আপডেট ব্যর্থ (পূর্বের ব্যালেন্স)
                           </span>
                         ) : steadfast.lastConnectedAt ? (
-                          <span className="text-[9px] text-emerald-300/80 block font-medium mt-0.5">
+                          <span className="text-[9px] text-emerald-300 block font-medium mt-0.5 tabular-nums">
                             আপডেট: {steadfast.lastConnectedAt}
                           </span>
                         ) : (
-                          <span className="text-[9px] text-emerald-300/60 block mt-0.5">এখনো রিফ্রেশ হয়নি</span>
+                          <span className="text-[9px] text-gray-400 block mt-0.5">এখনো রিফ্রেশ হয়নি</span>
                         )}
                       </div>
 
-                      <div className="bg-white/10 backdrop-blur-xs p-2.5 rounded-2xl border border-white/10">
-                        <span className="text-[10px] text-emerald-300 block font-bold uppercase">মোট পার্সেল</span>
-                        <span className="font-bold text-white text-xs">{assignedOrders.length}টি ({deliveredCount} ডেলিভার্ড)</span>
-                        <span className="text-[9px] text-emerald-300/70 block mt-0.5 font-medium">উৎস: ফায়ারবেস অর্ডার রেকর্ডস</span>
+                      <div className="bg-[#1f2937] p-3 rounded-xl border border-white/10">
+                        <span className="text-[10px] text-gray-400 block font-bold uppercase">মোট পার্সেল</span>
+                        <span className="font-bold text-white text-xs tabular-nums">{assignedOrders.length}টি ({deliveredCount} ডেলিভার্ড)</span>
+                        <span className="text-[9px] text-gray-400 block mt-0.5 font-medium">উৎস: ফায়ারবেস অর্ডার রেকর্ডস</span>
                       </div>
 
-                      <div className="bg-white/10 backdrop-blur-xs p-2.5 rounded-2xl border border-white/10">
-                        <span className="text-[10px] text-emerald-300 block font-bold uppercase">অটো-অ্যাসাইন রুল</span>
+                      <div className="bg-[#1f2937] p-3 rounded-xl border border-white/10">
+                        <span className="text-[10px] text-gray-400 block font-bold uppercase">অটো-অ্যাসাইন রুল</span>
                         <span className="font-bold text-emerald-300 text-xs">{autoAssignRuleLabel}</span>
-                        <span className="text-[9px] text-emerald-300/70 block mt-0.5 font-medium">চেকআউট নিয়মানুযায়ী প্রয়োগ</span>
+                        <span className="text-[9px] text-gray-400 block mt-0.5 font-medium">চেকআউট নিয়মানুযায়ী প্রয়োগ</span>
                       </div>
                     </div>
                   </div>
@@ -484,7 +496,7 @@ export const CourierManager: React.FC = () => {
                       type="button"
                       disabled={isLiveChecking}
                       onClick={handleRefreshSteadfastBalance}
-                      className="bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-black px-5 py-2.5 rounded-xl text-xs flex items-center justify-center space-x-2 transition-all shadow-md cursor-pointer disabled:opacity-50"
+                      className="bg-[#881337] hover:bg-[#6d0f2c] text-white font-bold px-5 py-2.5 min-h-[42px] rounded-xl text-xs flex items-center justify-center space-x-2 transition-colors cursor-pointer disabled:opacity-50"
                     >
                       <Zap className={`w-4 h-4 ${isLiveChecking ? 'animate-spin' : ''}`} />
                       <span>{isLiveChecking ? 'ব্যালেন্স যাচাই হচ্ছে...' : 'ব্যালেন্স ও কানেকশন রিফ্রেশ'}</span>
@@ -496,7 +508,7 @@ export const CourierManager: React.FC = () => {
                         setSelectedGuidePartner('Steadfast');
                         setActiveSubTab('guides');
                       }}
-                      className="bg-white/10 hover:bg-white/20 text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center space-x-1.5 transition-colors border border-white/15 cursor-pointer"
+                      className="bg-[#1f2937] hover:bg-gray-700 text-white font-bold px-4 py-2.5 min-h-[40px] rounded-xl text-xs flex items-center justify-center space-x-1.5 transition-colors border border-white/10 cursor-pointer"
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
                       <span>সেটআপ গাইড ও হেল্পলাইন</span>
@@ -553,9 +565,14 @@ export const CourierManager: React.FC = () => {
                         type="checkbox"
                         checked={c.isActive}
                         disabled={!canEdit}
-                        onChange={e => {
-                          updateCourierConfig(c.id, { isActive: e.target.checked });
-                          showToast(`${c.nameBn} ${e.target.checked ? 'সক্রিয়' : 'নিষ্ক্রিয়'} করা হয়েছে`);
+                        onChange={async e => {
+                          const nextVal = e.target.checked;
+                          const res = await updateCourierConfig(c.id, { isActive: nextVal });
+                          if (!res.success) {
+                            showToast(`❌ সংরক্ষণ ব্যর্থ: ${res.error || 'ফায়ারবেস ত্রুটি'}`, 'error');
+                          } else {
+                            showToast(`${c.nameBn} ${nextVal ? 'সক্রিয়' : 'নিষ্ক্রিয়'} করা হয়েছে`);
+                          }
                         }}
                         className="sr-only peer"
                       />
@@ -569,10 +586,15 @@ export const CourierManager: React.FC = () => {
                       <span className="text-gray-500 font-bold">পরিবেশ:</span>
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                           if (canEdit) {
-                            updateCourierConfig(c.id, { isSandbox: !c.isSandbox });
-                            showToast(`মোড পরিবর্তন: ${!c.isSandbox ? 'Sandbox (টেস্ট)' : 'Live (প্রোডাকশন)'}`);
+                            const nextSandbox = !c.isSandbox;
+                            const res = await updateCourierConfig(c.id, { isSandbox: nextSandbox });
+                            if (!res.success) {
+                              showToast(`❌ মোড পরিবর্তন ব্যর্থ: ${res.error || 'ফায়ারবেস ত্রুটি'}`, 'error');
+                            } else {
+                              showToast(`মোড পরিবর্তন: ${nextSandbox ? 'Sandbox (টেস্ট)' : 'Live (প্রোডাকশন)'}`);
+                            }
                           }
                         }}
                         className={`px-2 py-0.5 rounded-md font-bold text-[10px] transition-colors cursor-pointer ${
@@ -585,17 +607,16 @@ export const CourierManager: React.FC = () => {
                       </button>
                     </div>
 
-                    <div className="flex items-center space-x-1">
-                      <div
-                        className={`w-2 h-2 rounded-full ${
+                    <div className="flex items-center space-x-2">
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
                           c.connectionStatus === 'connected'
-                            ? 'bg-emerald-500 animate-pulse'
+                            ? 'bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]'
                             : c.connectionStatus === 'disconnected'
-                            ? 'bg-rose-500'
-                            : 'bg-gray-400'
+                            ? 'bg-[#fef2f2] text-[#b91c1c] border border-[#fecaca]'
+                            : 'bg-gray-200 text-[#4b5563]'
                         }`}
-                      />
-                      <span className="text-[10px] font-bold text-gray-700">
+                      >
                         {c.connectionStatus === 'connected'
                           ? 'সংযুক্ত'
                           : c.connectionStatus === 'disconnected'
@@ -817,11 +838,12 @@ export const CourierManager: React.FC = () => {
               return (
                 <button
                   key={providerId}
+                  type="button"
                   onClick={() => setSelectedGuidePartner(providerId)}
-                  className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center space-x-2 transition-all cursor-pointer ${
+                  className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center space-x-2 transition-colors cursor-pointer ${
                     isSelected
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-[#111827] text-white'
+                      : 'bg-[#faf9f7] text-[#374151] hover:bg-[#e6e3dd]/60 border border-[#e6e3dd]'
                   }`}
                 >
                   <Truck className="w-3.5 h-3.5" />
@@ -940,9 +962,9 @@ export const CourierManager: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                     {currentGuide.faq.map((item, idx) => (
-                      <div key={idx} className="bg-gray-50 p-3.5 rounded-2xl border border-gray-200 space-y-1">
-                        <strong className="text-gray-900 block font-bold">❓ {item.q}</strong>
-                        <p className="text-gray-600 leading-relaxed">💡 {item.a}</p>
+                      <div key={idx} className="bg-[#faf9f7] p-3.5 rounded-2xl border border-[#e6e3dd] space-y-1">
+                        <strong className="text-[#111827] block font-bold">{item.q}</strong>
+                        <p className="text-[#4b5563] leading-[1.65]">{item.a}</p>
                       </div>
                     ))}
                   </div>
@@ -1004,10 +1026,10 @@ export const CourierManager: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto tabular-nums">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-gray-200 text-gray-400 uppercase text-[10px] tracking-wider font-extrabold bg-gray-50/60">
+                  <tr className="border-b border-[#e6e3dd] text-[#4b5563] uppercase text-[10px] tracking-wider font-bold bg-[#faf9f7]">
                     <th className="py-3 px-3">অর্ডার ও তারিখ</th>
                     <th className="py-3 px-3">গ্রাহক ও এলাকা</th>
                     <th className="py-3 px-3">কুরিয়ার ও কনসাইনমেন্ট</th>
@@ -1016,39 +1038,39 @@ export const CourierManager: React.FC = () => {
                     <th className="py-3 px-3 text-right">একশন</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-[#e6e3dd]">
                   {filteredDispatchedOrders.map(order => {
                     const info = order.courierInfo!;
                     return (
-                      <tr key={order.id} className="hover:bg-gray-50/60 transition-colors">
-                        <td className="py-3 px-3">
-                          <span className="font-mono font-bold text-gray-900 block">#{order.id}</span>
-                          <span className="text-[10px] text-gray-400">{info.dispatchedDate}</span>
+                      <tr key={order.id} className="hover:bg-[#faf9f7] transition-colors">
+                        <td className="py-3 px-3 tabular-nums">
+                          <span className="font-mono font-bold text-[#111827] block">#{order.id}</span>
+                          <span className="text-[10px] text-[#4b5563]">{info.dispatchedDate}</span>
                         </td>
 
                         <td className="py-3 px-3">
-                          <span className="font-bold text-gray-900 block">{order.customerName}</span>
-                          <span className="text-[11px] text-gray-500">{order.phone}</span>
-                          <span className="text-[10px] text-gray-400 block truncate max-w-[150px]">
+                          <span className="font-bold text-[#111827] block">{order.customerName}</span>
+                          <span className="text-[11px] text-[#4b5563] font-mono tabular-nums">{order.phone}</span>
+                          <span className="text-[10px] text-[#4b5563] block truncate max-w-[150px]">
                             {order.address.district}
                           </span>
                         </td>
 
                         <td className="py-3 px-3">
                           <div className="flex items-center space-x-1.5">
-                            <span className="font-bold text-gray-800">{info.courierName}</span>
+                            <span className="font-bold text-[#111827]">{info.courierName}</span>
                           </div>
-                          <span className="font-mono text-[11px] text-emerald-700 font-bold block mt-0.5">
+                          <span className="font-mono text-[11px] text-[#15803d] font-bold block mt-0.5 tabular-nums">
                             {info.consignmentId}
                           </span>
-                          <span className="text-[10px] text-gray-400 block">ওজন: {info.weightKg} KG</span>
+                          <span className="text-[10px] text-[#4b5563] block tabular-nums">ওজন: {info.weightKg} KG</span>
                         </td>
 
-                        <td className="py-3 px-3">
-                          <span className="font-extrabold text-rose-600 block">
+                        <td className="py-3 px-3 tabular-nums">
+                          <span className="font-bold text-[#881337] block">
                             {order.paymentMethod === 'cod' ? formatPrice(info.codAmount) : 'প্রিপেইড'}
                           </span>
-                          <span className="text-[10px] text-gray-500">চার্জ: ৳{info.shippingCharge}</span>
+                          <span className="text-[10px] text-[#4b5563]">চার্জ: ৳{info.shippingCharge}</span>
                         </td>
 
                         <td className="py-3 px-3">
@@ -1057,12 +1079,12 @@ export const CourierManager: React.FC = () => {
                             onChange={e => updateCourierStatus(order.id, e.target.value)}
                             className={`rounded-xl px-2.5 py-1 text-[11px] font-bold border transition-colors cursor-pointer ${
                               info.courierStatus === 'Delivered'
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                ? 'bg-[#f0fdf4] text-[#15803d] border-[#bbf7d0]'
                                 : info.courierStatus === 'Out for Delivery'
-                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                ? 'bg-amber-50 text-amber-800 border-amber-200'
                                 : info.courierStatus === 'Returned'
-                                ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                : 'bg-blue-50 text-blue-700 border-blue-200'
+                                ? 'bg-[#fef2f2] text-[#b91c1c] border-[#fecaca]'
+                                : 'bg-[#faf9f7] text-[#111827] border-[#e6e3dd]'
                             }`}
                           >
                             <option value="In Transit">In Transit (ট্রানজিটে)</option>
@@ -1074,24 +1096,23 @@ export const CourierManager: React.FC = () => {
 
                         <td className="py-3 px-3 text-right">
                           <div className="flex items-center justify-end space-x-1.5">
-                            {/* Live Tracking link */}
                             {info.trackingUrl && (
                               <a
                                 href={info.trackingUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 title="কুরিয়ার পোর্টালে সরাসরি ট্র্যাকিং দেখুন"
-                                className="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors cursor-pointer"
+                                className="p-1.5 bg-[#faf9f7] hover:bg-[#e6e3dd]/60 border border-[#e6e3dd] text-[#111827] rounded-lg transition-colors cursor-pointer"
                               >
                                 <ExternalLink className="w-3.5 h-3.5" />
                               </a>
                             )}
 
-                            {/* Print shipping label */}
                             <button
+                              type="button"
                               onClick={() => setOrderForShippingLabel(order)}
                               title="চালান ও লেবেল প্রিন্ট করুন"
-                              className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-colors cursor-pointer"
+                              className="p-1.5 bg-[#f0fdf4] hover:bg-emerald-100 border border-[#bbf7d0] text-[#15803d] rounded-lg transition-colors cursor-pointer"
                             >
                               <Printer className="w-3.5 h-3.5" />
                             </button>
@@ -1109,30 +1130,30 @@ export const CourierManager: React.FC = () => {
 
       {/* TAB 4: LOGISTICS & COD ANALYTICS */}
       {activeSubTab === 'analytics' && (
-        <div className="space-y-6">
+        <div className="space-y-6 tabular-nums">
           {/* Top KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-xs space-y-1">
-              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">মোট বুকিং পার্সেল</span>
-              <p className="text-2xl font-black text-gray-900">{dispatchedOrders.length}টি</p>
-              <span className="text-[10px] text-emerald-600 font-bold">সারাদেশে ৬৪ জেলায়</span>
+            <div className="bg-white p-5 rounded-2xl border border-[#e6e3dd] space-y-1">
+              <span className="text-[10px] text-[#4b5563] font-bold uppercase tracking-wider block">মোট বুকিং পার্সেল</span>
+              <p className="text-2xl font-bold text-[#111827]">{dispatchedOrders.length}টি</p>
+              <span className="text-[10px] text-[#15803d] font-bold">সারাদেশে ৬৪ জেলায়</span>
             </div>
 
-            <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-xs space-y-1">
-              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">আদায়যোগ্য মোট COD</span>
-              <p className="text-2xl font-black text-rose-600">{formatPrice(totalCodDispatched)}</p>
-              <span className="text-[10px] text-gray-400">ক্যাশ অন ডেলিভারি</span>
+            <div className="bg-white p-5 rounded-2xl border border-[#e6e3dd] space-y-1">
+              <span className="text-[10px] text-[#4b5563] font-bold uppercase tracking-wider block">আদায়যোগ্য মোট COD</span>
+              <p className="text-2xl font-bold text-[#881337]">{formatPrice(totalCodDispatched)}</p>
+              <span className="text-[10px] text-[#4b5563]">ক্যাশ অন ডেলিভারি</span>
             </div>
 
-            <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-xs space-y-1">
-              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">সফলভাবে ডেলিভার্ড COD</span>
-              <p className="text-2xl font-black text-emerald-600">{formatPrice(totalDeliveredCod)}</p>
-              <span className="text-[10px] text-emerald-600 font-bold">মার্চেন্ট একাউন্টে জমাযোগ্য</span>
+            <div className="bg-white p-5 rounded-2xl border border-[#e6e3dd] space-y-1">
+              <span className="text-[10px] text-[#4b5563] font-bold uppercase tracking-wider block">সফলভাবে ডেলিভার্ড COD</span>
+              <p className="text-2xl font-bold text-[#15803d]">{formatPrice(totalDeliveredCod)}</p>
+              <span className="text-[10px] text-[#15803d] font-bold">মার্চেন্ট একাউন্টে জমাযোগ্য</span>
             </div>
 
-            <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-xs space-y-1">
-              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">ডেলিভারি সাকসেস রেট</span>
-              <p className="text-2xl font-black text-blue-600">
+            <div className="bg-white p-5 rounded-2xl border border-[#e6e3dd] space-y-1">
+              <span className="text-[10px] text-[#4b5563] font-bold uppercase tracking-wider block">ডেলিভারি সাকসেস রেট</span>
+              <p className="text-2xl font-bold text-[#111827]">
                 {dispatchedOrders.length > 0
                   ? Math.round(
                       (dispatchedOrders.filter(o => o.status === 'Delivered').length /
@@ -1142,13 +1163,13 @@ export const CourierManager: React.FC = () => {
                   : 100}
                 %
               </p>
-              <span className="text-[10px] text-gray-400">রিটার্ন রেশিও নূন্যতম</span>
+              <span className="text-[10px] text-[#4b5563]">রিটার্ন রেশিও নূন্যতম</span>
             </div>
           </div>
 
           {/* Breakdown by Courier */}
-          <div className="bg-white rounded-3xl p-6 border border-gray-200 shadow-xs space-y-4 text-xs">
-            <h3 className="font-extrabold text-base text-gray-900">
+          <div className="bg-white rounded-2xl p-6 border border-[#e6e3dd] space-y-4 text-xs">
+            <h3 className="font-bold text-base text-[#111827]">
               কুরিয়ারভিত্তিক পারফরম্যান্স ও পার্সেল বিশ্লেষণ
             </h3>
 
@@ -1163,32 +1184,32 @@ export const CourierManager: React.FC = () => {
                 );
 
                 return (
-                  <div key={c.id} className="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-2.5">
+                  <div key={c.id} className="bg-[#faf9f7] p-4 rounded-2xl border border-[#e6e3dd] space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <span className="font-black text-sm text-gray-900">{c.name}</span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
+                      <span className="font-bold text-sm text-[#111827]">{c.name}</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#f0fdf4] border border-[#bbf7d0] text-[#15803d]">
                         সচল
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                      <div className="bg-white p-2 rounded-xl border border-gray-100">
-                        <span className="text-[10px] text-gray-400 block font-bold">মোট</span>
-                        <strong className="text-gray-900">{assigned.length}</strong>
+                    <div className="grid grid-cols-3 gap-2 text-center text-xs tabular-nums">
+                      <div className="bg-white p-2 rounded-xl border border-[#e6e3dd]">
+                        <span className="text-[10px] text-[#4b5563] block font-bold">মোট</span>
+                        <strong className="text-[#111827]">{assigned.length}</strong>
                       </div>
-                      <div className="bg-white p-2 rounded-xl border border-gray-100">
-                        <span className="text-[10px] text-gray-400 block font-bold">ট্রানজিট</span>
-                        <strong className="text-blue-600">{inTransit}</strong>
+                      <div className="bg-white p-2 rounded-xl border border-[#e6e3dd]">
+                        <span className="text-[10px] text-[#4b5563] block font-bold">ট্রানজিট</span>
+                        <strong className="text-[#111827]">{inTransit}</strong>
                       </div>
-                      <div className="bg-white p-2 rounded-xl border border-gray-100">
-                        <span className="text-[10px] text-gray-400 block font-bold">ডেলিভার্ড</span>
-                        <strong className="text-emerald-600">{delivered}</strong>
+                      <div className="bg-white p-2 rounded-xl border border-[#e6e3dd]">
+                        <span className="text-[10px] text-[#4b5563] block font-bold">ডেলিভার্ড</span>
+                        <strong className="text-[#15803d]">{delivered}</strong>
                       </div>
                     </div>
 
-                    <div className="pt-2 border-t border-gray-200 flex justify-between text-[11px] text-gray-600">
+                    <div className="pt-2 border-t border-[#e6e3dd] flex justify-between text-[11px] text-[#4b5563] tabular-nums">
                       <span>আদায়যোগ্য COD:</span>
-                      <strong className="text-rose-600 font-mono">{formatPrice(cod)}</strong>
+                      <strong className="text-[#881337] font-mono">{formatPrice(cod)}</strong>
                     </div>
                   </div>
                 );

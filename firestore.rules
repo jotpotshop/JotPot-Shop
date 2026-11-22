@@ -3,9 +3,28 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // Catch-all deny: every non-explicitly matched collection or path is denied
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core Helpers
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
     function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128;
+      return id is string &&
+        id.size() > 0 &&
+        id.size() <= 128 &&
+        id != '.' &&
+        id != '..' &&
+        !id.matches('.*\\.\\..*') &&
+        id.matches('^[a-zA-Z0-9._-]+$');
     }
 
     function isAuthenticated() {
@@ -26,75 +45,185 @@ service cloud.firestore {
           'staff.sultana@jotpotshop.com'
         ] ||
         (exists(/databases/$(database)/documents/staff/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.isActive != false &&
          get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role in ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'])
       );
     }
 
-    // Health check and connection validation
+    function hasNoPasswordFields(data) {
+      return !('password' in data) && !('plainPassword' in data);
+    }
+
+    function isPublicSettingId(settingId) {
+      return settingId in [
+        'branding',
+        'categories',
+        'hero_banners',
+        'products_catalog',
+        'bundles',
+        'coupons',
+        'return_policy',
+        'seo',
+        'livechat',
+        'homepage_sections',
+        'trust_section',
+        'help_center',
+        'delivery',
+        'payment',
+        'order_rules'
+      ];
+    }
+
+    function isValidOrderCreate(data) {
+      return data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+        data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 150 &&
+        data.phone is string && data.phone.size() >= 6 && data.phone.size() <= 30 &&
+        data.items is list && data.items.size() > 0 && data.items.size() <= 100 &&
+        data.totalAmount is number && data.totalAmount > 0 && data.totalAmount < 10000000 &&
+        data.address is map;
+    }
+
+    function isValidProductDoc(data) {
+      return data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 300 &&
+        data.price is number && data.price >= 0 &&
+        data.stock is number && data.stock >= 0 &&
+        hasNoPasswordFields(data);
+    }
+
+    function isValidCustomerPayload(data) {
+      return data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 150 &&
+        (!('email' in data) || (data.email is string && data.email.size() <= 200)) &&
+        (!('phone' in data) || (data.phone is string && data.phone.size() <= 40)) &&
+        hasNoPasswordFields(data);
+    }
+
+    // Connectivity health probe
     match /test/{docId} {
-      allow read, write: if isValidId(docId);
+      allow read: if isValidId(docId) && (docId == 'connection' || isStaffOrAdmin());
+      allow write: if isValidId(docId) && isStaffOrAdmin();
     }
 
-    // Global settings, branding, help center, and transactional orders ledger
+    // Storefront configuration & admin operational ledgers
+    // Public read strictly allowlisted to non-PII storefront docs; staff ledgers locked to Staff/Admin.
     match /settings/{settingId} {
-      allow read: if isValidId(settingId);
-      allow write: if isStaffOrAdmin() || (isAuthenticated() && (settingId == 'orders_data' || settingId == 'live_chat_conversations'));
+      allow get: if isValidId(settingId) && (isPublicSettingId(settingId) || isStaffOrAdmin());
+      allow list: if isStaffOrAdmin();
+      allow create, update: if isValidId(settingId) && isStaffOrAdmin() && hasNoPasswordFields(incoming());
+      allow delete: if isValidId(settingId) && isStaffOrAdmin();
     }
 
-    // Customer Live Chat & Omnichannel conversations:
-    // Read: Customer can read ONLY their own conversation (customerUid == request.auth.uid) OR staff/admin
-    // Create/Write: Customer can create/update ONLY their own conversation; staff/admin can manage & reply
+    // Customer Live Chat & Omnichannel conversations
     match /conversations/{convId} {
-      allow read: if isStaffOrAdmin() || (isAuthenticated() && (resource == null || resource.data.customerUid == request.auth.uid));
-      allow create: if isValidId(convId) && (isStaffOrAdmin() || (isAuthenticated() && request.resource.data.customerUid == request.auth.uid));
-      allow update: if isStaffOrAdmin() || (isAuthenticated() && resource.data.customerUid == request.auth.uid);
-      allow delete: if isStaffOrAdmin();
+      allow get: if isValidId(convId) && (
+        isStaffOrAdmin() ||
+        (isAuthenticated() && (resource == null || existing().customerUid == request.auth.uid))
+      );
+      allow list: if isStaffOrAdmin() ||
+        (isAuthenticated() && existing().customerUid == request.auth.uid);
+      allow create: if isValidId(convId) && hasNoPasswordFields(incoming()) && (
+        isStaffOrAdmin() ||
+        (isAuthenticated() && incoming().customerUid == request.auth.uid)
+      );
+      allow update: if isValidId(convId) && hasNoPasswordFields(incoming()) && (
+        isStaffOrAdmin() ||
+        (isAuthenticated() && existing().customerUid == request.auth.uid && incoming().customerUid == request.auth.uid)
+      );
+      allow delete: if isValidId(convId) && isStaffOrAdmin();
 
       match /messages/{messageId} {
-        allow read: if isStaffOrAdmin() || (isAuthenticated() && get(/databases/$(database)/documents/conversations/$(convId)).data.customerUid == request.auth.uid);
-        allow write: if isStaffOrAdmin() || (isAuthenticated() && get(/databases/$(database)/documents/conversations/$(convId)).data.customerUid == request.auth.uid);
+        allow get: if isValidId(convId) && isValidId(messageId) && (
+          isStaffOrAdmin() ||
+          (isAuthenticated() && get(/databases/$(database)/documents/conversations/$(convId)).data.customerUid == request.auth.uid)
+        );
+        allow list: if isValidId(convId) && (
+          isStaffOrAdmin() ||
+          (isAuthenticated() && get(/databases/$(database)/documents/conversations/$(convId)).data.customerUid == request.auth.uid)
+        );
+        allow create, update: if isValidId(convId) && isValidId(messageId) && hasNoPasswordFields(incoming()) && (
+          isStaffOrAdmin() ||
+          (isAuthenticated() && get(/databases/$(database)/documents/conversations/$(convId)).data.customerUid == request.auth.uid)
+        );
+        allow delete: if isValidId(convId) && isValidId(messageId) && isStaffOrAdmin();
       }
     }
 
     // Products catalog
     match /products/{productId} {
-      allow read: if isValidId(productId);
-      allow write: if isStaffOrAdmin();
+      allow get: if isValidId(productId);
+      allow list: if true;
+      allow create, update: if isValidId(productId) && isStaffOrAdmin() && isValidProductDoc(incoming());
+      allow delete: if isValidId(productId) && isStaffOrAdmin();
     }
 
-    // Customer orders:
-    // Read: Customer can read ONLY their own order documents (resource.data.customerUid == request.auth.uid) OR staff/admin
-    // Create: Authenticated customer can place order where customerUid == request.auth.uid (or staff/admin)
-    // Update/Delete: ONLY verified staff/admin can modify order status, paymentStatus, trackingNumber, or courierInfo
+    // Customer orders (strict owner isolation + verified guest/customer Pending creation)
     match /orders/{orderId} {
-      allow read: if isStaffOrAdmin() || (isAuthenticated() && (resource == null || resource.data.customerUid == request.auth.uid));
-      allow create: if isValidId(orderId) && (isStaffOrAdmin() || (isAuthenticated() && request.resource.data.customerUid == request.auth.uid));
-      allow update: if isStaffOrAdmin();
-      allow delete: if isStaffOrAdmin();
+      allow get: if isValidId(orderId) && (
+        isStaffOrAdmin() ||
+        (isAuthenticated() && (resource == null || existing().customerUid == request.auth.uid))
+      );
+      allow list: if isStaffOrAdmin() ||
+        (isAuthenticated() && existing().customerUid == request.auth.uid);
+      allow create: if isValidId(orderId) && hasNoPasswordFields(incoming()) && isValidOrderCreate(incoming()) && (
+        isStaffOrAdmin() ||
+        (isAuthenticated() && incoming().customerUid == request.auth.uid && incoming().status == 'Pending') ||
+        (!isAuthenticated() && (!('customerUid' in incoming()) || incoming().customerUid == '') && incoming().status == 'Pending')
+      );
+      allow update: if isValidId(orderId) && isStaffOrAdmin() && hasNoPasswordFields(incoming());
+      allow delete: if isValidId(orderId) && isStaffOrAdmin();
     }
 
     // Promo Coupons
     match /coupons/{couponId} {
-      allow read: if isValidId(couponId);
-      allow write: if isStaffOrAdmin();
+      allow get: if isValidId(couponId);
+      allow list: if true;
+      allow write: if isValidId(couponId) && isStaffOrAdmin();
     }
 
-    // Registered Customers
+    // Registered Customers (strict owner isolation, no plaintext passwords, no self-privilege or self-reactivation)
     match /customers/{customerId} {
-      allow read: if isStaffOrAdmin() || isOwner(customerId);
-      allow write: if isStaffOrAdmin() || isOwner(customerId);
+      allow get: if isValidId(customerId) && (isStaffOrAdmin() || isOwner(customerId));
+      allow list: if isStaffOrAdmin();
+      allow create: if isValidId(customerId) && isValidCustomerPayload(incoming()) && (
+        isStaffOrAdmin() ||
+        (
+          isOwner(customerId) &&
+          incoming().id == customerId &&
+          !('role' in incoming()) &&
+          (!('status' in incoming()) || incoming().status == 'active')
+        )
+      );
+      allow update: if isValidId(customerId) && isValidCustomerPayload(incoming()) && (
+        isStaffOrAdmin() ||
+        (
+          isOwner(customerId) &&
+          incoming().id == customerId &&
+          !('role' in incoming()) &&
+          (
+            !('status' in existing())
+              ? (!('status' in incoming()) || incoming().status == 'active')
+              : (existing().status != 'disabled' && (!('status' in incoming()) || incoming().status == existing().status))
+          )
+        )
+      );
+      allow delete: if isValidId(customerId) && isStaffOrAdmin();
     }
 
     // Combo Bundles
     match /bundles/{bundleId} {
-      allow read: if isValidId(bundleId);
-      allow write: if isStaffOrAdmin();
+      allow get: if isValidId(bundleId);
+      allow list: if true;
+      allow write: if isValidId(bundleId) && isStaffOrAdmin();
     }
 
-    // Staff Accounts
+    // Staff Accounts (RBAC lookup & management, never exposes plaintext passwords)
     match /staff/{staffId} {
-      allow read: if isStaffOrAdmin() || isOwner(staffId);
-      allow write: if isStaffOrAdmin();
+      allow get: if isValidId(staffId) && (isStaffOrAdmin() || isOwner(staffId));
+      allow list: if isStaffOrAdmin();
+      allow create, update: if isValidId(staffId) && isStaffOrAdmin() && hasNoPasswordFields(incoming()) &&
+        incoming().role in ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'];
+      allow delete: if isValidId(staffId) && isStaffOrAdmin();
     }
   }
 }

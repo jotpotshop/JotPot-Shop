@@ -56,7 +56,6 @@ interface ManagementModuleMeta {
   titleEn: string;
   descriptionBn: string;
   icon: React.ComponentType<{ className?: string }>;
-  color: string;
   badgeBg: string;
   badgeText: string;
 }
@@ -70,7 +69,6 @@ const ALL_SYSTEM_MODULES: ManagementModuleMeta[] = [
     titleEn: 'Order Confirmation & Fulfillment Hub',
     descriptionBn: 'নতুন অর্ডারের কল ভেরিফিকেশন, স্ট্যাটাস পরিবর্তন, হোয়াটসঅ্যাপ বার্তা ও কুরিয়ারে হ্যান্ডওভার।',
     icon: ShoppingCart,
-    color: 'from-rose-500 to-rose-700',
     badgeBg: 'bg-rose-50 text-rose-700 border-rose-200',
     badgeText: 'অর্ডার হাব',
   },
@@ -82,7 +80,6 @@ const ALL_SYSTEM_MODULES: ManagementModuleMeta[] = [
     titleEn: 'Omnichannel Support Inbox',
     descriptionBn: 'ওয়েবসাইট লাইভ চ্যাট, হোয়াটসঅ্যাপ ও মেসেঞ্জারে সরাসরি গ্রাহক সহায়তা ও অনুসন্ধান হ্যান্ডলিং।',
     icon: MessageSquare,
-    color: 'from-blue-500 to-indigo-700',
     badgeBg: 'bg-blue-50 text-blue-700 border-blue-200',
     badgeText: 'সাপোর্ট ডেস্ক',
   },
@@ -94,7 +91,6 @@ const ALL_SYSTEM_MODULES: ManagementModuleMeta[] = [
     titleEn: 'Product Catalog & Pricing Management',
     descriptionBn: 'নতুন পণ্য তৈরি, নাম, মূল্য, ডিসকাউন্ট, ছবি আপলোড এবং ক্যাটালগ নিয়ন্ত্রণ।',
     icon: Package,
-    color: 'from-indigo-500 to-indigo-700',
     badgeBg: 'bg-indigo-50 text-indigo-700 border-indigo-200',
     badgeText: 'পণ্য ক্যাটালগ',
   },
@@ -106,7 +102,6 @@ const ALL_SYSTEM_MODULES: ManagementModuleMeta[] = [
     titleEn: 'Warehouse Inventory & Stock Alerts',
     descriptionBn: 'ওয়্যারহাউজের স্টক লেভেল পর্যবেক্ষণ, লো-স্টক জরুরি রি-অর্ডার এবং আউট-অব-স্টক ট্র্যাকিং।',
     icon: AlertTriangle,
-    color: 'from-amber-500 to-amber-700',
     badgeBg: 'bg-amber-50 text-amber-700 border-amber-200',
     badgeText: 'ওয়্যারহাউজ স্টক',
   },
@@ -118,7 +113,6 @@ const ALL_SYSTEM_MODULES: ManagementModuleMeta[] = [
     titleEn: 'Categories & Subcategories Manager',
     descriptionBn: 'নতুন ক্যাটাগরি তৈরি, ক্যাটাগরি আইকন, ব্র্যান্ড নেম ও ফিল্টার ট্যাগ কনফিগারেশন।',
     icon: Tag,
-    color: 'from-teal-500 to-teal-700',
     badgeBg: 'bg-teal-50 text-teal-700 border-teal-200',
     badgeText: 'ক্যাটাগরি হাব',
   },
@@ -130,7 +124,6 @@ const ALL_SYSTEM_MODULES: ManagementModuleMeta[] = [
     titleEn: 'Couriers API & Consignment Gateway',
     descriptionBn: 'Steadfast, Pathao ও RedX এপিআই চালানের অটো বুকিং, শিপিং লেবেল প্রিন্ট ও পার্সেল ট্র্যাকিং।',
     icon: Truck,
-    color: 'from-emerald-500 to-emerald-700',
     badgeBg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     badgeText: 'কুরিয়ার লজিস্টিকস',
   },
@@ -142,7 +135,6 @@ const ALL_SYSTEM_MODULES: ManagementModuleMeta[] = [
     titleEn: 'Customer Directory & Profiles',
     descriptionBn: 'নিবন্ধিত গ্রাহকদের যোগাযোগের তথ্য, অর্ডারের ইতিহাস এবং বিশ্বস্ত গ্রাহক তালিকা।',
     icon: Users,
-    color: 'from-cyan-500 to-blue-700',
     badgeBg: 'bg-cyan-50 text-cyan-700 border-cyan-200',
     badgeText: 'গ্রাহক ডাটাবেস',
   },
@@ -154,7 +146,6 @@ const ALL_SYSTEM_MODULES: ManagementModuleMeta[] = [
     titleEn: 'Coupons & Promotional Deals',
     descriptionBn: 'ডিসকাউন্ট কুপন কোড তৈরি, শতাংশ/ফিক্সড ছাড়, ন্যূনতম অর্ডারের সীমা ও ক্যাম্পেইন সময়কাল।',
     icon: Sparkles,
-    color: 'from-purple-500 to-purple-700',
     badgeBg: 'bg-purple-50 text-purple-700 border-purple-200',
     badgeText: 'প্রমোশন হাব',
   },
@@ -166,7 +157,6 @@ const ALL_SYSTEM_MODULES: ManagementModuleMeta[] = [
     titleEn: 'Delivery Charges & Area Policies',
     descriptionBn: 'ঢাকা সিটি ও ঢাকার বাইরের ডেলিভারি চার্জ নির্ধারণ, ফ্রি ডেলিভারি সীমা ও এক্সপ্রেস চার্জ।',
     icon: Layers,
-    color: 'from-orange-500 to-orange-700',
     badgeBg: 'bg-orange-50 text-orange-700 border-orange-200',
     badgeText: 'ডেলিভারি পলিসি',
   },
@@ -178,7 +168,6 @@ const ALL_SYSTEM_MODULES: ManagementModuleMeta[] = [
     titleEn: 'Financial Revenue & Analytics Reports',
     descriptionBn: 'দৈনিক ও মাসিক মোট রাজস্ব, বিক্রয় পরিসংখ্যান, আনুমানিক নিট লাভ ও পেমেন্ট মেথড অ্যানালিটিক্স।',
     icon: BarChart3,
-    color: 'from-emerald-600 to-teal-800',
     badgeBg: 'bg-emerald-50 text-emerald-800 border-emerald-200',
     badgeText: 'আর্থিক প্রতিবেদন',
   },
@@ -190,7 +179,6 @@ const ALL_SYSTEM_MODULES: ManagementModuleMeta[] = [
     titleEn: 'Team Roles & RBAC Permission Matrix',
     descriptionBn: 'স্টাফ অ্যাকাউন্ট তৈরি, গ্র্যানুলার পারমিশন নির্ধারণ এবং নিরাপদ রোল-বেসড এক্সেস কন্ট্রোল।',
     icon: ShieldCheck,
-    color: 'from-slate-700 to-slate-900',
     badgeBg: 'bg-slate-100 text-slate-800 border-slate-300',
     badgeText: 'নিরাপত্তা ও টিম',
   },
@@ -202,7 +190,6 @@ const ALL_SYSTEM_MODULES: ManagementModuleMeta[] = [
     titleEn: 'Payment Gateways & System Master Settings',
     descriptionBn: 'বিকাশ ও নগদ মার্চেন্ট ক্রেডেনশিয়াল, ক্লাউড ফায়ারস্টোর এবং মূল প্ল্যাটফর্ম কনফিগারেশন।',
     icon: Settings,
-    color: 'from-rose-600 to-rose-900',
     badgeBg: 'bg-rose-50 text-rose-800 border-rose-200',
     badgeText: 'সিস্টেম কনফিগ',
   },
@@ -255,6 +242,8 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
   // Quick product search state for Staff / front desk lookup
   const [staffProductSearch, setStaffProductSearch] = useState('');
   const [showRestrictedModules, setShowRestrictedModules] = useState(false);
+  const [confirmPurgeDemo, setConfirmPurgeDemo] = useState(false);
+  const [purgeFeedback, setPurgeFeedback] = useState<{ text: string; success: boolean } | null>(null);
 
   const searchedStaffProducts = staffProductSearch.trim()
     ? products.filter(
@@ -272,52 +261,36 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
     switch (role) {
       case 'SUPER_ADMIN':
         return {
-          titleBn: 'সুপার এডমিন (God Mode)',
+          titleBn: 'সুপার এডমিন (মাস্টার এক্সেস)',
           titleEn: 'Super Admin Executive Suite',
-          badgeBn: '👑 মাস্টার এক্সেস (God Mode)',
-          gradient: 'from-gray-950 via-slate-900 to-rose-950',
-          border: 'border-rose-900/40',
-          accent: 'bg-rose-600',
-          textAccent: 'text-rose-400',
+          badgeBn: 'মাস্টার এক্সেস',
           descBn:
-            'আপনার কাছে সমস্ত অর্থনৈতিক প্রতিবেদন, বিকাশ/নগদ মার্চেন্ট পেমেন্ট সেটিংস, কুরিয়ার এপিআই ক্রেডেনশিয়াল, আরবিএসি টিম পারমিশন এবং প্ল্যাটফর্ম পরিচালনার পূর্ণ নিয়ন্ত্রণ রয়েছে।',
+            'সমস্ত অর্থনৈতিক প্রতিবেদন, বিকাশ/নগদ মার্চেন্ট পেমেন্ট সেটিংস, কুরিয়ার এপিআই ক্রেডেনশিয়াল, আরবিএসি টিম পারমিশন এবং প্ল্যাটফর্ম পরিচালনার পূর্ণ নিয়ন্ত্রণ।',
         };
       case 'ADMIN':
         return {
           titleBn: 'স্টোর এডমিন',
           titleEn: 'Store Operations & Catalog Admin',
-          badgeBn: '🛡️ স্টোর এডমিন (Operations & Catalog)',
-          gradient: 'from-slate-900 via-indigo-950 to-rose-950',
-          border: 'border-indigo-900/40',
-          accent: 'bg-indigo-600',
-          textAccent: 'text-indigo-400',
+          badgeBn: 'স্টোর এডমিন',
           descBn:
-            'আপনার দায়িত্ব: পণ্য ক্যাটালগ নিয়ন্ত্রণ, মূল্য ও স্টক আপডেট, কুপন ও প্রমোশনাল অফার, গ্রাহক ডিরেক্টরি এবং সামগ্রিক স্টোর কার্যক্রম তদারকি। সংবেদনশীল পেমেন্ট এপিআই কি ও স্টাফ পাসওয়ার্ড সুরক্ষিত।',
+            'পণ্য ক্যাটালগ নিয়ন্ত্রণ, মূল্য ও স্টক আপডেট, কুপন ও প্রমোশনাল অফার, গ্রাহক ডিরেক্টরি এবং সামগ্রিক স্টোর কার্যক্রম তদারকি।',
         };
       case 'MANAGER':
         return {
           titleBn: 'অপারেশন ও লজিস্টিকস ম্যানেজার',
           titleEn: 'Operations & Logistics Manager',
-          badgeBn: '📋 অপারেশন ম্যানেজার (Logistics & Inventory)',
-          gradient: 'from-emerald-900 via-teal-900 to-slate-950',
-          border: 'border-emerald-900/40',
-          accent: 'bg-emerald-600',
-          textAccent: 'text-emerald-400',
+          badgeBn: 'অপারেশন ম্যানেজার',
           descBn:
-            'আপনার দায়িত্ব: নিশ্চিতকৃত অর্ডারের প্যাকেজিং, চালান ও কুরিয়ারে (Steadfast/Pathao) হস্তান্তর, পার্সেল ট্র্যাকিং এবং ওয়্যারহাউজ স্টক লেভেল নিয়ন্ত্রণ। গোপনীয় আর্থিক আয় ও কাস্টমার তালিকা সুরক্ষিত।',
+            'নিশ্চিতকৃত অর্ডারের প্যাকেজিং, চালান ও কুরিয়ারে (Steadfast/Pathao) হস্তান্তর, পার্সেল ট্র্যাকিং এবং ওয়্যারহাউজ স্টক লেভেল নিয়ন্ত্রণ।',
         };
       case 'STAFF':
       default:
         return {
           titleBn: 'কাস্টমার সাপোর্ট ও কল সেন্টার স্টাফ',
           titleEn: 'Support Desk & Order Verification',
-          badgeBn: '💼 সাপোর্ট স্টাফ (Front Desk & Call Queue)',
-          gradient: 'from-blue-900 via-indigo-900 to-slate-950',
-          border: 'border-blue-900/40',
-          accent: 'bg-blue-600',
-          textAccent: 'text-blue-400',
+          badgeBn: 'সাপোর্ট স্টাফ',
           descBn:
-            'আপনার দায়িত্ব: নতুন গ্রাহকদের ফোন কল করে অর্ডার তথ্য ও ঠিকানা নিশ্চিতকরণ এবং লাইভ চ্যাট/হোয়াটসঅ্যাপে গ্রাহকদের তাৎক্ষণিক সহায়তা প্রদান। সিস্টেমের সমস্ত প্রশাসনিক ও আর্থিক ডেটা সুরক্ষিত।',
+            'নতুন গ্রাহকদের ফোন কল করে অর্ডার তথ্য ও ঠিকানা নিশ্চিতকরণ এবং লাইভ চ্যাট/হোয়াটসঅ্যাপে গ্রাহকদের তাৎক্ষণিক সহায়তা প্রদান।',
         };
     }
   };
@@ -340,8 +313,8 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
   const getModulePermissionDetails = (mod: ManagementModuleMeta) => {
     if (currentRole === 'SUPER_ADMIN') {
       return {
-        levelLabel: '👑 পূর্ণ মাস্টার কন্ট্রোল',
-        levelClass: 'bg-rose-100 text-rose-800 border-rose-200',
+        levelLabel: 'পূর্ণ নিয়ন্ত্রণ',
+        levelClass: 'text-[#881337]',
         allowedActions: ['ভিউ', 'তৈরি', 'এডিট', 'ডিলিট', 'অনুমোদন', 'মাস্টার'],
       };
     }
@@ -350,31 +323,31 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
 
     if (actions.includes('manage') || (actions.includes('create') && actions.includes('edit') && actions.includes('delete'))) {
       return {
-        levelLabel: '⚡ সম্পূর্ণ ব্যবস্থাপনা',
-        levelClass: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+        levelLabel: 'সম্পূর্ণ ব্যবস্থাপনা',
+        levelClass: 'text-[#111827]',
         allowedActions: actions.map(translateAction),
       };
     }
 
     if (actions.includes('create') || actions.includes('edit')) {
       return {
-        levelLabel: '✏️ তৈরি ও পরিবর্তন',
-        levelClass: 'bg-blue-100 text-blue-800 border-blue-200',
+        levelLabel: 'তৈরি ও পরিবর্তন',
+        levelClass: 'text-[#374151]',
         allowedActions: actions.map(translateAction),
       };
     }
 
     if (actions.includes('approve')) {
       return {
-        levelLabel: '🚚 অপারেশন ও অনুমোদন',
-        levelClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+        levelLabel: 'অপারেশন ও অনুমোদন',
+        levelClass: 'text-[#15803d]',
         allowedActions: actions.map(translateAction),
       };
     }
 
     return {
-      levelLabel: '👁️ ভিউ-অনলি এক্সেস',
-      levelClass: 'bg-gray-100 text-gray-700 border-gray-200',
+      levelLabel: 'ভিউ-অনলি এক্সেস',
+      levelClass: 'text-[#6b7280]',
       allowedActions: actions.length > 0 ? actions.map(translateAction) : ['ভিউ'],
     };
   };
@@ -658,42 +631,34 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
   return (
     <div className="space-y-6">
       {/* ============================================================= */}
-      {/* 1. DYNAMIC ROLE HEADER BANNER & AUTHORIZATION OVERVIEW       */}
+      {/* 1. CONCISE WORKSPACE OVERVIEW & QUICK ACTIONS                 */}
       {/* ============================================================= */}
-      <div
-        className={`bg-gradient-to-r ${roleMeta.gradient} rounded-3xl p-6 sm:p-7 text-white shadow-xl border ${roleMeta.border} space-y-5`}
-      >
+      <div className="bg-[#111827] rounded-2xl p-6 text-white border border-[#1f2937] space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1.5 max-w-2xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center space-x-1.5 bg-white/20 backdrop-blur-xs px-3 py-1 rounded-full text-xs font-black text-white shadow-xs">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>{roleMeta.badgeBn}</span>
-              </span>
-              <span className="inline-flex items-center space-x-1 bg-black/30 backdrop-blur-xs px-2.5 py-1 rounded-full text-[11px] font-bold text-gray-200">
-                <span>অনুমোদিত মডিউল:</span>
-                <span className="text-white font-black">{authorizedModules.length}টি</span>
-              </span>
-              <span className="inline-flex items-center space-x-1 bg-black/30 backdrop-blur-xs px-2.5 py-1 rounded-full text-[11px] font-bold text-gray-200">
-                <span>অনুমোদিত মেট্রিক:</span>
-                <span className="text-white font-black">{authorizedStatCards.length}টি</span>
-              </span>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[#d1d5db]">
+              <ShieldCheck className="w-4 h-4 text-[#fb7185]" />
+              <span className="font-semibold text-white">{roleMeta.badgeBn}</span>
+              <span aria-hidden="true">·</span>
+              <span className="tabular-nums">অনুমোদিত মডিউল: {authorizedModules.length}টি</span>
+              <span aria-hidden="true">·</span>
+              <span className="tabular-nums">দৃশ্যমান মেট্রিক: {authorizedStatCards.length}টি</span>
             </div>
 
-            <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              স্বাগতম, {adminUser?.name || 'টিম মেম্বার'}!
+            <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+              স্বাগতম, {adminUser?.name || 'টিম মেম্বার'}
             </h2>
-            <p className="text-xs sm:text-sm text-gray-200 leading-relaxed">
+            <p className="text-xs sm:text-sm text-[#d1d5db] leading-relaxed">
               {roleMeta.descBn}
             </p>
           </div>
 
-          {/* Quick Dynamic Module Jump / Action Buttons */}
+          {/* Quick Dynamic Module Jump Buttons */}
           <div className="flex flex-wrap items-center gap-2 self-start lg:self-center">
             {hasPermission('orders', 'view') && (
               <button
                 onClick={() => setAdminTab('orders')}
-                className="bg-white/10 hover:bg-white/20 text-white font-bold text-xs px-3.5 py-2.5 rounded-2xl flex items-center space-x-1.5 cursor-pointer backdrop-blur-xs transition-colors border border-white/20"
+                className="min-h-[38px] bg-white/10 hover:bg-white/15 text-white font-medium text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors border border-white/15 tabular-nums whitespace-nowrap shrink-0"
               >
                 <ShoppingCart className="w-3.5 h-3.5" />
                 <span>অর্ডার হাব ({pendingOrders.length})</span>
@@ -703,7 +668,7 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
             {hasPermission('couriers', 'view') && (
               <button
                 onClick={() => setAdminTab('couriers')}
-                className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs px-3.5 py-2.5 rounded-2xl flex items-center space-x-1.5 cursor-pointer shadow-xs transition-colors"
+                className="min-h-[38px] bg-[#15803d] hover:bg-[#166534] text-white font-medium text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors tabular-nums whitespace-nowrap shrink-0"
               >
                 <Truck className="w-3.5 h-3.5" />
                 <span>কুরিয়ার চালান ({confirmedOrders.length})</span>
@@ -713,7 +678,7 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
             {hasPermission('roles', 'view') && (
               <button
                 onClick={() => setAdminTab('roles')}
-                className="bg-amber-500 hover:bg-amber-600 text-gray-950 font-black text-xs px-3.5 py-2.5 rounded-2xl flex items-center space-x-1.5 cursor-pointer shadow-xs transition-colors"
+                className="min-h-[38px] bg-white/10 hover:bg-white/15 text-white font-medium text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors border border-white/15 whitespace-nowrap shrink-0"
               >
                 <ShieldCheck className="w-3.5 h-3.5" />
                 <span>টিম রোল ও পারমিশন</span>
@@ -723,7 +688,7 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
             {hasPermission('settings', 'view') && (
               <button
                 onClick={() => setAdminTab('settings')}
-                className="bg-rose-600 hover:bg-rose-700 text-white font-black text-xs px-3.5 py-2.5 rounded-2xl flex items-center space-x-1.5 cursor-pointer shadow-xs transition-colors"
+                className="min-h-[38px] bg-[#881337] hover:bg-[#6d0f2c] text-white font-semibold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0"
               >
                 <Settings className="w-3.5 h-3.5" />
                 <span>পেমেন্ট ও সেটিংস</span>
@@ -732,20 +697,14 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
           </div>
         </div>
 
-        {/* Secure Session Info */}
-        <div className="pt-3 border-t border-white/15 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-          <div className="flex items-center space-x-2 text-gray-300">
-            <Lock className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="font-semibold text-[11px]">
-              নিরাপদ লগইন সেশন: <strong className="text-white font-mono">{adminUser?.email || adminUser?.name || 'লগইনকৃত ব্যবহারকারী'}</strong>
+        <div className="pt-3 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-[#9ca3af]">
+          <div className="flex items-center gap-2">
+            <Lock className="w-3.5 h-3.5 text-[#34d399]" />
+            <span>
+              সেশন: <strong className="text-white font-mono">{adminUser?.email || adminUser?.name || 'অনুমোদিত ব্যবহারকারী'}</strong>
             </span>
           </div>
-
-          <div className="flex items-center space-x-2">
-            <span className="text-[10px] bg-white/10 text-gray-200 px-3 py-1 rounded-full font-bold">
-              আরবিএসি এক্সেস পলিসি কার্যকর • {roleMeta.badgeBn}
-            </span>
-          </div>
+          <span className="text-[11px] text-[#9ca3af]">রোল-ভিত্তিক এক্সেস নীতি কার্যকর</span>
         </div>
       </div>
 
@@ -755,19 +714,19 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
       <div className="space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h3 className="font-black text-base text-gray-900 flex items-center space-x-2">
-              <TrendingUp className="w-4 h-4 text-rose-600" />
-              <span>অনুমোদিত লাইভ পরিসংখ্যান ({authorizedStatCards.length}টি দৃশ্যমান মেট্রিক)</span>
+            <h3 className="font-bold text-base text-[#111827] flex items-center gap-2 tabular-nums">
+              <TrendingUp className="w-4 h-4 text-[#881337]" />
+              <span>অনুমোদিত লাইভ পরিসংখ্যান ({authorizedStatCards.length}টি মেট্রিক)</span>
             </h3>
-            <p className="text-xs text-gray-500">
-              আপনার ভূমিকা ({roleMeta.titleBn}) অনুযায়ী শুধুমাত্র অনুমোদিত মডিউলসমূহের পরিসংখ্যান প্রদর্শিত হচ্ছে।
+            <p className="text-xs text-[#6b7280]">
+              আপনার ভূমিকা ({roleMeta.titleBn}) অনুযায়ী অনুমোদিত মডিউলের পরিসংখ্যান।
             </p>
           </div>
 
-          <div className="text-[11px] font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full self-start sm:self-auto flex items-center space-x-1">
-            <Lock className="w-3 h-3 text-gray-400" />
+          <div className="text-[11px] font-medium text-[#6b7280] flex items-center gap-1.5 tabular-nums">
+            <Lock className="w-3.5 h-3.5 text-[#9ca3af]" />
             <span>
-              অননুমোদিত সংরক্ষিত মেট্রিক লুকানো: {ALL_STAT_CARDS.length - authorizedStatCards.length}টি
+              সংরক্ষিত মেট্রিক লুকানো: {ALL_STAT_CARDS.length - authorizedStatCards.length}টি
             </span>
           </div>
         </div>
@@ -780,36 +739,27 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
               <div
                 key={card.id}
                 onClick={() => card.targetTab && setAdminTab(card.targetTab)}
-                className={`bg-white rounded-3xl p-5 border shadow-xs transition-all hover:shadow-md ${
-                  card.targetTab ? 'cursor-pointer hover:border-rose-300 group' : ''
-                } ${card.accentColor.split(' ')[2] || 'border-gray-200'}`}
+                className={`bg-white rounded-2xl p-5 border border-[#e6e3dd] transition-colors ${
+                  card.targetTab ? 'cursor-pointer hover:border-[#881337]/40 group' : ''
+                }`}
               >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500 truncate mr-2">
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-xs font-semibold text-[#6b7280] truncate mr-2">
                     {card.labelBn}
                   </span>
-                  <div
-                    className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 ${card.accentColor}`}
-                  >
+                  <div className="w-8 h-8 rounded-xl bg-[#faf9f7] border border-[#e6e3dd] text-[#374151] flex items-center justify-center shrink-0">
                     <Icon className="w-4 h-4" />
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <h3 className="text-2xl font-black text-gray-900 tracking-tight">{card.value}</h3>
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-gray-500 truncate mr-1">{card.subtext}</span>
-                    {card.badgeText && (
-                      <span className="font-bold text-[10px] px-2 py-0.5 rounded-full shrink-0 bg-gray-100 text-gray-700">
-                        {card.badgeText}
-                      </span>
-                    )}
-                  </div>
+                  <h3 className="text-2xl font-bold text-[#111827] tracking-tight tabular-nums">{card.value}</h3>
+                  <p className="text-xs text-[#6b7280] truncate">{card.subtext}</p>
                 </div>
 
                 {card.targetTab && (
-                  <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between text-[10px] font-bold text-gray-400 group-hover:text-rose-600 transition-colors">
-                    <span>মডিউল খুলুন</span>
+                  <div className="mt-3 pt-2.5 border-t border-[#f3f1ed] flex items-center justify-between text-[11px] font-semibold text-[#6b7280] group-hover:text-[#881337] transition-colors">
+                    <span>{card.badgeText || 'মডিউল খুলুন'}</span>
                     <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                   </div>
                 )}
@@ -822,31 +772,26 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
       {/* ============================================================= */}
       {/* 3. DYNAMIC AUTHORIZED MANAGEMENT MODULES GRID                 */}
       {/* ============================================================= */}
-      <div className="bg-white rounded-3xl p-6 border border-gray-200 shadow-xs space-y-5">
+      <div className="bg-white rounded-2xl p-6 border border-[#e6e3dd] space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <div className="flex items-center space-x-2">
-              <h3 className="font-extrabold text-base text-gray-900">
-                অনুমোদিত ম্যানেজমেন্ট মডিউলসমূহ ({authorizedModules.length}টি মডিউলে এক্সেস অনুমোদিত)
-              </h3>
-              <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2.5 py-0.5 rounded-full">
-                সক্রিয়
-              </span>
-            </div>
-            <p className="text-xs text-gray-500">
-              আপনার রোল ({roleMeta.titleBn}) যে যে ব্যবস্থাপনা মডিউলগুলো দেখার ও পরিচালনার অনুমোদন রাখে, সেগুলো নিচে তালিকাভুক্ত।
+            <h3 className="font-bold text-base text-[#111827] tabular-nums">
+              অনুমোদিত ম্যানেজমেন্ট মডিউলসমূহ ({authorizedModules.length}টি)
+            </h3>
+            <p className="text-xs text-[#6b7280]">
+              আপনার রোলের ({roleMeta.titleBn}) জন্য অনুমোদিত ব্যবস্থাপনা মডিউলসমূহ নিচে তালিকাভুক্ত।
             </p>
           </div>
 
           <button
             onClick={() => setShowRestrictedModules(!showRestrictedModules)}
-            className="text-xs font-bold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-3.5 py-1.5 rounded-xl flex items-center space-x-1.5 cursor-pointer self-start sm:self-auto transition-colors"
+            className="text-xs font-semibold text-[#374151] hover:text-[#111827] bg-[#faf9f7] hover:bg-[#f3f1ed] border border-[#e6e3dd] px-3.5 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer self-start sm:self-auto transition-colors"
           >
-            <Lock className="w-3.5 h-3.5 text-gray-500" />
-            <span>
+            <Lock className="w-3.5 h-3.5 text-[#6b7280]" />
+            <span className="tabular-nums">
               {showRestrictedModules
                 ? 'লককৃত মডিউল লুকান'
-                : `লককৃত সংরক্ষিত মডিউল দেখুন (${restrictedModules.length}টি)`}
+                : `সংরক্ষিত মডিউল দেখুন (${restrictedModules.length}টি)`}
             </span>
           </button>
         </div>
@@ -861,61 +806,42 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
             return (
               <div
                 key={mod.id}
-                className="rounded-2xl border border-gray-200 p-4.5 bg-gray-50/50 hover:bg-white hover:border-rose-200 hover:shadow-md transition-all flex flex-col justify-between space-y-3 group"
+                className="rounded-xl border border-[#e6e3dd] p-4 bg-[#faf9f7]/60 hover:bg-white hover:border-[#881337]/40 transition-colors flex flex-col justify-between space-y-3 group"
               >
                 <div className="space-y-2.5">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center space-x-2.5">
-                      <div
-                        className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${mod.color} text-white flex items-center justify-center shadow-xs shrink-0`}
-                      >
-                        <Icon className="w-5 h-5" />
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-[#111827] text-white flex items-center justify-center shrink-0">
+                        <Icon className="w-4 h-4" />
                       </div>
                       <div className="min-w-0">
-                        <h4 className="font-extrabold text-sm text-gray-900 group-hover:text-rose-600 transition-colors truncate">
+                        <h4 className="font-bold text-sm text-[#111827] group-hover:text-[#881337] transition-colors truncate">
                           {mod.titleBn}
                         </h4>
-                        <span className="text-[10px] font-mono text-gray-400 block truncate">
-                          {mod.titleEn}
+                        <span className="text-[11px] font-medium block truncate">
+                          <span className={details.levelClass}>{details.levelLabel}</span>
+                          <span className="text-[#9ca3af] mx-1.5">·</span>
+                          <span className="text-[#6b7280] tabular-nums">{liveCount}</span>
                         </span>
                       </div>
                     </div>
-
-                    <span
-                      className={`text-[10px] font-black px-2 py-0.5 rounded-full border shrink-0 ${details.levelClass}`}
-                    >
-                      {details.levelLabel}
-                    </span>
                   </div>
 
-                  <p className="text-xs text-gray-600 leading-relaxed line-clamp-2">
+                  <p className="text-xs text-[#4b5563] leading-relaxed line-clamp-2">
                     {mod.descriptionBn}
                   </p>
 
-                  {/* Live Status indicator */}
-                  <div className="text-[11px] font-bold text-gray-700 bg-white border border-gray-100 rounded-xl px-2.5 py-1.5 flex items-center space-x-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                    <span className="truncate">{liveCount}</span>
-                  </div>
-
-                  {/* Allowed Action Badges */}
-                  <div className="flex flex-wrap items-center gap-1 pt-1">
-                    <span className="text-[10px] font-bold text-gray-400 mr-1">অনুমোদিত একশন:</span>
-                    {details.allowedActions.map((action, i) => (
-                      <span
-                        key={i}
-                        className="text-[9px] font-black bg-gray-200 text-gray-800 px-1.5 py-0.5 rounded"
-                      >
-                        {action}
-                      </span>
-                    ))}
+                  {/* Allowed Actions Summary (Unboxed clean text) */}
+                  <div className="text-[11px] text-[#6b7280] pt-0.5 truncate">
+                    <span className="font-semibold text-[#374151]">অনুমতি:</span>{' '}
+                    {details.allowedActions.join(' · ')}
                   </div>
                 </div>
 
                 {/* Direct Action Button */}
                 <button
                   onClick={() => setAdminTab(mod.tabKey)}
-                  className="w-full mt-2 bg-white hover:bg-rose-600 text-gray-900 hover:text-white border border-gray-200 hover:border-rose-600 font-extrabold text-xs py-2 px-3 rounded-xl flex items-center justify-center space-x-1.5 transition-colors cursor-pointer shadow-xs group-hover:bg-rose-600 group-hover:text-white group-hover:border-rose-600"
+                  className="w-full min-h-[38px] bg-white hover:bg-[#111827] text-[#111827] hover:text-white border border-[#e6e3dd] hover:border-[#111827] font-semibold text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <span>মডিউলে প্রবেশ করুন</span>
                   <ArrowUpRight className="w-3.5 h-3.5" />
@@ -973,7 +899,7 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-extrabold text-base text-gray-900 flex items-center space-x-2">
-                  <Phone className="w-4 h-4 text-rose-600 animate-pulse" />
+                  <Phone className="w-4 h-4 text-rose-600" />
                   <span>জরুরি কাস্টমার কল ভেরিফিকেশন কিউ</span>
                 </h3>
                 <p className="text-xs text-gray-500">
@@ -1081,26 +1007,33 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
               {searchedStaffProducts.map(p => (
                 <div
                   key={p.id}
-                  className="p-3.5 rounded-2xl border border-gray-100 bg-gray-50/50 flex items-center space-x-3"
+                  className="p-3.5 rounded-xl border border-[#e6e3dd] bg-[#faf9f7] flex items-center gap-3"
                 >
-                  <img
-                    src={p.images?.[0] || ''}
-                    alt={p.name}
-                    className="w-12 h-12 rounded-xl object-cover border border-gray-200 shrink-0"
-                  />
+                  {p.images?.[0] ? (
+                    <img
+                      src={p.images[0]}
+                      alt={p.name}
+                      referrerPolicy="no-referrer"
+                      className="w-12 h-12 rounded-xl object-cover border border-[#e6e3dd] shrink-0 bg-white"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-xl bg-white border border-[#e6e3dd] flex items-center justify-center text-[#9ca3af] shrink-0">
+                      <Package className="w-5 h-5" />
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
-                    <h4 className="font-bold text-xs text-gray-900 truncate">{p.nameBn || p.name}</h4>
-                    <p className="text-[10px] text-gray-400 font-mono">SKU: {p.sku}</p>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="font-black text-xs text-rose-600">{formatPrice(p.price)}</span>
+                    <h4 className="font-semibold text-xs text-[#111827] truncate">{p.nameBn || p.name}</h4>
+                    <p className="text-[11px] text-[#6b7280] font-mono tabular-nums">SKU: {p.sku}</p>
+                    <div className="flex items-center justify-between mt-1 tabular-nums">
+                      <span className="font-bold text-xs text-[#881337]">{formatPrice(p.price)}</span>
                       <span
-                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        className={`text-[11px] font-semibold ${
                           p.stock <= p.lowStockThreshold
-                            ? 'bg-rose-100 text-rose-700'
-                            : 'bg-emerald-100 text-emerald-800'
+                            ? 'text-[#b91c1c]'
+                            : 'text-[#15803d]'
                         }`}
                       >
-                        স্টক: {p.stock} pcs
+                        স্টক: {p.stock} পিস
                       </span>
                     </div>
                   </div>
@@ -1211,20 +1144,27 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
               {lowStockProducts.slice(0, 6).map(p => (
                 <div
                   key={p.id}
-                  className="p-3.5 bg-rose-50/50 border border-rose-200 rounded-2xl flex items-center space-x-3"
+                  className="p-3.5 bg-[#fef2f2]/70 border border-[#fecaca] rounded-xl flex items-center gap-3"
                 >
-                  <img
-                    src={p.images?.[0] || ''}
-                    alt={p.name}
-                    className="w-12 h-12 rounded-xl object-cover border border-rose-200 shrink-0"
-                  />
+                  {p.images?.[0] ? (
+                    <img
+                      src={p.images[0]}
+                      alt={p.name}
+                      referrerPolicy="no-referrer"
+                      className="w-12 h-12 rounded-xl object-cover border border-[#fecaca] shrink-0 bg-white"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-xl bg-white border border-[#fecaca] flex items-center justify-center text-[#b91c1c] shrink-0">
+                      <Package className="w-5 h-5" />
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
-                    <h4 className="font-bold text-xs text-gray-900 truncate">{p.nameBn || p.name}</h4>
-                    <p className="text-[10px] text-gray-400 font-mono">SKU: {p.sku}</p>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="text-[10px] text-gray-500">মূল্য: {formatPrice(p.price)}</span>
-                      <span className="font-black text-xs text-rose-600 bg-white px-2 py-0.5 rounded-md border border-rose-200">
-                        অবশিষ্ট: {p.stock} pcs
+                    <h4 className="font-semibold text-xs text-[#111827] truncate">{p.nameBn || p.name}</h4>
+                    <p className="text-[11px] text-[#6b7280] font-mono tabular-nums">SKU: {p.sku}</p>
+                    <div className="flex items-center justify-between mt-1 tabular-nums">
+                      <span className="text-[11px] text-[#6b7280]">মূল্য: {formatPrice(p.price)}</span>
+                      <span className="font-bold text-xs text-[#b91c1c]">
+                        অবশিষ্ট: {p.stock} পিস
                       </span>
                     </div>
                   </div>
@@ -1376,102 +1316,129 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
 
           {/* Platform Infrastructure & System Health Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-slate-900 rounded-3xl p-5 text-white border border-slate-800 space-y-2">
+            <div className="bg-[#111827] rounded-2xl p-5 text-white border border-[#1f2937] space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-mono uppercase text-gray-400">Firebase Firestore</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-xs font-mono text-[#9ca3af]">Firebase Firestore</span>
+                <CheckCircle className="w-4 h-4 text-[#34d399]" />
               </div>
-              <h4 className="text-base font-extrabold text-emerald-400">লাইভ ক্লাউড ডেটাবেস সক্রিয়</h4>
-              <p className="text-[11px] text-gray-400">
+              <h4 className="text-base font-bold text-white">লাইভ ক্লাউড ডেটাবেস সক্রিয়</h4>
+              <p className="text-xs text-[#9ca3af] leading-relaxed">
                 ব্র্যান্ডিং, ক্যাটালগ ক্যাটাগরি ও ব্যানার রিয়েলটাইমে গুগল ফায়ারস্টোর ক্লাউডে সংরক্ষিত হচ্ছে।
               </p>
             </div>
 
-            <div className="bg-slate-900 rounded-3xl p-5 text-white border border-slate-800 space-y-2">
+            <div className="bg-[#111827] rounded-2xl p-5 text-white border border-[#1f2937] space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-mono uppercase text-gray-400">Payment Gateways</span>
-                <span className="text-[10px] font-bold bg-pink-500/20 text-pink-300 px-2 py-0.5 rounded-full">
+                <span className="text-xs font-mono text-[#9ca3af]">Payment Gateways</span>
+                <span className="text-xs font-medium text-[#d1d5db]">
                   {paymentSettings.bkashAccountType || 'Merchant'} / {paymentSettings.nagadAccountType || 'Merchant'}
                 </span>
               </div>
-              <h4 className="text-base font-extrabold text-white">বিকাশ ও নগদ পেমেন্ট মেথড</h4>
-              <p className="text-[11px] text-gray-400">
+              <h4 className="text-base font-bold text-white">বিকাশ ও নগদ পেমেন্ট মেথড</h4>
+              <p className="text-xs text-[#9ca3af] leading-relaxed">
                 মার্চেন্ট গেটওয়ে এবং পার্সোনাল সেন্ড মানি (Sender, TrxID, Amount যাচাই) উভয় অপশনই সক্রিয় আছে।
               </p>
             </div>
 
-            <div className="bg-slate-900 rounded-3xl p-5 text-white border border-slate-800 space-y-2">
+            <div className="bg-[#111827] rounded-2xl p-5 text-white border border-[#1f2937] space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-mono uppercase text-gray-400">Customer Support Inbox</span>
-                <span className="text-[10px] font-bold bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full">
-                  Omnichannel
-                </span>
+                <span className="text-xs font-mono text-[#9ca3af]">Customer Support Inbox</span>
+                <span className="text-xs font-medium text-[#d1d5db]">Omnichannel</span>
               </div>
-              <h4 className="text-base font-extrabold text-white">লাইভ চ্যাট, WA ও মেসেঞ্জার</h4>
-              <p className="text-[11px] text-gray-400">
+              <h4 className="text-base font-bold text-white">লাইভ চ্যাট, WA ও মেসেঞ্জার</h4>
+              <p className="text-xs text-[#9ca3af] leading-relaxed">
                 সমস্ত কাস্টমার মেসেজ এক ইউনিফাইড ইনবক্সে সেন্ট্রালাইজড আছে। এআই সেলস অ্যাসিস্ট্যান্ট নিয়ন্ত্রণযোগ্য।
               </p>
             </div>
           </div>
 
           {/* Super Admin: Clean All Demo Data Card */}
-          <div className="bg-gradient-to-r from-amber-50 via-rose-50 to-orange-50 border border-amber-200/80 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+          <div className="bg-white border border-[#e6e3dd] rounded-2xl p-5 sm:p-6 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-start space-x-3">
-                <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-rose-600/20">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#fef2f2] border border-[#fecaca] text-[#881337] flex items-center justify-center shrink-0">
                   <Trash2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="flex items-center space-x-2">
-                    <h4 className="font-extrabold text-sm sm:text-base text-gray-900">
-                      সুপার এডমিন: ডেমো ডেটা নিয়ন্ত্রণ ও ক্লিনআপ (Demo Data Purge)
-                    </h4>
-                    <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-2.5 py-0.5 rounded-full border border-rose-200">
-                      👑 সুপার এডমিন ক্ষমতা
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-600 mt-1">
-                    কাস্টমারদের কাছে যেকোনো ডেমো অর্ডার বা ডেমো প্রোফাইল লুকানো হয়েছে। আপনি চাইলে এক ক্লিকে সিস্টেমের সমস্ত ডেমো অর্ডার, ডেমো কাস্টমার ও ডেমো ঠিকানা চিরতরে ডিলিট করতে পারেন।
+                  <h4 className="font-bold text-sm sm:text-base text-[#111827]">
+                    সুপার এডমিন: ডেমো ডেটা নিয়ন্ত্রণ ও ক্লিনআপ
+                  </h4>
+                  <p className="text-xs text-[#6b7280] mt-1 leading-relaxed">
+                    কাস্টমারদের কাছে যেকোনো ডেমো অর্ডার বা ডেমো প্রোফাইল লুকানো হয়েছে। চাইলে এক ক্লিকে ডেমো অর্ডার ও ডেমো কাস্টমার মুছে ফেলতে পারেন (রিয়েল ডেটা অক্ষুণ্ণ থাকবে)।
                   </p>
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm('আপনি কি নিশ্চিত যে সকল ডেমো অর্ডার ও ডেমো কাস্টমার তথ্য মুছে ফেলতে চান? এটি শুধুমাত্র ডেমো ডেটা ডিলিট করবে, রিয়েল কাস্টমারের কোনো তথ্য ক্ষতি হবে না।')) {
-                      const res = purgeAllDemoData();
-                      alert(res.message);
-                    }
-                  }}
-                  className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl flex items-center space-x-1.5 shadow-md shadow-rose-600/20 cursor-pointer transition-all"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span>সকল ডেমো মুছে ফেলুন (Purge Demo)</span>
-                </button>
+                {!confirmPurgeDemo ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfirmPurgeDemo(true);
+                      setPurgeFeedback(null);
+                    }}
+                    className="min-h-[38px] bg-[#881337] hover:bg-[#6d0f2c] text-white font-semibold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>সকল ডেমো মুছে ফেলুন</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2 bg-[#fef2f2] border border-[#fecaca] rounded-xl px-3 py-1.5">
+                    <span className="text-xs font-semibold text-[#991b1b]">নিশ্চিত?</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const res = purgeAllDemoData();
+                        setPurgeFeedback({ text: res.message, success: res.success });
+                        setConfirmPurgeDemo(false);
+                      }}
+                      className="bg-[#991b1b] hover:bg-[#7f1d1d] text-white font-semibold text-xs px-3 py-1 rounded-lg cursor-pointer transition-colors"
+                    >
+                      হ্যাঁ, মুছুন
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmPurgeDemo(false)}
+                      className="bg-white border border-[#e6e3dd] text-[#374151] hover:text-[#111827] font-medium text-xs px-2.5 py-1 rounded-lg cursor-pointer transition-colors"
+                    >
+                      বাতিল
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-xs">
-              <div className="bg-white/80 p-3 rounded-2xl border border-amber-200/60">
-                <span className="text-gray-400 block text-[10px] uppercase font-bold">ডেমো অর্ডার শনাক্ত</span>
-                <span className="font-black text-rose-600 text-sm">{demoOrdersCount} টি</span>
+            {purgeFeedback && (
+              <div
+                className={`p-3 rounded-xl border text-xs font-medium ${
+                  purgeFeedback.success
+                    ? 'bg-[#f0fdf4] border-[#bbf7d0] text-[#15803d]'
+                    : 'bg-[#fef2f2] border-[#fecaca] text-[#991b1b]'
+                }`}
+              >
+                {purgeFeedback.text}
               </div>
-              <div className="bg-white/80 p-3 rounded-2xl border border-amber-200/60">
-                <span className="text-gray-400 block text-[10px] uppercase font-bold">রিয়েল কাস্টমার অর্ডার</span>
-                <span className="font-black text-emerald-600 text-sm">{orders.length - demoOrdersCount} টি</span>
+            )}
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 text-xs tabular-nums">
+              <div className="bg-[#faf9f7] p-3 rounded-xl border border-[#e6e3dd]">
+                <span className="text-[#6b7280] block text-[11px] font-medium">ডেমো অর্ডার শনাক্ত</span>
+                <span className="font-bold text-[#881337] text-sm mt-0.5 block">{demoOrdersCount} টি</span>
               </div>
-              <div className="bg-white/80 p-3 rounded-2xl border border-amber-200/60">
-                <span className="text-gray-400 block text-[10px] uppercase font-bold">কাস্টমার ভিউ স্ট্যাটাস</span>
-                <span className="font-bold text-gray-800 text-[11px] flex items-center space-x-1">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+              <div className="bg-[#faf9f7] p-3 rounded-xl border border-[#e6e3dd]">
+                <span className="text-[#6b7280] block text-[11px] font-medium">রিয়েল কাস্টমার অর্ডার</span>
+                <span className="font-bold text-[#15803d] text-sm mt-0.5 block">{orders.length - demoOrdersCount} টি</span>
+              </div>
+              <div className="bg-[#faf9f7] p-3 rounded-xl border border-[#e6e3dd]">
+                <span className="text-[#6b7280] block text-[11px] font-medium">কাস্টমার ভিউ স্ট্যাটাস</span>
+                <span className="font-semibold text-[#111827] text-xs flex items-center gap-1 mt-0.5">
+                  <CheckCircle className="w-3.5 h-3.5 text-[#15803d]" />
                   <span>১০০% রিয়েলিস্টিক</span>
                 </span>
               </div>
-              <div className="bg-white/80 p-3 rounded-2xl border border-amber-200/60">
-                <span className="text-gray-400 block text-[10px] uppercase font-bold">কাস্টমার অথেন্টিকেশন</span>
-                <span className="font-bold text-emerald-700 text-[11px]">ইমেইল/ফোন ও পাসওয়ার্ড</span>
+              <div className="bg-[#faf9f7] p-3 rounded-xl border border-[#e6e3dd]">
+                <span className="text-[#6b7280] block text-[11px] font-medium">কাস্টমার অথেন্টিকেশন</span>
+                <span className="font-semibold text-[#15803d] text-xs mt-0.5 block">ইমেইল/ফোন ও পাসওয়ার্ড</span>
               </div>
             </div>
           </div>
