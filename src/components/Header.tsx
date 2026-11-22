@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { BD_DISTRICTS } from '../data/mockData';
+import { isImageIconUrl, resolveCategoryIcon } from '../utils/categoryAssets';
 
 export const Header: React.FC = () => {
   const {
@@ -406,7 +407,8 @@ export const Header: React.FC = () => {
                   className="absolute left-0 top-full w-64 bg-white rounded-xl shadow-lg border border-[#e6e3dd] py-2 z-50"
                 >
                   {categories.map(cat => {
-                    const isImg = cat.icon && (cat.icon.startsWith('http') || cat.icon.startsWith('data:image/') || cat.icon.startsWith('/'));
+                    const resolvedIcon = resolveCategoryIcon(cat.id, cat.icon);
+                    const isImg = isImageIconUrl(resolvedIcon);
                     return (
                       <button
                         key={cat.id}
@@ -419,7 +421,7 @@ export const Header: React.FC = () => {
                         className="w-full text-left px-4 py-2.5 hover:bg-[#faf9f7] hover:text-[#881337] flex items-center space-x-3 transition-colors cursor-pointer text-gray-800"
                       >
                         {isImg ? (
-                          <img src={cat.icon} alt={cat.name} referrerPolicy="no-referrer" className="w-5 h-5 object-contain rounded" />
+                          <img src={resolvedIcon} alt={language === 'bn' ? cat.nameBn : cat.name} referrerPolicy="no-referrer" className="w-6 h-6 object-cover rounded border border-[#e6e3dd] shrink-0" />
                         ) : (
                           <Tag className="w-4 h-4 text-gray-400 shrink-0" />
                         )}

@@ -173,7 +173,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           </div>
 
           {/* Product Title */}
-          <h3 className="text-[13px] sm:text-sm font-medium text-[#111827] line-clamp-2 leading-[1.45] group-hover:text-[#881337] transition-colors mb-1.5 min-h-[2.6em]">
+          <h3 className="text-[13px] sm:text-sm font-medium text-[#111827] line-clamp-2 leading-[1.6] group-hover:text-[#881337] transition-colors mb-1.5 min-h-[2.8em]">
             {language === 'bn' ? liveProduct.nameBn : liveProduct.name}
           </h3>
 

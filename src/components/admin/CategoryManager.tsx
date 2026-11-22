@@ -18,6 +18,7 @@ import {
 import { useShop } from '../../context/ShopContext';
 import { Category } from '../../types';
 import { uploadCategoryIcon, uploadHeroBannerImage, cleanupUnusedStorageAsset } from '../../lib/firebase';
+import { isImageIconUrl, resolveCategoryIcon } from '../../utils/categoryAssets';
 
 const PRESET_EMOJIS = ['👨', '👩', '📱', '💍', '👟', '👜', '🕶️', '🏠', '💄', '🎁', '⚡', '👕', '👗', '🎮', '🎧', '⌚', '🧸', '📚'];
 
@@ -45,9 +46,7 @@ export const CategoryManager: React.FC = () => {
   const quickIconUploadRef = useRef<HTMLInputElement>(null);
   const [quickUploadTargetId, setQuickUploadTargetId] = useState<string | null>(null);
 
-  const isImageIcon = (icon: string) => {
-    return icon && (icon.startsWith('http://') || icon.startsWith('https://') || icon.startsWith('data:image/') || icon.startsWith('/'));
-  };
+  const isImageIcon = (icon: string) => isImageIconUrl(icon);
 
   const handleOpenAdd = () => {
     setCatName('');
@@ -65,7 +64,7 @@ export const CategoryManager: React.FC = () => {
     setEditingCategory(c);
     setCatName(c.name);
     setCatNameBn(c.nameBn);
-    setCatIcon(c.icon);
+    setCatIcon(resolveCategoryIcon(c.id, c.icon));
     setCatSubcategories(c.subcategories.join(', '));
     setCatSubcategoriesBn(c.subcategoriesBn?.join(', ') || '');
     setCatBannerImage(c.bannerImage || '');
@@ -299,7 +298,8 @@ export const CategoryManager: React.FC = () => {
         {/* Categories Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredCategories.map(c => {
-            const hasImage = isImageIcon(c.icon);
+            const resolvedIcon = resolveCategoryIcon(c.id, c.icon);
+            const hasImage = isImageIcon(resolvedIcon);
             const productCount = products.filter(p => p.category === c.id || p.category === c.name).length;
 
             return (
@@ -321,7 +321,7 @@ export const CategoryManager: React.FC = () => {
                         title="আইকন পরিবর্তন করতে ক্লিক করুন"
                       >
                         {hasImage ? (
-                          <img src={c.icon} alt={c.name} referrerPolicy="no-referrer" className="w-8 h-8 object-contain" />
+                          <img src={resolvedIcon} alt={c.name} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
                         ) : (
                           <span className="text-2xl">{c.icon || '🛍️'}</span>
                         )}
@@ -481,9 +481,9 @@ export const CategoryManager: React.FC = () => {
 
                 <div className="flex items-center space-x-3">
                   {/* Current Icon Preview */}
-                  <div className="w-14 h-14 rounded-xl bg-white border-2 border-dashed border-[#e6e3dd] flex items-center justify-center shrink-0 overflow-hidden">
+                  <div className="w-14 h-14 rounded-xl bg-[#fcfaf7] border border-[#e6e3dd] flex items-center justify-center shrink-0 overflow-hidden">
                     {isImageIcon(catIcon) ? (
-                      <img src={catIcon} alt="Icon Preview" referrerPolicy="no-referrer" className="w-9 h-9 object-contain" />
+                      <img src={catIcon} alt="Icon Preview" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
                     ) : (
                       <span className="text-3xl">{catIcon || '🛍️'}</span>
                     )}

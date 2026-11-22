@@ -308,8 +308,8 @@ const MainContent: React.FC = () => {
 
             {/* Products grid */}
             {displayedProducts.length === 0 ? (
-              <div className="bg-white p-12 rounded-3xl border border-gray-100 text-center text-gray-500">
-                <p className="text-base font-bold text-gray-800">
+              <div className="bg-white p-12 rounded-2xl border border-[#e6e3dd] text-center text-gray-500">
+                <p className="text-base font-semibold text-[#111827]">
                   {t('এই ক্যাটাগরিতে কোনো পণ্য পাওয়া যায়নি।', 'No products found in this category.')}
                 </p>
                 <button
@@ -317,7 +317,7 @@ const MainContent: React.FC = () => {
                     setSelectedCategory(null);
                     setSelectedNeed(null);
                   }}
-                  className="mt-3 text-rose-600 font-bold underline cursor-pointer text-xs"
+                  className="mt-4 inline-flex items-center justify-center bg-[#881337] hover:bg-[#9f1239] text-white font-medium text-xs px-5 py-2.5 min-h-[40px] rounded-xl cursor-pointer transition-colors"
                 >
                   {t('হোমে ফিরে যান', 'Return Home')}
                 </button>

@@ -120,7 +120,7 @@ export const TrustSection: React.FC<TrustSectionProps> = ({ previewSettings }) =
                 <Icon className="w-5 h-5" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className={`text-sm font-semibold text-[#111827] ${accentStyles.titleHover} transition-colors line-clamp-1`}>
+                <h3 className={`text-sm font-semibold text-[#111827] ${accentStyles.titleHover} transition-colors leading-snug line-clamp-2`}>
                   {t(item.titleBn, item.titleEn)}
                 </h3>
                 <p className="text-xs text-gray-600 mt-1 leading-[1.65] line-clamp-2">
