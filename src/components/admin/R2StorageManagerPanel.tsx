@@ -244,8 +244,12 @@ export const R2StorageManagerPanel: React.FC = () => {
         entityId: entry.entityId,
       });
 
-      // Verify uploaded R2 object actually serves cleanly before updating DB reference
-      const verifyRes = await fetch(migrated.downloadUrl, { method: 'GET' });
+      // Verify uploaded R2 object actually serves cleanly via same-origin Worker route before updating DB reference
+      const encodedStoragePath = migrated.storagePath
+        .split('/')
+        .map(part => encodeURIComponent(part))
+        .join('/');
+      const verifyRes = await fetch(`/api/storage/file/${encodedStoragePath}`, { method: 'GET' });
       if (!verifyRes.ok) {
         throw new Error(`R2 verification read failed (HTTP ${verifyRes.status})`);
       }
@@ -332,7 +336,14 @@ export const R2StorageManagerPanel: React.FC = () => {
 
   const handleDeleteR2Media = async (asset: MediaAssetRecord) => {
     if (!isAdmin) return;
-    await cleanupUnusedR2Asset(asset.publicUrl, []);
+    const deleted = await cleanupUnusedR2Asset(asset.publicUrl, []);
+    if (!deleted) {
+      setMigrationLog({
+        type: 'error',
+        text: `R2 ফাইল (${asset.objectKey}) মুছে ফেলা যায়নি। আপনার এডমিন সেশন বা R2 সংযোগ পরীক্ষা করুন।`,
+      });
+      return;
+    }
     setMediaAssets(prev => prev.filter(m => m.fileId !== asset.fileId));
     setMigrationLog({
       type: 'info',

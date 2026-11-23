@@ -12,7 +12,8 @@
   "vars": {
     "FIREBASE_PROJECT_ID": "jotpotshop",
     "FIREBASE_DATABASE_ID": "ai-studio-jotpotshop-389ae0a3-7bb3-43e0-a886-7d4d77268b7f",
-    "ALLOWED_ORIGINS": "https://jotpotshop.com,https://www.jotpotshop.com,https://assets.jotpotshop.com"
+    "R2_PUBLIC_BASE_URL": "https://assets.jotpotshop.com",
+    "ALLOWED_ORIGINS": "https://jotpotshop.com,https://www.jotpotshop.com"
   },
   "assets": {
     "directory": "./dist",

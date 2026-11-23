@@ -411,16 +411,16 @@ export async function uploadAssetToR2(
 export async function cleanupUnusedR2Asset(
   oldUrl?: string,
   remainingUrlsInUse: string[] = []
-): Promise<void> {
-  if (!oldUrl || typeof oldUrl !== 'string') return;
+): Promise<boolean> {
+  if (!oldUrl || typeof oldUrl !== 'string') return false;
   const trimmed = oldUrl.trim();
-  if (!trimmed || trimmed.startsWith('data:') || remainingUrlsInUse.includes(trimmed)) return;
+  if (!trimmed || trimmed.startsWith('data:') || remainingUrlsInUse.includes(trimmed)) return false;
 
   // Preserve old Firebase Storage files unless manually migrated & cleaned up separately
-  if (isLegacyFirebaseStorageUrl(trimmed)) return;
+  if (isLegacyFirebaseStorageUrl(trimmed)) return false;
 
   const objectKey = extractR2ObjectKeyFromUrl(trimmed);
-  if (!objectKey) return;
+  if (!objectKey) return false;
 
   try {
     const idToken = await getAuthenticatedIdToken(true);
@@ -438,8 +438,10 @@ export async function cleanupUnusedR2Asset(
         await deleteDoc(doc(db, 'media_assets', fileId)).catch(() => {});
       }
     }
+    return true;
   } catch (err: any) {
     console.warn('Non-fatal R2 cleanup notice:', err?.message || err);
+    return false;
   }
 }
 

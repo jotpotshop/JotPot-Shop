@@ -117,52 +117,45 @@ const ALLOWED_EXT_BY_FOLDER: Record<AllowedStorageFolder, Set<string>> = {
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://jotpotshop.com',
   'https://www.jotpotshop.com',
-  'https://assets.jotpotshop.com',
+];
+
+const LOCAL_DEV_ALLOWED_ORIGINS = new Set([
   'http://localhost:3000',
   'http://127.0.0.1:3000',
-];
+]);
+
+function isLocalDevEnvironment(requestUrl: URL, env: StorageEnv): boolean {
+  const mode = (
+    env.STORAGE_BACKEND_MODE ||
+    (typeof process !== 'undefined' ? process.env?.STORAGE_BACKEND_MODE : '') ||
+    ''
+  ).trim();
+  if (mode === 'local_dev_fs_adapter') return true;
+  return requestUrl.hostname === 'localhost' || requestUrl.hostname === '127.0.0.1';
+}
 
 function isOriginAllowed(origin: string | null, requestUrl: URL, env: StorageEnv): string | null {
   if (!origin) return null;
 
-  // Allow exact same origin
+  // Normalize origin check without trusting arbitrary subdomains or third-party suffixes
   if (origin === requestUrl.origin) return origin;
 
-  // Check explicit configured origins
-  const configured = (
+  const rawConfigured = (
     env.ALLOWED_ORIGINS ||
     (typeof process !== 'undefined' ? process.env?.ALLOWED_ORIGINS : '') ||
     ''
-  )
-    .split(',')
-    .map(s => s.trim())
+  ).trim();
+
+  const configured = (rawConfigured ? rawConfigured.split(',') : DEFAULT_ALLOWED_ORIGINS)
+    .map(s => s.trim().replace(/\/+$/, ''))
     .filter(Boolean);
 
-  if (DEFAULT_ALLOWED_ORIGINS.includes(origin) || configured.includes(origin)) {
+  if (configured.includes(origin)) {
     return origin;
   }
 
-  // Allow Cloudflare Workers / Pages previews & Google AI Studio run.app preview origins over HTTPS
-  try {
-    const parsed = new URL(origin);
-    if (
-      parsed.protocol === 'https:' &&
-      (parsed.hostname.endsWith('.workers.dev') ||
-        parsed.hostname.endsWith('.pages.dev') ||
-        parsed.hostname.endsWith('.run.app') ||
-        parsed.hostname === 'jotpotshop.com' ||
-        parsed.hostname.endsWith('.jotpotshop.com'))
-    ) {
-      return origin;
-    }
-    if (
-      parsed.protocol === 'http:' &&
-      (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1')
-    ) {
-      return origin;
-    }
-  } catch {
-    return null;
+  if (isLocalDevEnvironment(requestUrl, env) && LOCAL_DEV_ALLOWED_ORIGINS.has(origin)) {
+    return origin;
   }
 
   return null;
@@ -465,13 +458,42 @@ export async function handleStorageRequest(
 ): Promise<Response> {
   const url = new URL(request.url);
   const pathname = url.pathname;
+  const origin = request.headers.get('Origin');
+  const allowedOrigin = isOriginAllowed(origin, url, env);
+  const isPrivateFilePath =
+    pathname.startsWith('/api/storage/file/documents/') ||
+    pathname.startsWith('/api/storage/file/support/');
   const isPublicFileGet =
     request.method === 'GET' &&
     pathname.startsWith('/api/storage/file/') &&
-    !pathname.startsWith('/api/storage/file/documents/') &&
-    !pathname.startsWith('/api/storage/file/support/');
+    !isPrivateFilePath;
 
   const corsHeaders = buildCorsHeaders(request, env, isPublicFileGet);
+
+  // Actively block disallowed cross-origin requests on preflight, mutating, and sensitive endpoints
+  const requiresOriginAllowlist =
+    request.method === 'OPTIONS' ||
+    request.method === 'POST' ||
+    request.method === 'DELETE' ||
+    pathname.startsWith('/api/storage/metadata/') ||
+    pathname === '/api/storage/status' ||
+    pathname === '/api/storage/health' ||
+    isPrivateFilePath;
+
+  if (origin && !allowedOrigin && requiresOriginAllowlist) {
+    return jsonResponse(
+      {
+        success: false,
+        error: 'Origin not allowed by CORS policy',
+        errorBn: 'নিরাপত্তা নীতি: এই ডোমেইন থেকে API অনুরোধের অনুমতি নেই।',
+      },
+      403,
+      {
+        'X-Content-Type-Options': 'nosniff',
+        Vary: 'Origin',
+      }
+    );
+  }
 
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders });

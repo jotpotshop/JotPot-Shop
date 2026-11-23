@@ -162,14 +162,22 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
       const res = await uploadHeroBannerImage(file, String(activeUploadBannerId));
       const target = heroBanners.find(b => b.id === activeUploadBannerId);
       if (target) {
-        updateHeroBanner({
+        const previousImage = target.image;
+        const saveRes = await updateHeroBanner({
           ...target,
           image: res.downloadUrl,
           imageStoragePath: res.storagePath,
         });
+        if (!saveRes.success) {
+          cleanupUnusedR2Asset(res.downloadUrl, []).catch(() => {});
+          throw new Error(saveRes.error || 'হিরো ব্যানার Firebase-এ সংরক্ষণ করা যায়নি।');
+        }
+        if (previousImage && previousImage !== res.downloadUrl) {
+          cleanupUnusedR2Asset(previousImage, [res.downloadUrl]).catch(() => {});
+        }
         setBannerStatusMessage({
           type: 'success',
-          text: `হিরো ব্যানার ইমেজ সফলভাবে আপলোড হয়েছে! (${file.name}, ${(file.size / 1024).toFixed(0)} KB)`,
+          text: `হিরো ব্যানার ইমেজ সফলভাবে আপলোড ও সেভ হয়েছে! (${file.name}, ${(file.size / 1024).toFixed(0)} KB)`,
         });
       }
     } catch (err) {
@@ -184,7 +192,7 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
     }
   };
 
-  const handleAddNewBanner = () => {
+  const handleAddNewBanner = async () => {
     if (!isSuperAdmin) return;
     const newId = `banner-${Date.now()}`;
     const newSlide: HeroBannerSlide = {
@@ -202,12 +210,20 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
       image: '',
       active: true,
     };
-    addHeroBanner(newSlide);
+    const saveRes = await addHeroBanner(newSlide);
+    if (!saveRes.success) {
+      setBannerStatusMessage({
+        type: 'error',
+        text: saveRes.error || 'নতুন হিরো ব্যানার Firebase-এ সেভ করা যায়নি।',
+      });
+      return;
+    }
     setBannerStatusMessage({
       type: 'success',
       text: 'নতুন হিরো ব্যানার স্লাইড তৈরি হয়েছে! নিচে ছবি আপলোড করুন ও টেক্সট পরিবর্তন করুন।',
     });
   };
+
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -222,6 +238,7 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
 
     setLogoUploading(true);
     setBrandingStatusMessage(null);
+    const previousLogoUrl = websiteSettings.logoUrl;
 
     try {
       const result = await uploadBrandingAsset(file, 'logo');
@@ -229,8 +246,14 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
         logoUrl: result.downloadUrl,
         logoStoragePath: result.storagePath,
       };
-      updateWebsiteSettings(updated);
-      saveBrandingToRemote(updated).catch(e => console.warn('Auto-save branding error:', e));
+      const saved = await saveBrandingToRemote(updated);
+      if (!saved) {
+        cleanupUnusedR2Asset(result.downloadUrl, []).catch(() => {});
+        throw new Error('লোগো Cloudflare R2-তে উঠেছে কিন্তু Firebase-এ সংরক্ষণ ব্যর্থ হয়েছে। আবার চেষ্টা করুন।');
+      }
+      if (previousLogoUrl && previousLogoUrl !== result.downloadUrl) {
+        cleanupUnusedR2Asset(previousLogoUrl, [result.downloadUrl]).catch(() => {});
+      }
 
       setBrandingStatusMessage({
         type: 'success',
@@ -262,14 +285,21 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
 
     setMobileLogoUploading(true);
     setBrandingStatusMessage(null);
+    const previousMobileLogo = websiteSettings.mobileLogoUrl;
 
     try {
       const result = await uploadBrandingAsset(file, 'mobile_logo');
       const updated = {
         mobileLogoUrl: result.downloadUrl,
       };
-      updateWebsiteSettings(updated);
-      saveBrandingToRemote(updated).catch(e => console.warn('Auto-save mobile logo error:', e));
+      const saved = await saveBrandingToRemote(updated);
+      if (!saved) {
+        cleanupUnusedR2Asset(result.downloadUrl, []).catch(() => {});
+        throw new Error('মোবাইল লোগো Firebase-এ সংরক্ষণ ব্যর্থ হয়েছে।');
+      }
+      if (previousMobileLogo && previousMobileLogo !== result.downloadUrl) {
+        cleanupUnusedR2Asset(previousMobileLogo, [result.downloadUrl]).catch(() => {});
+      }
 
       setBrandingStatusMessage({
         type: 'success',
@@ -301,14 +331,21 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
 
     setFaviconUploading(true);
     setBrandingStatusMessage(null);
+    const previousFavicon = websiteSettings.faviconUrl;
 
     try {
       const result = await uploadBrandingAsset(file, 'favicon');
       const updated = {
         faviconUrl: result.downloadUrl,
       };
-      updateWebsiteSettings(updated);
-      saveBrandingToRemote(updated).catch(e => console.warn('Auto-save favicon error:', e));
+      const saved = await saveBrandingToRemote(updated);
+      if (!saved) {
+        cleanupUnusedR2Asset(result.downloadUrl, []).catch(() => {});
+        throw new Error('ফেভিকন Firebase-এ সংরক্ষণ ব্যর্থ হয়েছে।');
+      }
+      if (previousFavicon && previousFavicon !== result.downloadUrl) {
+        cleanupUnusedR2Asset(previousFavicon, [result.downloadUrl]).catch(() => {});
+      }
 
       setBrandingStatusMessage({
         type: 'success',
@@ -2396,7 +2433,12 @@ export const BusinessSettingsManager: React.FC<{ initialSection?: SettingsSectio
                           pct => setAvatarUploadProgress(pct),
                           { entityId: 'livechat_agent_avatar' }
                         );
-                        await updateLiveChatSettings({ agentAvatarUrl: res.downloadUrl });
+                        const saveRes = await updateLiveChatSettings({ agentAvatarUrl: res.downloadUrl });
+                        if (!saveRes.success) {
+                          cleanupUnusedR2Asset(res.downloadUrl, []).catch(() => {});
+                          showSaveError(saveRes.error || 'এজেন্ট ছবি Firebase-এ সংরক্ষণ ব্যর্থ হয়েছে।');
+                          return;
+                        }
                         if (prevUrl && prevUrl !== res.downloadUrl) {
                           cleanupUnusedR2Asset(prevUrl, [res.downloadUrl]).catch(() => {});
                         }

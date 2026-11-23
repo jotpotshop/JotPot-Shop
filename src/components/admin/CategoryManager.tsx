@@ -92,6 +92,7 @@ export const CategoryManager: React.FC = () => {
               text: `"${target.name}" ক্যাটাগরি আইকন সফলভাবে আপলোড ও আপডেট হয়েছে!`,
             });
           } else {
+            cleanupUnusedR2Asset(res.downloadUrl, []).catch(() => {});
             setStatusMessage({
               type: 'error',
               text: saveRes.error || 'ক্যাটাগরি আইকন সেভ করা যায়নি।',
