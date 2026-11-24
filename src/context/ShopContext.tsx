@@ -143,7 +143,6 @@ import {
   subscribeToFirebaseAuthState,
   registerCustomerWithFirebaseAuth,
   loginCustomerWithFirebaseAuth,
-  loginGoogleCustomerToFirestore,
   resetCustomerPasswordFirebase,
   logoutFirebaseAuth,
   saveHelpCenterSettingsToFirestore,
@@ -152,7 +151,6 @@ import {
   saveTrustSectionSettingsToFirestore,
   fetchTrustSectionSettingsFromFirestore,
   subscribeToTrustSectionSettings,
-  signInWithGooglePopup,
   resizeDataUrl,
   stripPasswords,
   isCurrentUserStaffEmail,
@@ -292,7 +290,6 @@ interface ShopContextType {
   resetCustomerPassword: (phone: string, newPass?: string) => Promise<{ success: boolean; message: string }>;
   updateCustomerProfile: (updates: { name: string; phone: string; email?: string }) => Promise<FirestoreWriteResult>;
   updateCustomerStatus: (customerId: string, status: 'active' | 'disabled') => Promise<FirestoreWriteResult>;
-  loginWithGoogle: (googleUser?: { uid?: string; name: string; email: string; avatarUrl?: string }) => Promise<{ success: boolean; message: string }>;
 
   // Omnichannel Conversations & AI Assistant
   conversations: UnifiedConversation[];
@@ -2865,58 +2862,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true, message: res.message };
   };
 
-  // One-click Google Login synced cleanly to /customers/{uid}
-  const loginWithGoogle = async (googleUser?: {
-    uid?: string;
-    name: string;
-    email: string;
-    avatarUrl?: string;
-  }): Promise<{ success: boolean; message: string }> => {
-    if (!googleUser?.email) {
-      return { success: false, message: 'গুগল ইমেইল পাওয়া যায়নি।' };
-    }
-
-    const res = await loginGoogleCustomerToFirestore({
-      uid: googleUser.uid,
-      name: googleUser.name,
-      email: googleUser.email,
-      avatarUrl: googleUser.avatarUrl,
-      cart: [...cart],
-    });
-
-    if (!res.success || !res.customer || !res.uid) {
-      showToast(res.message, 'error');
-      return { success: false, message: res.message };
-    }
-
-    const cleanCust = stripPasswords(res.customer);
-    setRegisteredCustomers(prev => {
-      const exists = prev.some(c => c.id === cleanCust.id || c.email.toLowerCase() === cleanCust.email.toLowerCase());
-      const next = exists
-        ? prev.map(c =>
-            c.id === cleanCust.id || c.email.toLowerCase() === cleanCust.email.toLowerCase()
-              ? { ...c, ...cleanCust }
-              : c
-          )
-        : [cleanCust, ...prev];
-      localStorage.setItem('jps_registered_customers', JSON.stringify(next));
-      return next;
-    });
-
-    const updatedUser: UserState = {
-      isLoggedIn: true,
-      name: cleanCust.name,
-      phone: cleanCust.phone,
-      email: cleanCust.email,
-      uid: res.uid,
-    };
-    setUser(updatedUser);
-    localStorage.setItem('jps_user', JSON.stringify(updatedUser));
-    switchCustomerCart(cleanCust.email || cleanCust.phone, cleanCust);
-
-    return { success: true, message: res.message };
-  };
-
   // Reset Customer Password via Firebase Auth
   const resetCustomerPassword = async (
     identifier: string,
@@ -3966,7 +3911,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         resetCustomerPassword,
         updateCustomerProfile,
         updateCustomerStatus,
-        loginWithGoogle,
         conversations,
         activeChatConversationId,
         setActiveChatConversationId,

@@ -2,8 +2,6 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import {
   getAuth,
   Auth,
-  GoogleAuthProvider,
-  signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updatePassword,
@@ -1952,32 +1950,6 @@ export async function fetchStaffAccountsFromFirestore(): Promise<StaffAccount[] 
 }
 
 /**
- * Google Sign-In Popup
- */
-export async function signInWithGooglePopup(): Promise<{
-  uid: string;
-  name: string;
-  email: string;
-  avatarUrl: string;
-} | null> {
-  try {
-    const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: 'select_account' });
-    const result = await signInWithPopup(auth, provider);
-    const user = result.user;
-    return {
-      uid: user.uid,
-      name: user.displayName || user.email?.split('@')[0] || 'Google User',
-      email: user.email || '',
-      avatarUrl: user.photoURL || '',
-    };
-  } catch (err) {
-    console.warn('Google sign-in popup error:', err);
-    throw err;
-  }
-}
-
-/**
  * Deterministic email resolution for phone-based customer auth in Firebase Auth.
  */
 export function resolveCustomerAuthEmail(phone?: string, email?: string): string {
@@ -2160,55 +2132,6 @@ export async function loginCustomerWithFirebaseAuth(
     customer,
     message: 'লগইন সফল হয়েছে!',
   };
-}
-
-/**
- * Syncs Google-signed-in customer to /customers/{uid} and enforces active status
- */
-export async function loginGoogleCustomerToFirestore(googleUser: {
-  uid?: string;
-  name: string;
-  email: string;
-  avatarUrl?: string;
-  cart?: any[];
-}): Promise<{
-  success: boolean;
-  uid?: string;
-  customer?: RegisteredCustomer;
-  message: string;
-}> {
-  const uid = googleUser.uid || auth.currentUser?.uid || '';
-  if (!uid) {
-    return { success: false, message: 'গুগল সেশন পাওয়া যায়নি। আবার চেষ্টা করুন।' };
-  }
-
-  const existing = await fetchCustomerDocFromFirestore(uid);
-  if (existing && existing.status === 'disabled') {
-    await signOut(auth).catch(() => {});
-    return {
-      success: false,
-      message: 'দুঃখিত! আপনার অ্যাকাউন্টটি অ্যাডমিন কর্তৃক নিষ্ক্রিয় (Disabled) করা হয়েছে।',
-    };
-  }
-
-  const merged: RegisteredCustomer = {
-    id: uid,
-    name: existing?.name || googleUser.name || 'Google User',
-    phone: existing?.phone || '',
-    email: (existing?.email || googleUser.email || '').toLowerCase(),
-    isGoogleUser: true,
-    avatarUrl: existing?.avatarUrl || googleUser.avatarUrl || '',
-    status: existing?.status || 'active',
-    createdAt: existing?.createdAt || new Date().toISOString(),
-    cart: existing?.cart && existing.cart.length > 0 ? existing.cart : googleUser.cart || [],
-  };
-
-  const res = await saveSingleCustomerToFirestore(merged);
-  if (!res.success) {
-    return { success: false, message: res.error || 'কাস্টমার প্রোফাইল সেভ করা যায়নি।' };
-  }
-
-  return { success: true, uid, customer: merged, message: 'গুগল অ্যাকাউন্ট সফলভাবে কানেক্ট হয়েছে!' };
 }
 
 /**

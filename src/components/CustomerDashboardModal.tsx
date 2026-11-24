@@ -28,7 +28,6 @@ import {
 import { useShop } from '../context/ShopContext';
 import { ProductCard } from './ProductCard';
 import { BD_DISTRICTS } from '../data/mockData';
-import { signInWithGooglePopup } from '../lib/firebase';
 
 export const CustomerDashboardModal: React.FC = () => {
   const {
@@ -40,7 +39,6 @@ export const CustomerDashboardModal: React.FC = () => {
     loginCustomerWithPassword,
     resetCustomerPassword,
     updateCustomerProfile,
-    loginWithGoogle,
     orders,
     wishlist,
     products,
@@ -259,35 +257,6 @@ export const CustomerDashboardModal: React.FC = () => {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setAuthError('');
-    setIsLoading(true);
-    try {
-      const gUser = await signInWithGooglePopup();
-      if (gUser && gUser.email) {
-        const res = await loginWithGoogle(gUser);
-        if (res.success) {
-          setAuthSuccess(res.message);
-        } else {
-          setAuthError(res.message);
-        }
-      }
-    } catch (err: any) {
-      if (err?.code === 'auth/popup-blocked') {
-        setAuthError('ব্রাউজার পপ-আপ ব্লক করেছে। অনুগ্রহ করে পপ-আপ চালু করে আবার চেষ্টা করুন।');
-      } else if (err?.code === 'auth/unauthorized-domain') {
-        const domain = typeof window !== 'undefined' ? window.location.hostname : '';
-        setAuthError(
-          `বর্তমান ডোমেইনটি (${domain}) Firebase Console-এ অনুমোদিত নয়। আপাতত মোবাইল নম্বর দিয়ে লগইন ও অর্ডার করা যাবে।`
-        );
-      } else if (err?.code !== 'auth/popup-closed-by-user') {
-        setAuthError(err?.message || 'গুগল লগইন ব্যর্থ হয়েছে। মোবাইল নম্বর দিয়ে চেষ্টা করুন।');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
@@ -384,7 +353,7 @@ export const CustomerDashboardModal: React.FC = () => {
 
         {/* Auth Hub */}
         {!user.isLoggedIn ? (
-          <div className="p-6 sm:p-10 flex-1 overflow-y-auto">
+          <div className="p-5 sm:p-10 flex-1 overflow-y-auto font-sans">
             <div className="max-w-md mx-auto space-y-5">
               {/* Segmented Tabs */}
               <div className="flex bg-[#faf9f7] border border-[#e6e3dd] p-1 rounded-xl gap-1">
@@ -393,8 +362,9 @@ export const CustomerDashboardModal: React.FC = () => {
                   onClick={() => {
                     setAuthMode('password');
                     setAuthError('');
+                    setAuthSuccess('');
                   }}
-                  className={`flex-1 py-2 min-h-[38px] text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
+                  className={`flex-1 py-2.5 min-h-[40px] text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
                     authMode === 'password'
                       ? 'bg-[#111827] text-white'
                       : 'text-gray-600 hover:text-[#111827]'
@@ -409,8 +379,9 @@ export const CustomerDashboardModal: React.FC = () => {
                   onClick={() => {
                     setAuthMode('register');
                     setAuthError('');
+                    setAuthSuccess('');
                   }}
-                  className={`flex-1 py-2 min-h-[38px] text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
+                  className={`flex-1 py-2.5 min-h-[40px] text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
                     authMode === 'register'
                       ? 'bg-[#111827] text-white'
                       : 'text-gray-600 hover:text-[#111827]'
@@ -421,18 +392,18 @@ export const CustomerDashboardModal: React.FC = () => {
                 </button>
               </div>
 
-              <div className="text-center space-y-1">
-                <h4 className="font-editorial text-lg font-bold text-[#111827]">
+              <div className="text-center space-y-1.5">
+                <h4 className="font-sans text-lg sm:text-xl font-bold text-[#111827]">
                   {authMode === 'password'
                     ? t('আপনার অ্যাকাউন্টে লগইন করুন', 'Sign In to Your Account')
                     : authMode === 'register'
                     ? t('নতুন কাস্টমার অ্যাকাউন্ট তৈরি করুন', 'Create New Account')
                     : t('পাসওয়ার্ড রিসেট করুন', 'Reset Password')}
                 </h4>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 leading-relaxed">
                   {authMode === 'forgot'
-                    ? t('নিবন্ধিত মোবাইল নম্বর দিয়ে নতুন পাসওয়ার্ড সেট করুন।', 'Enter your registered phone number to set a new password.')
-                    : t('অর্ডার হিস্টোরি, ট্র্যাকিং ও সংরক্ষিত ঠিকানার সুবিধা পান।', 'Track orders and manage saved addresses.')}
+                    ? t('নিবন্ধিত ইমেইল দিয়ে রিসেট লিংক পান অথবা সাইন-ইন অবস্থায় নতুন পাসওয়ার্ড সেট করুন।', 'Enter your registered email for a password reset link.')
+                    : t('মোবাইল নম্বর বা ইমেইল দিয়ে প্রবেশ করে অর্ডার হিস্টোরি ও ঠিকানা পরিচালনা করুন।', 'Sign in with mobile number or email to track orders and manage addresses.')}
                 </p>
               </div>
 
@@ -611,58 +582,62 @@ export const CustomerDashboardModal: React.FC = () => {
                 <form onSubmit={handleForgotSubmit} className="space-y-3">
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      {t('আপনার নিবন্ধিত মোবাইল নম্বর দিন *', 'Registered Mobile Number *')}
+                      {t('আপনার নিবন্ধিত ইমেইল বা মোবাইল নম্বর দিন *', 'Registered Email or Mobile Number *')}
                     </label>
                     <div className="relative">
                       <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                       <input
-                        type="tel"
+                        type="text"
                         required
                         value={forgotPhone}
                         onChange={e => setForgotPhone(e.target.value)}
-                        placeholder="017XXXXXXXX"
+                        placeholder="name@example.com অথবা 017XXXXXXXX"
                         className="w-full min-h-[42px] bg-[#faf9f7] border border-[#e6e3dd] rounded-xl pl-10 pr-4 py-2 text-xs text-[#111827] focus:bg-white focus:border-[#111827] focus:outline-none font-mono"
                       />
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      {t('নতুন পাসওয়ার্ড * (কমপক্ষে ৬ অক্ষর)', 'New Password * (Min 6 chars)')}
-                    </label>
-                    <div className="relative">
-                      <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                      <input
-                        type={showForgotPass ? 'text' : 'password'}
-                        required
-                        value={forgotNewPass}
-                        onChange={e => setForgotNewPass(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full min-h-[42px] bg-[#faf9f7] border border-[#e6e3dd] rounded-xl pl-10 pr-10 py-2 text-xs text-[#111827] focus:bg-white focus:border-[#111827] focus:outline-none font-mono"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowForgotPass(!showForgotPass)}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#111827] cursor-pointer"
-                      >
-                        {showForgotPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
+                  {!forgotPhone.includes('@') && (
+                    <>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          {t('নতুন পাসওয়ার্ড * (কমপক্ষে ৬ অক্ষর)', 'New Password * (Min 6 chars)')}
+                        </label>
+                        <div className="relative">
+                          <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                          <input
+                            type={showForgotPass ? 'text' : 'password'}
+                            required={!forgotPhone.includes('@')}
+                            value={forgotNewPass}
+                            onChange={e => setForgotNewPass(e.target.value)}
+                            placeholder="••••••••"
+                            className="w-full min-h-[42px] bg-[#faf9f7] border border-[#e6e3dd] rounded-xl pl-10 pr-10 py-2 text-xs text-[#111827] focus:bg-white focus:border-[#111827] focus:outline-none font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowForgotPass(!showForgotPass)}
+                            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#111827] cursor-pointer"
+                          >
+                            {showForgotPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      {t('নতুন পাসওয়ার্ড নিশ্চিত করুন *', 'Confirm New Password *')}
-                    </label>
-                    <input
-                      type={showForgotPass ? 'text' : 'password'}
-                      required
-                      value={forgotConfirmPass}
-                      onChange={e => setForgotConfirmPass(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full min-h-[42px] bg-[#faf9f7] border border-[#e6e3dd] rounded-xl px-4 py-2 text-xs text-[#111827] focus:bg-white focus:border-[#111827] focus:outline-none font-mono"
-                    />
-                  </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          {t('নতুন পাসওয়ার্ড নিশ্চিত করুন *', 'Confirm New Password *')}
+                        </label>
+                        <input
+                          type={showForgotPass ? 'text' : 'password'}
+                          required={!forgotPhone.includes('@')}
+                          value={forgotConfirmPass}
+                          onChange={e => setForgotConfirmPass(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full min-h-[42px] bg-[#faf9f7] border border-[#e6e3dd] rounded-xl px-4 py-2 text-xs text-[#111827] focus:bg-white focus:border-[#111827] focus:outline-none font-mono"
+                        />
+                      </div>
+                    </>
+                  )}
 
                   <button
                     type="submit"
@@ -670,7 +645,13 @@ export const CustomerDashboardModal: React.FC = () => {
                     className="w-full min-h-[44px] bg-[#881337] hover:bg-[#6d0f2c] text-white font-semibold text-xs sm:text-sm py-3 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-colors disabled:opacity-70"
                   >
                     <CheckCircle className="w-4 h-4" />
-                    <span>{isLoading ? t('প্রসেসিং...', 'Processing...') : t('পাসওয়ার্ড পরিবর্তন ও লগইন', 'Reset & Login')}</span>
+                    <span>
+                      {isLoading
+                        ? t('প্রসেসিং...', 'Processing...')
+                        : forgotPhone.includes('@')
+                        ? t('পাসওয়ার্ড রিসেট লিংক পাঠান', 'Send Reset Link')
+                        : t('পাসওয়ার্ড পরিবর্তন ও লগইন', 'Reset & Login')}
+                    </span>
                   </button>
 
                   <div className="text-center pt-1">
@@ -684,27 +665,6 @@ export const CustomerDashboardModal: React.FC = () => {
                   </div>
                 </form>
               )}
-
-              <div className="relative flex items-center justify-center my-3">
-                <div className="border-t border-[#e6e3dd] w-full" />
-                <span className="bg-white px-3 text-[11px] text-gray-400 absolute">
-                  {t('অথবা', 'OR')}
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleGoogleSignIn}
-                className="w-full min-h-[42px] bg-white hover:bg-[#faf9f7] text-[#111827] border border-[#e6e3dd] hover:border-[#111827] font-semibold text-xs py-2.5 rounded-xl flex items-center justify-center gap-2.5 transition-colors cursor-pointer"
-              >
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                </svg>
-                <span>{t('গুগল (Google) দিয়ে প্রবেশ করুন', 'Continue with Google')}</span>
-              </button>
             </div>
           </div>
         ) : (
